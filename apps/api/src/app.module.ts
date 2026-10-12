@@ -51,6 +51,8 @@ import { StandDownController } from './overseer/stand-down.controller.js';
 import { StandDownService } from './overseer/stand-down.service.js';
 import { BudgetService } from './overseer/budget.service.js';
 import { EscalationController } from './overseer/escalation.controller.js';
+import { DeconflictionController } from './overseer/deconfliction.controller.js';
+import { DeconflictionService } from './overseer/deconfliction.service.js';
 import { EscalationService } from './overseer/escalation.service.js';
 import { ActionsService } from './chat/actions.service.js';
 import { ChatController } from './chat/chat.controller.js';
@@ -82,6 +84,7 @@ export class AppModule {
         OperationsController,
         StandDownController,
         EscalationController,
+        DeconflictionController,
       ],
       providers: [
         { provide: LOG_DESTINATION, useValue: opts.logDestination ?? null },
@@ -140,6 +143,7 @@ export class AppModule {
         StandDownService,
         BudgetService,
         EscalationService,
+        DeconflictionService,
         ActionsService,
         ChatService,
         EventsGateway,

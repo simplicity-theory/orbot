@@ -11,6 +11,7 @@ export const SHORTCUTS: { keys: string[]; action: string }[] = [
   { keys: ['g', 'c'], action: 'Go to full-page chat' },
   { keys: ['g', 'l'], action: 'Go to the orders log' },
   { keys: ['g', 'd'], action: 'Go to the Supply Depot' },
+  { keys: ['g', 'x'], action: 'Go to Deconfliction (who touches what)' },
   { keys: ['g', ','], action: 'Go to Settings' },
   { keys: ['?'], action: 'Show this list' },
   { keys: ['Esc'], action: 'Close a dialog or tooltip' },

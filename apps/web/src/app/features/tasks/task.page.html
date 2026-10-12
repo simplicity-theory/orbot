@@ -85,6 +85,33 @@
       <orb-record-timeline [events]="v.events" />
     </section>
 
+    @if (v.overlaps.length) {
+      <section class="panel overlaps" aria-labelledby="overlaps-h">
+        <h2 id="overlaps-h" class="panel__title">
+          <span>Overlaps with other work</span>
+          <a routerLink="/deconfliction">Deconfliction</a>
+        </h2>
+        <ul class="list-reset">
+          @for (o of v.overlaps; track o.path) {
+            <li>
+              <code>{{ o.path }}</code> is also changed by
+              @for (t of o.others; track t.taskId; let last = $last) {
+                <a
+                  [routerLink]="
+                    t.botId
+                      ? ['/units', t.unitId, 'bots', t.botId, 'tasks', t.taskId]
+                      : ['/units', t.unitId, 'tasks', t.taskId]
+                  "
+                  >#{{ t.number }} {{ t.title }}</a
+                >
+                ({{ t.unitName }}){{ last ? '.' : ',' }}
+              }
+            </li>
+          }
+        </ul>
+      </section>
+    }
+
     <section class="panel" aria-labelledby="handover-h">
       <h2 id="handover-h" class="panel__title">
         <orb-term key="handover">Handover</orb-term>

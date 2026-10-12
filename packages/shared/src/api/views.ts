@@ -153,6 +153,39 @@ export interface TaskDetailView {
   events: RecordEvent[];
   versions: VersionWithStatus[];
   handover: DocumentView | null;
+  /** Files this task changes that other active tasks change too (deconfliction). */
+  overlaps: TouchOverlap[];
+}
+
+/** A task touching a file: who, where, doing what. */
+export interface Toucher {
+  taskId: string;
+  number: number;
+  title: string;
+  status: string;
+  unitId: string;
+  unitName: string;
+  botId: string | null;
+  callsign: string | null;
+  branch: string;
+}
+
+export interface TouchOverlap {
+  path: string;
+  others: Toucher[];
+}
+
+/** HQ's map of who touches what: every file an active task changes, per repository. */
+export interface DeconflictionView {
+  repos: {
+    id: string;
+    name: string;
+    files: { path: string; tasks: Toucher[] }[];
+  }[];
+  /** Files changed by more than one active task. */
+  overlaps: number;
+  /** HQ's deconfliction notices, newest last. */
+  notices: RecordEvent[];
 }
 
 export interface MetaView {

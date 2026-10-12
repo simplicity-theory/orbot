@@ -28,6 +28,7 @@ import type {
 import { APP_CONFIG, type AppConfig } from '../config/config.js';
 import { FieldManualService } from '../documents/field-manual.service.js';
 import { UnitDocsService } from '../documents/unit-docs.service.js';
+import { DeconflictionService } from '../overseer/deconfliction.service.js';
 import { EscalationService } from '../overseer/escalation.service.js';
 import { RecordService } from '../record/record.service.js';
 import { toView, toViews } from './view.js';
@@ -46,6 +47,7 @@ export class ViewsService {
     private readonly fieldManual: FieldManualService,
     private readonly docs: UnitDocsService,
     private readonly escalations: EscalationService,
+    private readonly deconfliction: DeconflictionService,
   ) {}
 
   async orbat(): Promise<OrbatView> {
@@ -243,6 +245,7 @@ export class ViewsService {
       events,
       versions,
       handover: handovers[0] ? toView(handovers[0]) : null,
+      overlaps: await this.deconfliction.overlapsFor(id),
     };
   }
 

@@ -40,6 +40,7 @@ const NAV: NavItem[] = [
   { label: 'Sitreps', link: '/sitreps', icon: 'radio' },
   { label: 'Chat', link: '/chat', icon: 'user' },
   { label: 'Orders log', link: '/orders', icon: 'book' },
+  { label: 'Deconfliction', link: '/deconfliction', icon: 'git-branch' },
   { label: 'Supply Depot', link: '/supply', icon: 'key' },
   { label: 'Archive', link: '/archive', icon: 'archive' },
   { label: 'Settings', link: '/settings', icon: 'sliders' },
@@ -58,6 +59,7 @@ const GO_TO: Record<string, string> = {
   c: '/chat',
   l: '/orders',
   d: '/supply',
+  x: '/deconfliction',
 };
 
 const isTyping = (t: EventTarget | null) =>

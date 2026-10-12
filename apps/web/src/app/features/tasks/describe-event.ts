@@ -199,6 +199,13 @@ export function describeEvent(e: RecordEvent): EventSummary {
         text: `${(b['lessons'] as unknown[]).length} lesson(s) kept as standing orders`,
         tone: 'info',
       };
+    case 'deconfliction':
+      return {
+        icon: 'git-branch',
+        label: 'Deconfliction',
+        text: `${(b['paths'] as string[]).join(', ')} changed by ${(b['taskIds'] as string[]).length} active tasks`,
+        tone: 'warning',
+      };
     case 'escalation': {
       const level =
         { overseer: 'Overseer', hq: 'HQ', commander: 'To you' }[s('level')] ?? s('level');

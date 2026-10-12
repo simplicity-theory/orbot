@@ -66,6 +66,14 @@ export const RecordEventBodies = {
     action: z.string(),
     runId: z.string().nullable(),
   }),
+  /** HQ found two active tasks changing the same files in one repository. */
+  deconfliction: z.object({
+    repoSupplyId: z.string(),
+    paths: z.array(z.string()),
+    /** The two tasks, earliest first. */
+    taskIds: z.array(z.string()),
+    unitIds: z.array(z.string()),
+  }),
   'escalation.resolved': z.object({ chainId: z.string(), note: z.string() }),
   /** Spending crossed the warning share of a compute budget (unit, operation or task). */
   'budget.warning': z.object({

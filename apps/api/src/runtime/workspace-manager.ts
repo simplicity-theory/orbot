@@ -99,6 +99,26 @@ export class WorkspaceManager {
     });
   }
 
+  /**
+   * Files a task's workspace changes relative to where it branched from `base` (committed,
+   * uncommitted and new files). ORBOT's own per-task notes under `orbot/` are left out.
+   */
+  async touched(supply: SupplyBody, ws: Workspace, baseRef: string | null): Promise<string[]> {
+    if (!existsSync(ws.path)) return [];
+    const base = baseRef ?? this.repo(supply).defaultBranch;
+    try {
+      const from = await git(ws.path, ['merge-base', 'HEAD', base]).catch(() => ws.baseCommit);
+      const changed = await git(ws.path, ['diff', '--name-only', from]);
+      const added = await git(ws.path, ['ls-files', '--others', '--exclude-standard']);
+      return [...new Set([...changed.split('\n'), ...added.split('\n')])]
+        .map((p) => p.trim())
+        .filter((p) => p && !p.startsWith('orbot/'))
+        .sort();
+    } catch {
+      return [];
+    }
+  }
+
   head(supply: SupplyBody, ref: string): Promise<string> {
     return git(this.repo(supply).localPath, ['rev-parse', ref]);
   }

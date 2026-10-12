@@ -146,3 +146,7 @@ Judgement calls made where the design was ambiguous or a choice had to be made. 
 A single failure is not an escalation: it already shows as a failed task, and a failure is usually a judgement that needs the Commander anyway. The sweep runs every `ORBOT_ESCALATION_SWEEP_SECONDS` (tests call it directly).
 
 **D64. HQ has no remedy of its own yet.** It records that it saw the escalation and raises it to the Commander. Moving work to another unit is left for later (Deconfliction / Main Effort).
+
+**D65. Deconfliction: the map comes from git, the notices go on the record.** Each task already has its own worktree and branch (`orbot/task-<n>`). "Who touches what" is worked out from git on demand: the files each active task (queued, working, blocked, stood-down, awaiting approval) changes since it branched, committed or not. ORBOT's own per-task notes under `orbot/` are left out. Nothing is cached that could drift from the branches.
+
+**D66. HQ informs; it does not block.** When a task writes or commits a file that another active task in the same repository is also changing, HQ records one `deconfliction` notice per pair of tasks (and per new file), posts an HQ sitrep, and sends both running bots a frago naming the other task. Both keep working: whichever lands second rebases. Tasks in the same operation are not flagged against each other, because they land in order on the operation's integration branch.

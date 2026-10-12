@@ -70,6 +70,7 @@ export const apiUrl = {
   supply: () => `${API}/supply`,
   settings: () => `${API}/settings`,
   standDown: () => `${API}/stand-down`,
+  deconfliction: () => `${API}/deconfliction`,
 };
 
 export type SettingsView = SettingsBody & { version: number; actionKinds: string[] };
