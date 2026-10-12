@@ -2,6 +2,11 @@ import { HttpClient } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import type {
+  ChatSendResult,
+  OrdersLogEntryView,
+  RecordEvent as ChatRecordEvent,
+  SettingsBody,
+  SupplyView,
   AddBotRequest,
   AmendBackbriefRequest,
   ApprovalsView,
@@ -55,9 +60,17 @@ export const apiUrl = {
   approvals: () => `${API}/approvals`,
   backbrief: (id: string) => `${API}/backbriefs/${id}`,
   palette: () => `${API}/palette`,
+  chat: (channel: string) => `${API}/chat/${channel}`,
+  orders: () => `${API}/orders`,
+  supply: () => `${API}/supply`,
+  settings: () => `${API}/settings`,
 };
 
+export type SettingsView = SettingsBody & { version: number; actionKinds: string[] };
+
 export type {
+  ChatSendResult,
+  OrdersLogEntryView,
   ApprovalsView,
   BackbriefView,
   FmEntryView,
@@ -187,6 +200,56 @@ export class Api {
 
   unitView(id: string) {
     return firstValueFrom(this.http.get<UnitDetailView>(apiUrl.unit(id)));
+  }
+
+  sendChat(channel: string, text: string) {
+    return firstValueFrom(this.http.post<ChatSendResult>(apiUrl.chat(channel), { text }));
+  }
+
+  confirmPending(id: string, phrase?: string) {
+    return firstValueFrom(
+      this.http.post<ChatRecordEvent<'chat.readback'>>(
+        `${API}/pending/${id}/confirm`,
+        phrase ? { phrase } : {},
+      ),
+    );
+  }
+
+  declinePending(id: string) {
+    return firstValueFrom(this.http.post<unknown>(`${API}/pending/${id}/decline`, {}));
+  }
+
+  undoOrder(id: string) {
+    return firstValueFrom(this.http.post<{ summary: string }>(`${API}/orders/${id}/undo`, {}));
+  }
+
+  connectRepository(name: string, location: string) {
+    return firstValueFrom(
+      this.http.post<SupplyView>(`${API}/supply/repositories`, { name, location }),
+    );
+  }
+
+  storeCredential(name: string, value: string) {
+    return firstValueFrom(this.http.post<SupplyView>(`${API}/supply/credentials`, { name, value }));
+  }
+
+  connectEnvironment(name: string, tier: 'staging' | 'production') {
+    return firstValueFrom(this.http.post<SupplyView>(`${API}/supply/environments`, { name, tier }));
+  }
+
+  allotSupply(supplyId: string, unitId: string, revoke = false) {
+    return firstValueFrom(
+      this.http.post<unknown>(`${API}/supply/allot`, { supplyId, unitId, revoke }),
+    );
+  }
+
+  updateSettings(body: {
+    irreversibleActions?: string[];
+    confirmationPhrase?: string;
+    reason: string;
+    expectedVersion: number;
+  }) {
+    return firstValueFrom(this.http.put<SettingsView>(apiUrl.settings(), body));
   }
 
   palette() {

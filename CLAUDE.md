@@ -39,6 +39,8 @@ Tests use the `orbot_test` / `orbot_secrets_test` databases and reset them; the 
   - `execution/task-runner.ts` — drives a bot through a task: brief → workspace → runtime events → policy check → record.
   - `runtime/` — `RuntimeRegistry`, `SimulatedRuntime` + `scenarios/*.json`, `WorkspaceManager` (git worktree per task).
   - `overseer/` — `OverseerService` (missions → backbriefs → tasks, dispatch, unit sitreps, reassign, replace bots), `BriefingService` (handover + Field Manual + War Diary → `TaskBrief`, `task.briefed` event), `CurationService`, `ColdStartService`.
+  - `chat/` — `ChatService` (message → `runtime.interpret` → actions/pending → orders log → read-back; undo; confirm/decline) and `ActionsService` (one executor per `ChatAction`, each returning its inverse).
+  - `settings/` — the versioned settings entity (irreversible action kinds, confirmation phrase).
   - `documents/` — `FieldManualService` (entries, render/parse), `UnitDocsService` + `UnitDocumentStore` (Markdown mirror in the unit's repo, import of human edits).
   - `common/background.ts` — per-key serial job runner for bus-driven work; tests wait with `settled()` (`src/testing/settle.ts`).
   - `policy/` — `PolicyService.check()`; every bot action passes through it (hook for ROE, budgets, stand-down, separation of duties).
@@ -62,5 +64,6 @@ Tests use the `orbot_test` / `orbot_secrets_test` databases and reset them; the 
 - Nest DI relies on decorator metadata: run API code through `nest build`/Vitest, not `tsx` (tsx is fine for DI-free scripts like `migrate`).
 - **Knowledge belongs to the unit.** A bot's brief comes only from `BriefingService` (unit documents). Never pass a bot information from another bot's memory or run; if a successor needs it, it belongs in a handover or the Field Manual.
 - **Field Manual edits go through entries** (`FieldManualService.promote/merge/edit/retire/reinstate` + `rerender` in the same transaction). Never rewrite the `field-manual` document directly.
+- **Chat changes go through `ActionsService`.** Add a new chat capability by adding a `ChatAction` kind (shared zod union), an executor that calls existing services and returns its inverse, and interpreter support. Never act on free text.
 - **Bus reactions go through `Background.run(key, …)`** with key `unit:<id>` (or `docs:<id>`) so a unit's work stays ordered.
 - Tests are written alongside code. Each phase's "done when" is an automated test.

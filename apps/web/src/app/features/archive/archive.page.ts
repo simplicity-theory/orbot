@@ -26,6 +26,7 @@ const FILTERS = [
   'bot.step',
   'artifact',
   'chat.message',
+  'orders.log',
 ];
 
 @Component({

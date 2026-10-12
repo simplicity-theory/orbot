@@ -13,6 +13,7 @@ import type { PaletteItem } from '@orbot/shared';
 import { Api } from '../core/api';
 import { toUserError } from '../core/api-error';
 import { ThemeService } from '../core/theme';
+import { ChatLauncher } from '../core/chat-drawer';
 import { openDialog } from '../ui/dialog';
 import { Icon } from '../ui/icon';
 import type { IconName } from '../ui/icons';
@@ -187,6 +188,7 @@ export class CommandPalette implements AfterViewInit {
   private readonly toasts = inject(Toasts);
   private readonly dialog = inject(Dialog);
   private readonly ref = inject(DialogRef);
+  private readonly chat = inject(ChatLauncher);
   private readonly input = viewChild.required<ElementRef<HTMLInputElement>>('input');
 
   protected readonly query = signal('');
@@ -262,6 +264,22 @@ export class CommandPalette implements AfterViewInit {
           }),
       })),
       {
+        id: 'chat:hq',
+        group: 'Actions',
+        label: 'Chat with HQ',
+        sublabel: 'Orders for any unit',
+        icon: 'user',
+        run: () => this.later(() => this.chat.open('hq')),
+      },
+      ...units.map<Command>((u) => ({
+        id: `chat:${u.id}`,
+        group: 'Actions',
+        label: `Chat with ${u.label}`,
+        sublabel: 'Its Overseer',
+        icon: 'user',
+        run: () => this.later(() => this.chat.open(u.id)),
+      })),
+      {
         id: 'theme',
         group: 'Actions',
         label: this.theme.theme() === 'dark' ? 'Switch to light theme' : 'Switch to dark theme',
@@ -284,6 +302,9 @@ export class CommandPalette implements AfterViewInit {
       go('ORBAT', '/', 'grid'),
       go('Approvals', '/approvals', 'stamp'),
       go('Sitreps', '/sitreps', 'radio'),
+      go('Orders log', '/orders', 'book'),
+      go('Supply Depot', '/supply', 'key'),
+      go('Chat (full page)', '/chat', 'user'),
       go('Archive', '/archive', 'archive'),
       go('Operations', '/operations', 'flag'),
       go('Settings', '/settings', 'sliders'),

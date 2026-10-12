@@ -2,7 +2,7 @@ import { Dialog } from '@angular/cdk/dialog';
 import { httpResource } from '@angular/common/http';
 import { Component, computed, effect, inject, input } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import type { UnitDetailView } from '@orbot/shared';
+import type { MissionStatus, Status, UnitDetailView } from '@orbot/shared';
 import { apiUrl } from '../../core/api';
 import { Breadcrumbs, ORBAT_CRUMB } from '../../core/breadcrumbs';
 import { reloadOnLive, touchedIds } from '../../core/live';
@@ -63,7 +63,11 @@ export class UnitPage {
   private readonly dialog = inject(Dialog);
 
   protected readonly activeMissions = computed(
-    () => this.view.value()?.missions.filter((m) => m.mission.status !== 'done') ?? [],
+    () =>
+      this.view
+        .value()
+        ?.missions.filter((m) => m.mission.status !== 'done' && m.mission.status !== 'withdrawn') ??
+      [],
   );
   protected readonly doneMissions = computed(
     () => this.view.value()?.missions.filter((m) => m.mission.status === 'done') ?? [],
@@ -112,6 +116,11 @@ export class UnitPage {
       { unitId: v.unit.id, unitName: v.unit.name, bots: this.workers(), replacesBotId },
       replacesBotId ? 'Replace a bot' : 'Add a bot',
     ).closed.subscribe(() => this.view.reload());
+  }
+
+  /** Missions share the app's one status vocabulary. */
+  protected missionStatus(s: MissionStatus): Status {
+    return s === 'planning' ? 'queued' : s === 'withdrawn' ? 'stood-down' : s;
   }
 
   protected callsign(v: UnitDetailView, botId: string | null): string {

@@ -15,7 +15,7 @@ test.describe('app shell', () => {
     await expect(strip).toContainText('E-2 blocked');
     await expect(strip).toContainText('failed');
     await expect(strip).toContainText('Backbrief awaiting approval: Harden session handling');
-    await expect(page.getByRole('button', { name: /items need you/ })).toContainText('3');
+    await expect(page.getByRole('button', { name: /items need you/ })).toContainText('5');
   });
 
   test('left rail navigates and collapses; breadcrumbs mirror the chain of command', async ({

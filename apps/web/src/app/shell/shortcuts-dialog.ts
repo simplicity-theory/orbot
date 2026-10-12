@@ -2,11 +2,15 @@ import { Component } from '@angular/core';
 
 export const SHORTCUTS: { keys: string[]; action: string }[] = [
   { keys: ['Ctrl/⌘', 'K'], action: 'Command palette: jump anywhere, run actions, search' },
+  { keys: ['c'], action: 'Chat with the Overseer of this screen (HQ elsewhere)' },
   { keys: ['g', 'o'], action: 'Go to the ORBAT' },
   { keys: ['g', 'a'], action: 'Go to Approvals (Needs you)' },
   { keys: ['g', 's'], action: 'Go to Sitreps' },
   { keys: ['g', 'r'], action: 'Go to the Archive (the record)' },
   { keys: ['g', 'p'], action: 'Go to Operations' },
+  { keys: ['g', 'c'], action: 'Go to full-page chat' },
+  { keys: ['g', 'l'], action: 'Go to the orders log' },
+  { keys: ['g', 'd'], action: 'Go to the Supply Depot' },
   { keys: ['g', ','], action: 'Go to Settings' },
   { keys: ['?'], action: 'Show this list' },
   { keys: ['Esc'], action: 'Close a dialog or tooltip' },

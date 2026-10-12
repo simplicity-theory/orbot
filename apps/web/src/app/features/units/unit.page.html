@@ -61,9 +61,7 @@
               <div class="mission">
                 <div class="mission-head">
                   <span>{{ m.mission.goal }}</span>
-                  <orb-status
-                    [status]="m.mission.status === 'planning' ? 'queued' : m.mission.status"
-                  />
+                  <orb-status [status]="missionStatus(m.mission.status)" />
                 </div>
                 <div
                   class="progress"

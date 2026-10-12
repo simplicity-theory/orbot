@@ -32,7 +32,7 @@ test('a backbrief is approved inline on the ORBAT, without leaving the page', as
   await expect(card.getByRole('region', { name: 'Needs you in Engineers' })).not.toContainText(
     'Harden session handling',
   );
-  await expect(page.getByRole('button', { name: /items need you/ })).toContainText('2');
+  await expect(page.getByRole('button', { name: /items need you/ })).toContainText('4');
 });
 
 test('a new mission is planned, sent back, re-planned and approved with changes', async ({

@@ -123,6 +123,18 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     meaning:
       'Something a bot or Overseer may not decide alone, waiting on a higher level — ultimately you.',
   },
+  'orders-log': {
+    term: 'Orders log',
+    short: 'Every change made from chat',
+    meaning:
+      'Each change an order in chat made, with the message that caused it. Undo adds a reversing entry; nothing is removed.',
+  },
+  'read-back': {
+    term: 'Read-back',
+    short: 'The Overseer repeating what it did',
+    meaning:
+      'After acting on your message, the Overseer lists every change it made, each with a link and Undo.',
+  },
   'cold-start': {
     term: 'Cold-start check',
     short: 'Could a new bot carry on from the documents?',

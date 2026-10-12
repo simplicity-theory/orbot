@@ -41,7 +41,20 @@ export const DOCS_BRANCH = 'orbot/unit-docs';
  * so they are versioned with the code and readable by human developers.
  */
 export class GitDocumentStore implements UnitDocumentStore {
+  /** One git operation at a time per repository: units sharing a repo share its docs worktree. */
+  private readonly locks = new Map<string, Promise<unknown>>();
+
   constructor(private readonly workspacesDir: string) {}
+
+  private locked<T>(loc: DocsLocation, fn: () => Promise<T>): Promise<T> {
+    const prev = this.locks.get(loc.repoSupplyId) ?? Promise.resolve();
+    const next = prev.then(fn, fn);
+    this.locks.set(
+      loc.repoSupplyId,
+      next.catch(() => undefined),
+    );
+    return next;
+  }
 
   describe(_loc: DocsLocation, unitSlug: string) {
     return { branch: DOCS_BRANCH, path: `.orbot/units/${unitSlug}` };
@@ -72,7 +85,20 @@ export class GitDocumentStore implements UnitDocumentStore {
     return path;
   }
 
-  async read(loc: DocsLocation, unitSlug: string): Promise<Map<string, string>> {
+  read(loc: DocsLocation, unitSlug: string): Promise<Map<string, string>> {
+    return this.locked(loc, () => this.readUnlocked(loc, unitSlug));
+  }
+
+  write(
+    loc: DocsLocation,
+    unitSlug: string,
+    files: Map<string, string>,
+    message: string,
+  ): Promise<WriteResult> {
+    return this.locked(loc, () => this.writeUnlocked(loc, unitSlug, files, message));
+  }
+
+  private async readUnlocked(loc: DocsLocation, unitSlug: string): Promise<Map<string, string>> {
     const root = join(await this.ensureWorktree(loc), this.describe(loc, unitSlug).path);
     const out = new Map<string, string>();
     if (!existsSync(root)) return out;
@@ -87,7 +113,7 @@ export class GitDocumentStore implements UnitDocumentStore {
     return out;
   }
 
-  async write(
+  private async writeUnlocked(
     loc: DocsLocation,
     unitSlug: string,
     files: Map<string, string>,

@@ -296,3 +296,20 @@ kbd {
   width: min(var(--palette-width), calc(var(--viewport-width) - var(--space-8)));
   padding: var(--space-4);
 }
+
+// Chat drawer: a slide-over from the right, full height.
+.orb-drawer {
+  width: min(var(--drawer-width), var(--viewport-width));
+  max-height: none;
+  height: var(--viewport-height);
+  border-radius: 0;
+  border-width: 0 0 0 var(--border-width);
+  animation: drawer-in var(--duration) var(--ease);
+}
+
+@keyframes drawer-in {
+  from {
+    transform: translateX(var(--space-8));
+    opacity: 0;
+  }
+}

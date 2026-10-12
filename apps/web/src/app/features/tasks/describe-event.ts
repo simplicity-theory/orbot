@@ -146,6 +146,22 @@ export function describeEvent(e: RecordEvent): EventSummary {
         text: `${(b['files'] as unknown[]).length} file(s) committed${(b['imported'] as unknown[]).length ? `, imported ${(b['imported'] as string[]).join(', ')}` : ''}`,
         tone: 'neutral',
       };
+    case 'frago':
+      return { icon: 'radio', label: 'Frago', term: 'frago', text: s('text'), tone: 'warning' };
+    case 'orders.log':
+      return { icon: 'book', label: 'Order', term: 'orders-log', text: s('summary'), tone: 'info' };
+    case 'chat.readback':
+      return {
+        icon: 'check',
+        label: 'Read-back',
+        term: 'read-back',
+        text: s('text'),
+        tone: 'neutral',
+      };
+    case 'pending.action':
+      return { icon: 'clock', label: 'Pending', text: s('summary'), tone: 'warning' };
+    case 'pending.resolved':
+      return { icon: 'check', label: 'Answered', text: s('outcome'), tone: 'neutral' };
     case 'chat.message':
       return { icon: 'user', label: 'Chat', text: s('text'), tone: 'neutral' };
     case 'secret.stored':

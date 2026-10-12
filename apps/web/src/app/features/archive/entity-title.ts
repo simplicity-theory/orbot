@@ -40,6 +40,8 @@ export const TYPE_LABELS: Record<string, string> = {
   artifact: 'Commits & files',
   'chat.message': 'Chat',
   'fm-entry': 'Field Manual entries',
+  'orders.log': 'Orders log',
+  frago: 'Fragos',
   backbrief: 'Backbriefs',
   curation: 'Field Manual curation',
   'coldstart.check': 'Cold-start checks',

@@ -61,6 +61,21 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./features/placeholder/sitreps.page').then((m) => m.SitrepsPage),
       },
+      { path: 'chat', pathMatch: 'full', redirectTo: 'chat/hq' },
+      {
+        path: 'chat/:channel',
+        loadComponent: () => import('./features/chat/chat.page').then((m) => m.ChatPage),
+      },
+      {
+        path: 'orders',
+        title: 'Orders log',
+        loadComponent: () => import('./features/orders/orders.page').then((m) => m.OrdersPage),
+      },
+      {
+        path: 'supply',
+        title: 'Supply Depot',
+        loadComponent: () => import('./features/supply/supply.page').then((m) => m.SupplyPage),
+      },
       {
         path: 'archive',
         title: 'Archive',

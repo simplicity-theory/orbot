@@ -193,7 +193,7 @@ export class ActionsService {
           ...action.addRoe.map((r) => `added ROE “${r.text}”`),
         ];
         return {
-          summary: `${u} standing orders: ${parts.join('; ')}.`,
+          summary: `${u} standing orders: ${parts.join('; ')}`,
           links: [{ label: `${u} rules`, link: unitLink(action.unitId, 'rules') }],
           inverse: {
             kind: 'rule-change',

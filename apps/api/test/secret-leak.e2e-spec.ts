@@ -95,19 +95,17 @@ describe('secrets never leak', () => {
   });
 
   it('via chat: a message containing the secret is masked in the record', async () => {
-    const ev = await t.app
-      .get(RecordService)
-      .event(
-        'chat.message',
-        {
-          channel: unitId,
-          from: 'commander',
-          text: `here is the token: ${SECRET}`,
-          relayedFrom: null,
-        },
-        { unitId },
-        'commander:commander',
-      );
+    const ev = await t.app.get(RecordService).event(
+      'chat.message',
+      {
+        channel: unitId,
+        from: 'commander',
+        text: `here is the token: ${SECRET}`,
+        relayedFrom: null,
+      },
+      { unitId },
+      'commander:commander',
+    );
     assertClean(JSON.stringify(ev), 'chat event');
     expect(ev.body.text).toBe('here is the token: [REDACTED:secret]');
   });

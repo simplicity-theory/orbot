@@ -10,6 +10,7 @@ import { Router, RouterLink, RouterLinkActive, RouterOutlet, NavigationEnd } fro
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { filter } from 'rxjs';
 import { Auth } from '../core/auth';
+import { ChatLauncher } from '../core/chat-drawer';
 import { Live } from '../core/live';
 import { Meta } from '../core/meta';
 import { NeedsYou } from '../core/needs-you';
@@ -34,6 +35,9 @@ const NAV: NavItem[] = [
   { label: 'Operations', link: '/operations', icon: 'flag' },
   { label: 'Approvals', link: '/approvals', icon: 'stamp' },
   { label: 'Sitreps', link: '/sitreps', icon: 'radio' },
+  { label: 'Chat', link: '/chat', icon: 'user' },
+  { label: 'Orders log', link: '/orders', icon: 'book' },
+  { label: 'Supply Depot', link: '/supply', icon: 'key' },
   { label: 'Archive', link: '/archive', icon: 'archive' },
   { label: 'Settings', link: '/settings', icon: 'sliders' },
 ];
@@ -48,6 +52,9 @@ const GO_TO: Record<string, string> = {
   r: '/archive',
   p: '/operations',
   ',': '/settings',
+  c: '/chat',
+  l: '/orders',
+  d: '/supply',
 };
 
 const isTyping = (t: EventTarget | null) =>
@@ -87,6 +94,7 @@ export class Shell {
   private readonly auth = inject(Auth);
   private readonly router = inject(Router);
   private readonly dialog = inject(Dialog);
+  protected readonly chat = inject(ChatLauncher);
   private pendingG: ReturnType<typeof setTimeout> | null = null;
   protected readonly inboxOpen = signal(false);
   protected readonly popover = POPOVER;
@@ -138,7 +146,10 @@ export class Shell {
       }
       return;
     }
-    if (e.key === 'g') {
+    if (e.key === 'c') {
+      e.preventDefault();
+      this.chat.open();
+    } else if (e.key === 'g') {
       this.pendingG = setTimeout(() => (this.pendingG = null), 1500);
     } else if (e.key === '?') {
       e.preventDefault();

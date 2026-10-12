@@ -107,7 +107,7 @@ describe('Phase 3: orders given in chat reach live work', () => {
     expect(rb.text).toBe('Wilco.');
     expect(rb.kinds.sort()).toEqual(['rule-change', 'supply-grant']);
     expect(rb.items.map((i) => i.summary)).toEqual([
-      'Guard standing orders: dropped “Low-severity findings also block release.”; added “Stop blocking on low-severity findings.”.',
+      'Guard standing orders: dropped “Low-severity findings also block release.”; added “Stop blocking on low-severity findings.”',
       'payments-service (repository) issued to Guard.',
     ]);
     expect(rb.items.every((i) => i.reversible && i.links.length > 0)).toBe(true);
@@ -130,6 +130,7 @@ describe('Phase 3: orders given in chat reach live work', () => {
       'Stop blocking on low-severity findings.',
     ]);
     expect(u.supply.map((s) => s.name)).toContain('payments-service');
+    expect(u.unit.supplyIds).toContain(paymentsId);
     expect(u.unit.updatedBy).toBe('commander:commander');
     const h: VersionWithStatus[] = (await t.agent.get(`/api/record/${guardId}/history`).expect(200))
       .body;

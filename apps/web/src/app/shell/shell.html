@@ -34,6 +34,17 @@
     <button
       type="button"
       class="btn btn--ghost palette-btn"
+      aria-label="Open chat with the Overseer of this screen"
+      title="Chat (c)"
+      (click)="chat.open()"
+    >
+      <orb-icon name="user" />
+      <span class="label">Chat</span>
+      <kbd>c</kbd>
+    </button>
+    <button
+      type="button"
+      class="btn btn--ghost palette-btn"
       (click)="openPalette()"
       aria-label="Open command palette"
     >

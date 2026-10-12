@@ -69,3 +69,27 @@ Judgement calls made where the design was ambiguous or a choice had to be made. 
 **D31. Unit view sections are navigation, not tabs.** Overview / Field Manual / War Diary / Handovers / Rules / Supply are links (`?section=`) with `aria-current`, so each is deep-linkable and the back button works.
 
 **D32. Keyboard.** Ctrl/⌘+K command palette (ARIA combobox + listbox, CDK dialog focus trap); `g` then `o/a/s/r/p/,` to go to screens; `?` for the cheat sheet. Shortcuts are ignored while typing in a field, except Ctrl/⌘+K.
+
+## Phase 3
+
+**D33. The Overseer interprets chat through `BotRuntime.interpret`.** It returns an `Interpretation` (zod-validated): message kinds, typed `ChatAction`s, musings, missing supply, an answer, and anything unclear. `SimulatedRuntime` uses a deterministic sentence-by-sentence rules/keyword classifier (`runtime/simulated-interpreter.ts`), so chat works offline and in tests. HQ has no Overseer bot until Phase 4, so the HQ channel is read by the default runtime, acting as `system:hq`.
+
+**D34. Chat can only emit a closed set of actions.** `create-mission`, `withdraw-mission`, `frago` (stand down / amend), `resume`, `rule-change`, `supply-grant`, `supply-revoke`, `budget-grant`, `grant-deploy-rights`. Each runs through `ActionsService`, which calls the same services the UI uses, and returns a summary, links and its inverse. Chat has no side doors.
+
+**D35. Orders log = append-only `orders.log` events.** Each records the originating message, the action, the summary, links and the inverse. Undo runs the inverse and appends a new entry with `reverses`; a second undo is refused. Some changes have no inverse (deploy rights; withdrawing a mission) and say so instead of offering Undo. Undoing a mission order withdraws it (`withdrawn` mission status, backbrief rejected, tasks stood down).
+
+**D36. Orders reach live work in two ways.** Running bots get a recorded `frago` that `TaskRunner` delivers into the run (`RunContext.waitForFrago`), and they re-read live orders with `RunContext.orders()`. Blocked tasks whose block reason shares at least two significant words with what changed are restarted by the Overseer (with a unit sitrep). New tasks pick up changes from their brief.
+
+**D37. A rule change replaces only the best-matching order.** "Stop blocking on low-severity findings" removes the standing order that best matches it, not every order that mentions findings. Ties are removed together.
+
+**D38. Musings and irreversible orders are held as `pending.action` events.** Musings get "Yes, do it" / "No"; irreversible kinds (the setting `irreversibleActions`, default `grant-deploy-rights`) need the typed phrase (setting `confirmationPhrase`, default "confirm"). Answers are `pending.resolved` events. Settings are a versioned `settings` entity.
+
+**D39. Cross-unit orders are relayed by HQ.** An order naming another unit runs against that unit, is logged with `routedVia: 'hq'`, and HQ posts it into the other unit's channel. The full HQ (planning, routing, shared record) comes in Phase 4.
+
+**D40. Production deploy rights are given only by order in chat.** The Supply Depot screen lists production environments but issues them only through chat, where the irreversible-order confirmation lives.
+
+**D41. Toasts live in the CDK overlay container.** When a dialog (chat drawer, palette) is open, CDK hides everything outside the overlay container from assistive tech; toasts must stay announced and clickable, so the outlet moves itself there.
+
+**D42. The chat history is a plain scrolling log, not virtual-scrolled.** Messages vary a lot in height (read-back cards), the view loads the last 500 per channel, and full history is in the record and Archive. Virtual scroll stays on the fixed-row feeds (working record, War Diary, sitreps).
+
+**D43. Docs mirror writes are serialized per repository.** Units that share a repository share its `orbot/unit-docs` worktree, so `GitDocumentStore` runs one git operation at a time per repository.

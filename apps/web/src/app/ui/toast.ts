@@ -1,4 +1,5 @@
-import { Component, inject, Injectable, signal } from '@angular/core';
+import { OverlayContainer } from '@angular/cdk/overlay';
+import { afterNextRender, Component, ElementRef, inject, Injectable, signal } from '@angular/core';
 import { Icon } from './icon';
 
 export interface Toast {
@@ -74,6 +75,7 @@ export class Toasts {
       flex-direction: column;
       gap: var(--space-2);
       max-width: var(--measure);
+      pointer-events: auto;
     }
     .toast {
       --tone: var(--tone-info);
@@ -104,4 +106,12 @@ export class Toasts {
 })
 export class ToastOutlet {
   protected readonly toasts = inject(Toasts);
+
+  constructor() {
+    // Live inside the CDK overlay container: when a dialog is open, CDK hides everything
+    // outside it from assistive tech, and toasts must stay announced and reachable.
+    const host = inject(ElementRef<HTMLElement>).nativeElement;
+    const container = inject(OverlayContainer);
+    afterNextRender(() => container.getContainerElement().appendChild(host));
+  }
 }
