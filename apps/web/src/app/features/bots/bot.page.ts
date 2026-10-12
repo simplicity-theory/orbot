@@ -6,6 +6,7 @@ import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import type { BotDetailView, TaskView } from '@orbot/shared';
 import { Api, apiUrl } from '../../core/api';
+import { Meta } from '../../core/meta';
 import { toUserError } from '../../core/api-error';
 import { Breadcrumbs, ORBAT_CRUMB } from '../../core/breadcrumbs';
 import { reloadOnLive, touchedIds } from '../../core/live';
@@ -47,7 +48,18 @@ import { AddBotDialog, type AddBotData } from '../units/add-bot.dialog';
             </p>
             <h1 class="mono">{{ v.bot.callsign }}</h1>
             <p class="page-header__lede">
-              {{ v.bot.role }} · runtime <span class="mono">{{ v.bot.runtime }}</span>
+              {{ v.bot.role }} ·
+              <label for="runtime">runtime</label>
+              <select
+                id="runtime"
+                class="input runtime"
+                [value]="v.bot.runtime"
+                (change)="switchRuntime($any($event.target).value)"
+              >
+                @for (r of meta.runtimes(); track r) {
+                  <option [value]="r" [selected]="r === v.bot.runtime">{{ r }}</option>
+                }
+              </select>
             </p>
           </div>
           <div class="header-actions">
@@ -203,6 +215,11 @@ import { AddBotDialog, type AddBotData } from '../units/add-bot.dialog';
     }
   `,
   styles: `
+    .runtime {
+      min-height: auto;
+      margin-left: var(--space-1);
+      font-family: var(--font-mono);
+    }
     .header-actions {
       display: flex;
       align-items: center;
@@ -262,6 +279,32 @@ export class BotPage {
   protected readonly reassigning = signal<{ taskId: string; botId: string; reason: string } | null>(
     null,
   );
+
+  protected readonly meta = inject(Meta);
+
+  protected async switchRuntime(runtime: string): Promise<void> {
+    const v = this.view.value()!;
+    if (runtime === v.bot.runtime) return;
+    try {
+      await this.api.setBotRuntime(
+        v.bot.id,
+        runtime,
+        `Switched to the ${runtime} runtime by the Commander`,
+      );
+      this.toasts.show({
+        tone: 'success',
+        message: `${v.bot.callsign} now runs on ${runtime}.`,
+        undo: async () => {
+          await this.api.setBotRuntime(v.bot.id, v.bot.runtime, 'Undo runtime switch');
+          this.view.reload();
+        },
+      });
+      this.view.reload();
+    } catch (err) {
+      const e = toUserError(err);
+      this.toasts.show({ tone: 'danger', message: e.message, detail: e.action });
+    }
+  }
 
   protected reassignable(t: TaskView): boolean {
     return ['queued', 'blocked', 'stood-down', 'failed'].includes(t.status);

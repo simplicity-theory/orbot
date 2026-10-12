@@ -39,6 +39,8 @@ Tests use the `orbot_test` / `orbot_secrets_test` databases and reset them; the 
   - `execution/task-runner.ts` — drives a bot through a task: brief → workspace → runtime events → policy check → record.
   - `runtime/` — `RuntimeRegistry`, `SimulatedRuntime` + `scenarios/*.json`, `WorkspaceManager` (git worktree per task).
   - `overseer/` — `OverseerService` (missions → backbriefs → tasks, dispatch, unit sitreps, reassign, replace bots), `BriefingService` (handover + Field Manual + War Diary → `TaskBrief`, `task.briefed` event), `CurationService`, `ColdStartService`.
+  - `overseer/hq.service.ts` — `HqService` (actor `system:hq`): operation → O Group plan → chained missions on an integration branch → backbriefs → execution → handoffs/send-backs → deploy approval → After Action review → closed; renders the operation's shared record document.
+  - `runtime/claude.runtime.ts` — `ClaudeRuntime` (Messages API tool loop confined to the worktree; structured outputs for Overseer/HQ). Registered only if `ANTHROPIC_API_KEY` is set; tests use a scripted fake client.
   - `chat/` — `ChatService` (message → `runtime.interpret` → actions/pending → orders log → read-back; undo; confirm/decline) and `ActionsService` (one executor per `ChatAction`, each returning its inverse).
   - `settings/` — the versioned settings entity (irreversible action kinds, confirmation phrase).
   - `documents/` — `FieldManualService` (entries, render/parse), `UnitDocsService` + `UnitDocumentStore` (Markdown mirror in the unit's repo, import of human edits).

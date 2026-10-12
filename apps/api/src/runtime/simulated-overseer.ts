@@ -48,12 +48,7 @@ export class SimulatedOverseer {
       stage === 'inspect' || stage === 'guard' || stage === 'deploy'
         ? [
             {
-              title:
-                stage === 'inspect'
-                  ? `Test: ${input.mission.goal}`
-                  : stage === 'guard'
-                    ? `Security review: ${input.mission.goal}`
-                    : `Deploy to production: ${input.mission.goal}`,
+              title: input.mission.goal,
               description: `Stage “${stage}” of the operation. Done when: ${input.mission.definitionOfDone.join('; ')}.`,
               botId: pick(),
               scenario:

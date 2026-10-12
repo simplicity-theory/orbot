@@ -16,6 +16,7 @@ import type {
   CreateMissionRequest,
   FmEntryView,
   MissionView,
+  OperationView,
   PaletteItem,
   RecordEvent as RecordEventOf,
   ReviseFmEntryRequest,
@@ -60,6 +61,8 @@ export const apiUrl = {
   approvals: () => `${API}/approvals`,
   backbrief: (id: string) => `${API}/backbriefs/${id}`,
   palette: () => `${API}/palette`,
+  operations: () => `${API}/operations`,
+  operation: (id: string) => `${API}/operations/${id}`,
   chat: (channel: string) => `${API}/chat/${channel}`,
   orders: () => `${API}/orders`,
   supply: () => `${API}/supply`,
@@ -250,6 +253,24 @@ export class Api {
     expectedVersion: number;
   }) {
     return firstValueFrom(this.http.put<SettingsView>(apiUrl.settings(), body));
+  }
+
+  createOperation(intent: string, name?: string) {
+    return firstValueFrom(
+      this.http.post<OperationView>(`${API}/operations`, { intent, ...(name ? { name } : {}) }),
+    );
+  }
+
+  decideDeploy(taskId: string, approve: boolean, note: string | null = null) {
+    return firstValueFrom(
+      this.http.post<TaskView>(`${API}/tasks/${taskId}/deploy-decision`, { approve, note }),
+    );
+  }
+
+  setBotRuntime(botId: string, runtime: string, reason: string) {
+    return firstValueFrom(
+      this.http.put<BotView>(`${API}/bots/${botId}/runtime`, { runtime, reason }),
+    );
   }
 
   palette() {

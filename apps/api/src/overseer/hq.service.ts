@@ -303,8 +303,12 @@ export class HqService implements OnApplicationBootstrap, OnModuleDestroy {
     const bots = (await this.record.listActive('bot', { unitId: toUnit.entityId })).filter(
       (b) => !b.body.isOverseer && b.body.status !== 'stood-down',
     );
+    // Prefer a free bot: one that is blocked or failed elsewhere would never pick the fix up.
+    const free = (b: (typeof bots)[number]) =>
+      b.body.status === 'idle' || b.body.status === 'working' ? 0 : 1;
     const bot = bots.sort(
       (a, b) =>
+        free(a) - free(b) ||
         a.body.queue.length - b.body.queue.length ||
         a.body.callsign.localeCompare(b.body.callsign, undefined, { numeric: true }),
     )[0];

@@ -93,3 +93,23 @@ Judgement calls made where the design was ambiguous or a choice had to be made. 
 **D42. The chat history is a plain scrolling log, not virtual-scrolled.** Messages vary a lot in height (read-back cards), the view loads the last 500 per channel, and full history is in the record and Archive. Virtual scroll stays on the fixed-row feeds (working record, War Diary, sitreps).
 
 **D43. Docs mirror writes are serialized per repository.** Units that share a repository share its `orbot/unit-docs` worktree, so `GitDocumentStore` runs one git operation at a time per repository.
+
+## Phase 4
+
+**D44. HQ is a service, not a bot.** `HqService` runs operations as `system:hq`; its staff work (planning, after-action) goes through the default runtime's `planOperation` / `afterAction`, so it stays runtime-agnostic and works offline.
+
+**D45. One integration branch per operation.** `orbot/op-<id8>` is cut from the repository's default branch. Every task in the operation starts from it (`baseRef`); finished work and fix tasks are merged back in, so each unit receives exactly what the previous one delivered. Branches and worktrees are never removed.
+
+**D46. Missions in an operation form a chain.** The plan creates build → inspect → guard → deploy missions linked by `dependsOnMissionId`. Downstream missions sit in `waiting` until the upstream mission hands off. Units brief back before execution, and execution starts only when every backbrief is approved.
+
+**D47. A send-back is a task stood down with "Sent back: …".** HQ turns it into a fix task in the upstream unit, preferring a bot that is free. The downstream mission waits, and the sent-back task is re-queued when the fix is integrated. In simulation, `inspect-strict` always sends back once and adds a handover flag aimed at Engineers, so the loop is exercised every time.
+
+**D48. Production deploys need two things.** The Commander's approval on the deploy task (shown inline on Approvals and the operation page; skipped only when the unit's gate is escalations-only), and production deploy rights for the unit, which are given only by order in chat (D40). Without rights the deploy task blocks, and granting them resumes it.
+
+**D49. After Action review lessons become standing orders automatically.** The AAR is written as a document; each lesson becomes a standing order in the unit it names, logged as an HQ change (attributed to `system:hq`) so the Commander can see and revise it. Cross-unit lessons (handover flags naming another unit) are posted as HQ sitreps and land in the operation's shared record document.
+
+**D50. ClaudeRuntime is a manual tool loop on the Messages API, not the Agent SDK.** ORBOT must own every side effect: file access is confined to the task worktree, scripts are limited to `npm run`, commits go through git, and every tool call becomes a record event via `RunContext`. No tool returns a secret value. A handover is required before any terminal tool (done/blocked/failed/send_back/stand_down). Overseer and HQ calls use structured outputs (zod), validated again by ORBOT. Server-side fallback is enabled. The runtime is registered only when `ANTHROPIC_API_KEY` is set, and the key is added to the redactor.
+
+**D51. Bots can be switched between runtimes** (`PUT /bots/:id/runtime`, a select on the bot page with Undo). The choice is a versioned field on the bot.
+
+**D52. Launching an operation from chat has no inverse.** Withdrawing a whole operation is done by standing its units down (Phase 5), not by Undo.

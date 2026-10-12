@@ -19,7 +19,7 @@ import { Term } from '../../ui/term';
           <li role="treeitem" aria-expanded="true" aria-selected="false">
             <span class="node"
               ><orb-term key="hq">HQ</orb-term>
-              <span class="meta">routes operations to units (Phase 4)</span></span
+              <span class="meta">plans operations, routes orders between units</span></span
             >
             <ul role="group" class="list-reset">
               @for (u of units(); track u.unit.id) {

@@ -298,7 +298,7 @@ export class Backbrief {
   protected add(): void {
     this.draft.update((d) => [
       ...d,
-      { title: 'New task', description: '', botId: null, scenario: 'happy-path' },
+      { title: 'New task', description: '', botId: null, scenario: 'happy-path', kind: 'work' },
     ]);
   }
 

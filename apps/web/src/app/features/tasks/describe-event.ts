@@ -146,6 +146,59 @@ export function describeEvent(e: RecordEvent): EventSummary {
         text: `${(b['files'] as unknown[]).length} file(s) committed${(b['imported'] as unknown[]).length ? `, imported ${(b['imported'] as string[]).join(', ')}` : ''}`,
         tone: 'neutral',
       };
+    case 'operation.phase':
+      return {
+        icon: 'flag',
+        label: 'Phase',
+        term: 'operation',
+        text: `${s('from')} → ${s('to')}: ${s('reason')}`,
+        tone: 'info',
+      };
+    case 'handoff':
+      return {
+        icon: 'arrow-right',
+        label: 'Handoff',
+        term: 'handoff',
+        text: `Handed off at ${s('commit').slice(0, 10)}`,
+        tone: 'success',
+      };
+    case 'sendback':
+      return {
+        icon: 'undo',
+        label: 'Send-back',
+        term: 'send-back',
+        text: s('reason'),
+        tone: 'warning',
+      };
+    case 'integration':
+      return {
+        icon: 'git-commit',
+        label: 'Integrated',
+        text: `${s('from')} → ${s('branch')}`,
+        tone: 'neutral',
+      };
+    case 'deployment':
+      return {
+        icon: 'check',
+        label: 'Deployed',
+        text: `${s('environment')} at ${s('commit').slice(0, 10)}`,
+        tone: 'success',
+      };
+    case 'deploy.approval':
+      return {
+        icon: 'stamp',
+        label: 'Deploy',
+        text: `${s('status')}${b['note'] ? `: ${s('note')}` : ''}`,
+        tone: s('status') === 'approved' ? 'success' : 'warning',
+      };
+    case 'after-action':
+      return {
+        icon: 'book',
+        label: 'After Action',
+        term: 'after-action',
+        text: `${(b['lessons'] as unknown[]).length} lesson(s) kept as standing orders`,
+        tone: 'info',
+      };
     case 'frago':
       return { icon: 'radio', label: 'Frago', term: 'frago', text: s('text'), tone: 'warning' };
     case 'orders.log':

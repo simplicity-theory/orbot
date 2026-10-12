@@ -84,8 +84,19 @@ import { ThemeService } from '../../core/theme';
         <dl class="dl">
           <dt>Product name</dt>
           <dd>{{ meta.productName() }} <span class="meta">(ORBOT_PRODUCT_NAME)</span></dd>
-          <dt>Bot runtime</dt>
+          <dt>Default bot runtime</dt>
           <dd class="mono">{{ meta.runtime() }}</dd>
+          <dt>Runtimes installed</dt>
+          <dd>
+            <span class="mono">{{ meta.runtimes().join(', ') }}</span>
+            @if (!meta.runtimes().includes('claude')) {
+              <span class="meta">
+                — set ANTHROPIC_API_KEY to enable the Claude runtime ({{
+                  meta.claudeModel()
+                }}).</span
+              >
+            }
+          </dd>
         </dl>
       </section>
     </div>

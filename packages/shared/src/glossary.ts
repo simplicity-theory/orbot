@@ -123,6 +123,18 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     meaning:
       'Something a bot or Overseer may not decide alone, waiting on a higher level — ultimately you.',
   },
+  handoff: {
+    term: 'Handoff',
+    short: 'Work passed to the next unit',
+    meaning:
+      'In an operation, Engineers hand off to Inspection, Inspection to Guard, Guard to Logistics — always on the operation’s integration branch.',
+  },
+  'send-back': {
+    term: 'Send-back',
+    short: 'A failed check returns work upstream',
+    meaning:
+      'When a check fails, HQ sends the work back to the unit that handed it over, with the reason. After the fix, it is handed off again.',
+  },
   'orders-log': {
     term: 'Orders log',
     short: 'Every change made from chat',

@@ -47,7 +47,7 @@ export const routes: Routes = [
         path: 'operations',
         title: 'Operations',
         loadComponent: () =>
-          import('./features/placeholder/operations.page').then((m) => m.OperationsPage),
+          import('./features/operations/operations.page').then((m) => m.OperationsPage),
       },
       {
         path: 'approvals',
@@ -60,6 +60,11 @@ export const routes: Routes = [
         title: 'Sitreps',
         loadComponent: () =>
           import('./features/placeholder/sitreps.page').then((m) => m.SitrepsPage),
+      },
+      {
+        path: 'operations/:operationId',
+        loadComponent: () =>
+          import('./features/operations/operation.page').then((m) => m.OperationPage),
       },
       { path: 'chat', pathMatch: 'full', redirectTo: 'chat/hq' },
       {

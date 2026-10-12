@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { STAGE_ORDER } from '@orbot/shared';
 import type {
   ApprovalsView,
   AttentionItem,
@@ -249,7 +250,11 @@ export class ViewsService {
       this.record.listActive('task'),
       this.record.listActive('backbrief'),
     ]);
-    const order = op.body.missionIds.length ? op.body.missionIds : missions.map((m) => m.entityId);
+    const stageRank = (m: (typeof missions)[number]) =>
+      m.body.stage ? STAGE_ORDER.indexOf(m.body.stage) : 99;
+    const order = op.body.missionIds.length
+      ? op.body.missionIds
+      : [...missions].sort((a, b) => stageRank(a) - stageRank(b)).map((m) => m.entityId);
     const bbViews = backbriefViews(
       backbriefs.filter((b) => order.includes(b.body.missionId)),
       missions,

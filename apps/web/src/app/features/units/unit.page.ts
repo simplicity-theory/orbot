@@ -120,7 +120,7 @@ export class UnitPage {
 
   /** Missions share the app's one status vocabulary. */
   protected missionStatus(s: MissionStatus): Status {
-    return s === 'planning' ? 'queued' : s === 'withdrawn' ? 'stood-down' : s;
+    return s === 'planning' || s === 'waiting' ? 'queued' : s === 'withdrawn' ? 'stood-down' : s;
   }
 
   protected callsign(v: UnitDetailView, botId: string | null): string {

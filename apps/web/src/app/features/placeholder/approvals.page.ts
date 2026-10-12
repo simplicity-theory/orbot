@@ -3,6 +3,7 @@ import { RouterLink } from '@angular/router';
 import { Breadcrumbs, ORBAT_CRUMB } from '../../core/breadcrumbs';
 import { NeedsYou } from '../../core/needs-you';
 import { Backbrief } from '../../ui/backbrief';
+import { DeployApproval } from '../../ui/deploy-approval';
 import { EmptyState } from '../../ui/empty-state';
 import { Icon } from '../../ui/icon';
 import { LoadError } from '../../ui/load-error';
@@ -13,7 +14,7 @@ import { scrollToFragment } from './scroll-to-fragment';
 /** The single inbox of everything waiting on the Commander, resolvable in place. */
 @Component({
   selector: 'orb-approvals-page',
-  imports: [EmptyState, Term, RouterLink, Icon, Backbrief, LoadError, Skeleton],
+  imports: [EmptyState, Term, RouterLink, Icon, Backbrief, LoadError, Skeleton, DeployApproval],
   template: `
     <div class="page page--detail">
       <header class="page-header">
@@ -50,7 +51,7 @@ import { scrollToFragment } from './scroll-to-fragment';
         }
         @if (needsYou.items().length) {
           <section aria-labelledby="other-h">
-            <h2 id="other-h" class="panel__title">Blocked and failed</h2>
+            <h2 id="other-h" class="panel__title">Deploys, blocks and failures</h2>
             <ul class="list-reset panel items">
               @for (a of needsYou.items(); track a.entityId + a.kind) {
                 <li>
@@ -60,6 +61,9 @@ import { scrollToFragment } from './scroll-to-fragment';
                   />
                   <span class="meta">{{ a.unitName }}</span>
                   <a [routerLink]="a.link">{{ a.label }}</a>
+                  @if (a.action === 'approve-deploy') {
+                    <orb-deploy-approval class="inline" [taskId]="a.entityId" [label]="a.label" />
+                  }
                 </li>
               }
             </ul>
@@ -87,6 +91,10 @@ import { scrollToFragment } from './scroll-to-fragment';
     }
     orb-icon {
       color: var(--tone-warning);
+    }
+    .inline {
+      grid-column: 1 / -1;
+      padding-bottom: var(--space-3);
     }
   `,
 })

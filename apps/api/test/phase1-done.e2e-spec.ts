@@ -1,7 +1,7 @@
 import type { BotEvent, BotView, RecordEvent, TaskDetailView, TaskView } from '@orbot/shared';
 import { git } from '../src/common/git.js';
 import { RecordService } from '../src/record/record.service.js';
-import { makeRepo, makeUnitWithBot, SpyRuntime, waitFor } from './fixtures.js';
+import { makeRepo, makeUnitWithBot, settled, SpyRuntime, waitFor } from './fixtures.js';
 import { asRole, startTestApp, type TestApp } from './helpers.js';
 
 /**
@@ -62,6 +62,9 @@ describe('Phase 1: one bot, one task, fully on the record', () => {
       const d: TaskDetailView = (await t.agent.get(`/api/tasks/${taskId}`).expect(200)).body;
       return d.task.status === 'done' ? d : null;
     });
+    // The run's closing events (and the Overseer's reaction) land just after the status flips.
+    await settled(t.app);
+    detail = (await t.agent.get(`/api/tasks/${taskId}`).expect(200)).body;
   });
   afterAll(() => t.close());
 
