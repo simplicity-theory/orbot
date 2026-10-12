@@ -1,0 +1,45 @@
+{
+  "name": "@orbot/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "nest build",
+    "start": "node dist/src/main.js",
+    "dev": "nest start --watch --preserveWatchOutput",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "migrate": "tsx src/db/migrate.ts",
+    "seed": "tsx src/seed/seed.cli.ts",
+    "test": "vitest run",
+    "test:e2e": "vitest run --config ./vitest.config.e2e.ts"
+  },
+  "dependencies": {
+    "@nestjs/common": "^12.1.3",
+    "@nestjs/core": "^12.1.3",
+    "@nestjs/platform-express": "^12.1.3",
+    "@nestjs/platform-socket.io": "^12.1.3",
+    "@nestjs/websockets": "^12.1.3",
+    "@orbot/shared": "0.1.0",
+    "cookie-parser": "^1.4.7",
+    "diff": "^9.0.0",
+    "dotenv": "^18.0.7",
+    "drizzle-orm": "^0.45.4",
+    "pg": "^8.23.1",
+    "pino": "^10.4.0",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2",
+    "socket.io": "^4.8.4",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^12.0.8",
+    "@nestjs/schematics": "^12.0.7",
+    "@nestjs/testing": "^12.1.3",
+    "@types/cookie-parser": "^1.4.10",
+    "@types/pg": "^8.23.1",
+    "@types/supertest": "^7.2.1",
+    "socket.io-client": "^4.8.4",
+    "supertest": "^7.3.1",
+    "tsx": "^4.23.15"
+  }
+}
