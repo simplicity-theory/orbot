@@ -31,16 +31,67 @@
         live.connected() ? 'Live updates on' : 'Live updates paused'
       }}</span>
     </span>
-    <a
+    <button
+      type="button"
+      class="btn btn--ghost palette-btn"
+      (click)="openPalette()"
+      aria-label="Open command palette"
+    >
+      <orb-icon name="search" />
+      <span class="label">Jump to…</span>
+      <kbd>{{ isMac ? '⌘' : 'Ctrl' }} K</kbd>
+    </button>
+    <button
+      type="button"
       class="needs-you"
-      routerLink="/approvals"
+      cdkOverlayOrigin
+      #inboxOrigin="cdkOverlayOrigin"
       [class.has-items]="needsYou.count() > 0"
+      [attr.aria-expanded]="inboxOpen()"
+      aria-haspopup="dialog"
       [attr.aria-label]="needsYou.count() + ' items need you'"
+      (click)="inboxOpen.set(!inboxOpen())"
     >
       <orb-icon name="inbox" />
       <span class="label">Needs you</span>
       <span class="count">{{ needsYou.count() }}</span>
-    </a>
+    </button>
+    <ng-template
+      cdkConnectedOverlay
+      [cdkConnectedOverlayOrigin]="inboxOrigin"
+      [cdkConnectedOverlayOpen]="inboxOpen()"
+      [cdkConnectedOverlayPositions]="popover"
+      [cdkConnectedOverlayHasBackdrop]="true"
+      cdkConnectedOverlayBackdropClass="cdk-overlay-transparent-backdrop"
+      (backdropClick)="inboxOpen.set(false)"
+      (detach)="inboxOpen.set(false)"
+      (overlayKeydown)="$event.key === 'Escape' && inboxOpen.set(false)"
+    >
+      <div
+        class="inbox"
+        role="dialog"
+        aria-label="Needs you"
+        cdkTrapFocus
+        [cdkTrapFocusAutoCapture]="true"
+      >
+        <header>
+          <h2>Needs you ({{ needsYou.count() }})</h2>
+          <a routerLink="/approvals" (click)="inboxOpen.set(false)">Open inbox</a>
+        </header>
+        @for (bb of needsYou.backbriefs(); track bb.id) {
+          <div class="inbox-item"><orb-backbrief [backbrief]="bb" /></div>
+        }
+        @for (a of needsYou.items(); track a.entityId + a.kind) {
+          <div class="inbox-item">
+            <span class="meta">{{ a.unitName }}</span>
+            <a [routerLink]="a.link" (click)="inboxOpen.set(false)">{{ a.label }}</a>
+          </div>
+        }
+        @if (needsYou.count() === 0) {
+          <p class="meta">Nothing waiting on you.</p>
+        }
+      </div>
+    </ng-template>
     <button
       type="button"
       class="btn btn--ghost btn--icon"

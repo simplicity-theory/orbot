@@ -27,6 +27,11 @@ export const routes: Routes = [
         loadComponent: () => import('./features/units/unit.page').then((m) => m.UnitPage),
       },
       {
+        path: 'units/:unitId/documents/:documentId',
+        loadComponent: () =>
+          import('./features/documents/document.page').then((m) => m.DocumentPage),
+      },
+      {
         path: 'units/:unitId/bots/:botId',
         loadComponent: () => import('./features/bots/bot.page').then((m) => m.BotPage),
       },

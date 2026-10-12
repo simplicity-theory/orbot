@@ -17,6 +17,10 @@ export function entityTitle(type: EntityType | string, body: unknown): string {
       return String(b['name']);
     case 'document':
       return String(b['title']);
+    case 'fm-entry':
+      return `Field Manual: ${String(b['title'])}`;
+    case 'backbrief':
+      return `Backbrief: ${String(b['summary'])}`;
     default:
       return type;
   }
@@ -35,6 +39,10 @@ export const TYPE_LABELS: Record<string, string> = {
   'bot.step': 'Working record',
   artifact: 'Commits & files',
   'chat.message': 'Chat',
+  'fm-entry': 'Field Manual entries',
+  backbrief: 'Backbriefs',
+  curation: 'Field Manual curation',
+  'coldstart.check': 'Cold-start checks',
   'task.status': 'Status changes',
   'credential.used': 'Credential use',
   'redaction.applied': 'Redactions',

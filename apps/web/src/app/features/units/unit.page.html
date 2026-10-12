@@ -9,175 +9,258 @@
         <h1>{{ v.unit.name }}</h1>
         <p class="page-header__lede">{{ v.unit.standingMission }}</p>
       </div>
-      <orb-status [status]="v.status" />
+      <div class="header-actions">
+        <orb-status [status]="v.status" />
+        <button type="button" class="btn" (click)="addBot()">Add bot</button>
+        <button type="button" class="btn btn--primary" (click)="newMission()">New mission</button>
+      </div>
     </header>
 
-    @if (v.attention.length) {
-      <section class="panel attention" aria-labelledby="attention-h">
-        <h2 id="attention-h" class="panel__title">Needs you</h2>
-        <ul class="list-reset">
-          @for (a of v.attention; track a.entityId + a.kind) {
-            <li>
-              <a [routerLink]="a.link">{{ a.label }}</a>
-            </li>
+    <nav class="sections" aria-label="Unit sections">
+      @for (s of sections; track s.id) {
+        <a
+          [routerLink]="[]"
+          [queryParams]="{ section: s.id === 'overview' ? null : s.id }"
+          [attr.aria-current]="section() === s.id ? 'page' : null"
+          >{{ s.label }}
+          @if (s.id === 'field-manual') {
+            <span class="count">{{ v.fieldManual.length }}</span>
+          } @else if (s.id === 'handovers') {
+            <span class="count">{{ v.handovers.length }}</span>
           }
-        </ul>
-      </section>
-    }
+        </a>
+      }
+    </nav>
 
-    <div class="columns">
-      <section class="panel" aria-labelledby="bots-h">
-        <h2 id="bots-h" class="panel__title">Bots</h2>
-        <table class="table">
-          <thead>
-            <tr>
-              <th scope="col">Callsign</th>
-              <th scope="col">Role</th>
-              <th scope="col">Status</th>
-              <th scope="col">Doing</th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (b of v.bots; track b.id) {
-              <tr>
-                <td>
-                  <a class="mono" [routerLink]="['/units', v.unit.id, 'bots', b.id]">{{
-                    b.callsign
-                  }}</a>
-                  @if (b.isOverseer) {
-                    <span class="chip"><orb-term key="overseer">Overseer</orb-term></span>
-                  }
-                </td>
-                <td>{{ b.role }}</td>
-                <td><orb-status [status]="b.status" /></td>
-                <td>
-                  @if (b.currentTask; as t) {
-                    <a [routerLink]="['/units', v.unit.id, 'bots', b.id, 'tasks', t.id]"
-                      >#{{ t.number }} {{ t.title }}</a
-                    >
-                  } @else if (b.queue.length) {
-                    <span class="meta">{{ b.queue.length }} queued</span>
-                  } @else {
-                    <span class="meta">—</span>
-                  }
-                </td>
-              </tr>
+    @switch (section()) {
+      @case ('overview') {
+        @if (v.backbriefs.length || v.attention.length) {
+          <section class="panel attention" aria-labelledby="attention-h">
+            <h2 id="attention-h" class="panel__title">Needs you</h2>
+            @for (bb of v.backbriefs; track bb.id) {
+              <orb-backbrief [backbrief]="bb" (decided)="view.reload()" />
             }
-          </tbody>
-        </table>
-      </section>
-
-      <section class="panel" aria-labelledby="tasks-h">
-        <h2 id="tasks-h" class="panel__title">Tasks</h2>
-        @if (v.tasks.length) {
-          <ul class="list-reset rows">
-            @for (t of v.tasks; track t.id) {
-              <li>
-                <a
-                  [routerLink]="
-                    t.botId
-                      ? ['/units', v.unit.id, 'bots', t.botId, 'tasks', t.id]
-                      : ['/units', v.unit.id, 'tasks', t.id]
-                  "
-                >
-                  <span class="mono">#{{ t.number }}</span> {{ t.title }}
-                </a>
-                <orb-status [status]="t.status" />
-              </li>
-            }
-          </ul>
-        } @else {
-          <p class="meta">No tasks yet. The Overseer issues tasks when a mission arrives.</p>
+            <ul class="list-reset">
+              @for (a of v.attention; track a.entityId + a.kind) {
+                @if (a.kind !== 'awaiting-approval' || !a.link.startsWith('/approvals')) {
+                  <li>
+                    <a [routerLink]="a.link">{{ a.label }}</a>
+                  </li>
+                }
+              }
+            </ul>
+          </section>
         }
-      </section>
-    </div>
 
-    <div class="columns">
-      <section class="panel" aria-labelledby="docs-h">
-        <h2 id="docs-h" class="panel__title">Documents</h2>
-        @if (v.documents.length) {
+        <div class="columns">
+          <section class="panel" aria-labelledby="missions-h">
+            <h2 id="missions-h" class="panel__title">
+              <orb-term key="mission">Missions</orb-term>
+            </h2>
+            @for (m of activeMissions(); track m.mission.id) {
+              <div class="mission">
+                <div class="mission-head">
+                  <span>{{ m.mission.goal }}</span>
+                  <orb-status
+                    [status]="m.mission.status === 'planning' ? 'queued' : m.mission.status"
+                  />
+                </div>
+                <div
+                  class="progress"
+                  role="progressbar"
+                  [attr.aria-label]="'Progress: ' + m.mission.goal"
+                  [attr.aria-valuenow]="m.done"
+                  aria-valuemin="0"
+                  [attr.aria-valuemax]="m.total"
+                >
+                  <span [style.width.%]="percent(m.done, m.total)"></span>
+                </div>
+                <p class="meta">
+                  {{ m.done }} of {{ m.total }} task(s) done
+                  @if (m.backbrief; as bb) {
+                    · <orb-term key="backbrief">backbrief</orb-term> round {{ bb.round }},
+                    {{ bb.status }}
+                  }
+                </p>
+              </div>
+            } @empty {
+              <p class="meta">No mission in hand. Standing mission: {{ v.unit.standingMission }}</p>
+            }
+            @if (doneMissions().length) {
+              <p class="meta done-list">
+                <orb-icon class="sm" name="check" /> Complete:
+                @for (m of doneMissions(); track m.mission.id; let last = $last) {
+                  {{ m.mission.goal }}{{ last ? '' : ';' }}
+                }
+              </p>
+            }
+          </section>
+
+          <orb-coldstart-card [unitId]="v.unit.id" [result]="v.coldStart" (ran)="view.reload()" />
+        </div>
+
+        <section class="panel" aria-labelledby="bots-h">
+          <h2 id="bots-h" class="panel__title">Bots — what each is doing</h2>
+          <table class="table">
+            <thead>
+              <tr>
+                <th scope="col">Callsign</th>
+                <th scope="col">Role</th>
+                <th scope="col">Status</th>
+                <th scope="col">Doing</th>
+                <th scope="col">Queue</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (b of v.bots; track b.id) {
+                <tr [class.muted]="b.status === 'stood-down'">
+                  <td>
+                    <a class="mono" [routerLink]="['/units', v.unit.id, 'bots', b.id]">{{
+                      b.callsign
+                    }}</a>
+                    @if (b.isOverseer) {
+                      <span class="chip"><orb-term key="overseer">Overseer</orb-term></span>
+                    }
+                  </td>
+                  <td>{{ b.role }}</td>
+                  <td><orb-status [status]="b.status" /></td>
+                  <td>
+                    @if (b.currentTask; as t) {
+                      <a [routerLink]="['/units', v.unit.id, 'bots', b.id, 'tasks', t.id]"
+                        >#{{ t.number }} {{ t.title }}</a
+                      >
+                    } @else {
+                      <span class="meta">—</span>
+                    }
+                  </td>
+                  <td>{{ b.queue.length || '—' }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </section>
+
+        <div class="columns">
+          <section class="panel" aria-labelledby="queue-h">
+            <h2 id="queue-h" class="panel__title">Queue ({{ v.queue.length }})</h2>
+            <ol class="list-reset rows">
+              @for (t of v.queue; track t.id) {
+                <li>
+                  <a
+                    [routerLink]="
+                      t.botId
+                        ? ['/units', v.unit.id, 'bots', t.botId, 'tasks', t.id]
+                        : ['/units', v.unit.id, 'tasks', t.id]
+                    "
+                  >
+                    <span class="mono">#{{ t.number }}</span> {{ t.title }}
+                  </a>
+                  <span class="meta mono">{{ callsign(v, t.botId) }}</span>
+                </li>
+              } @empty {
+                <li class="meta">Nothing waiting.</li>
+              }
+            </ol>
+          </section>
+
+          <section class="panel" aria-labelledby="tasks-h">
+            <h2 id="tasks-h" class="panel__title">Tasks</h2>
+            <ul class="list-reset rows">
+              @for (t of v.tasks; track t.id) {
+                <li>
+                  <a
+                    [routerLink]="
+                      t.botId
+                        ? ['/units', v.unit.id, 'bots', t.botId, 'tasks', t.id]
+                        : ['/units', v.unit.id, 'tasks', t.id]
+                    "
+                  >
+                    <span class="mono">#{{ t.number }}</span> {{ t.title }}
+                  </a>
+                  <orb-status [status]="t.status" />
+                </li>
+              } @empty {
+                <li class="meta">
+                  No tasks yet. The Overseer issues them once a backbrief is approved.
+                </li>
+              }
+            </ul>
+          </section>
+        </div>
+      }
+      @case ('field-manual') {
+        <orb-field-manual-tab [view]="v" (changed)="view.reload()" />
+      }
+      @case ('war-diary') {
+        <section class="panel" aria-labelledby="wd-h">
+          <h2 id="wd-h" class="panel__title">
+            <orb-term key="war-diary">War Diary</orb-term> (newest first)
+          </h2>
+          <p class="meta">
+            Written automatically as bots work: decisions, surprises and notes. Entries are
+            permanent.
+          </p>
+          <orb-record-timeline [events]="v.warDiary" label="War Diary" />
+        </section>
+      }
+      @case ('handovers') {
+        <section class="panel" aria-labelledby="ho-h">
+          <h2 id="ho-h" class="panel__title"><orb-term key="handover">Handovers</orb-term></h2>
           <ul class="list-reset rows">
-            @for (d of v.documents; track d.id) {
+            @for (d of v.handovers; track d.id) {
               <li>
-                <a [routerLink]="['/archive', d.id]"
+                <a [routerLink]="['/units', v.unit.id, 'documents', d.id]"
                   ><orb-icon class="sm" name="file-text" /> {{ d.title }}</a
                 >
-                <span class="meta">v{{ d.version }} · {{ d.updatedAt | relativeTime }}</span>
+                <span class="meta">
+                  v{{ d.version }} ·
+                  <time [attr.datetime]="d.updatedAt" [attr.title]="full(d.updatedAt)">{{
+                    d.updatedAt | relativeTime
+                  }}</time>
+                </span>
+              </li>
+            } @empty {
+              <li class="meta">Each bot writes one at the end of every task.</li>
+            }
+          </ul>
+        </section>
+      }
+      @case ('rules') {
+        <orb-rules-tab [view]="v" (changed)="view.reload()" />
+      }
+      @case ('supply') {
+        <section class="panel" aria-labelledby="supply-h">
+          <h2 id="supply-h" class="panel__title"><orb-term key="supply">Supply</orb-term></h2>
+          <ul class="list-reset rows">
+            @for (s of v.supply; track s.id) {
+              <li>
+                <span>
+                  <orb-icon
+                    class="sm"
+                    [name]="
+                      s.spec.kind === 'repository'
+                        ? 'git-branch'
+                        : s.spec.kind === 'credential'
+                          ? 'key'
+                          : 'coins'
+                    "
+                  />
+                  {{ s.name }}
+                </span>
+                <span class="meta"
+                  >{{ s.spec.kind }} · {{ s.connected ? 'connected' : 'not connected' }}</span
+                >
+              </li>
+            } @empty {
+              <li class="meta">
+                Nothing issued to this unit from the
+                <orb-term key="supply-depot">Supply Depot</orb-term>.
               </li>
             }
           </ul>
-        } @else {
-          <p class="meta">
-            No documents yet. The <orb-term key="field-manual">Field Manual</orb-term> and
-            <orb-term key="handover">handovers</orb-term> appear here.
-          </p>
-        }
-      </section>
-
-      <section class="panel" aria-labelledby="rules-h">
-        <h2 id="rules-h" class="panel__title">
-          <orb-term key="standing-orders">Standing orders</orb-term>
-        </h2>
-        <ul class="bullets">
-          @for (o of v.unit.standingOrders; track o.id) {
-            <li>{{ o.text }}</li>
-          } @empty {
-            <li class="meta">None.</li>
-          }
-        </ul>
-        <h3 class="panel__title sub"><orb-term key="roe">Rules of engagement</orb-term></h3>
-        <div class="roe">
-          <div>
-            <h4>May do alone</h4>
-            <ul class="bullets">
-              @for (r of v.unit.rulesOfEngagement.mayDoAlone; track r) {
-                <li>{{ r }}</li>
-              }
-            </ul>
-          </div>
-          <div>
-            <h4>Must escalate</h4>
-            <ul class="bullets">
-              @for (r of v.unit.rulesOfEngagement.mustEscalate; track r) {
-                <li>{{ r }}</li>
-              }
-            </ul>
-          </div>
-        </div>
-      </section>
-    </div>
-
-    <section class="panel" aria-labelledby="supply-h">
-      <h2 id="supply-h" class="panel__title"><orb-term key="supply">Supply</orb-term></h2>
-      @if (v.supply.length) {
-        <ul class="list-reset rows">
-          @for (s of v.supply; track s.id) {
-            <li>
-              <span
-                ><orb-icon
-                  class="sm"
-                  [name]="
-                    s.spec.kind === 'repository'
-                      ? 'git-branch'
-                      : s.spec.kind === 'credential'
-                        ? 'key'
-                        : 'coins'
-                  "
-                />
-                {{ s.name }}</span
-              >
-              <span class="meta"
-                >{{ s.spec.kind }} · {{ s.connected ? 'connected' : 'not connected' }}</span
-              >
-            </li>
-          }
-        </ul>
-      } @else {
-        <p class="meta">
-          Nothing issued to this unit from the <orb-term key="supply-depot">Supply Depot</orb-term>.
-        </p>
+        </section>
       }
-    </section>
+    }
   </div>
 } @else {
   <div class="page" aria-busy="true">

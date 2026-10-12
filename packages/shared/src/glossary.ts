@@ -123,6 +123,18 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     meaning:
       'Something a bot or Overseer may not decide alone, waiting on a higher level — ultimately you.',
   },
+  'cold-start': {
+    term: 'Cold-start check',
+    short: 'Could a new bot carry on from the documents?',
+    meaning:
+      'The Overseer gives a notional fresh bot only the unit’s documents and checks it could continue the work. Gaps become Field Manual fixes.',
+  },
+  'approval-gate': {
+    term: 'Approval gate',
+    short: 'What waits for you',
+    meaning:
+      'Per unit: approve everything, approve backbriefs and production deploys (default), or see escalations only.',
+  },
   archive: {
     term: 'Archive',
     short: 'Every prior version, kept forever',

@@ -114,6 +114,38 @@ export function describeEvent(e: RecordEvent): EventSummary {
         text: `Outcome: ${s('outcome')}`,
         tone: s('outcome') === 'done' ? 'success' : 'warning',
       };
+    case 'task.briefed':
+      return {
+        icon: 'book',
+        label: 'Briefed',
+        text: `${b['handoverId'] ? `Handover v${s('handoverVersion')}` : 'No handover'}, ${(b['fieldManualEntryIds'] as unknown[]).length} Field Manual entries, ${(b['diaryEventIds'] as unknown[]).length} diary entries`,
+        tone: 'info',
+      };
+    case 'task.reassigned':
+      return { icon: 'arrow-right', label: 'Reassigned', text: s('reason'), tone: 'neutral' };
+    case 'curation':
+      return {
+        icon: 'book',
+        label: 'Field Manual',
+        term: 'field-manual',
+        text: `${s('action')} “${s('title')}” — ${s('reason')}`,
+        tone: 'info',
+      };
+    case 'coldstart.check':
+      return {
+        icon: 'activity',
+        label: 'Cold start',
+        term: 'cold-start',
+        text: `${s('score')}/100${(b['gaps'] as unknown[]).length ? ` — ${(b['gaps'] as string[]).join(' ')}` : ''}`,
+        tone: Number(b['score']) === 100 ? 'success' : 'warning',
+      };
+    case 'docs.synced':
+      return {
+        icon: 'git-commit',
+        label: 'Docs',
+        text: `${(b['files'] as unknown[]).length} file(s) committed${(b['imported'] as unknown[]).length ? `, imported ${(b['imported'] as string[]).join(', ')}` : ''}`,
+        tone: 'neutral',
+      };
     case 'chat.message':
       return { icon: 'user', label: 'Chat', text: s('text'), tone: 'neutral' };
     case 'secret.stored':

@@ -65,6 +65,8 @@ export interface OrbatUnit {
   attention: AttentionItem[];
   /** Backbriefs waiting on the Commander, approvable inline from the ORBAT. */
   backbriefs: BackbriefView[];
+  /** The unit's bots (not its Overseer), for the tree view. */
+  bots: BotWithTask[];
 }
 
 export interface OrbatView {
@@ -121,6 +123,8 @@ export interface BotDetailView {
   recent: RecordEvent[];
   /** What the bot was handed at the start of its latest run. */
   lastBrief: RecordEvent<'task.briefed'> | null;
+  /** Other bots in the unit (not the Overseer), for reassigning work. */
+  peers: BotView[];
 }
 
 export interface TaskDetailView {

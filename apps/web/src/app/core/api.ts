@@ -2,6 +2,20 @@ import { HttpClient } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import type {
+  AddBotRequest,
+  AmendBackbriefRequest,
+  ApprovalsView,
+  BackbriefView,
+  BotView,
+  CreateFmEntryRequest,
+  CreateMissionRequest,
+  FmEntryView,
+  MissionView,
+  PaletteItem,
+  RecordEvent as RecordEventOf,
+  ReviseFmEntryRequest,
+  StandingOrdersRequest,
+  UnitView as UnitViewOf,
   BotDetailView,
   CreateDocumentRequest,
   CreateTaskRequest,
@@ -38,9 +52,16 @@ export const apiUrl = {
   diff: (entityId: string) => `${API}/record/${entityId}/diff`,
   search: () => `${API}/record/search`,
   events: () => `${API}/record/events`,
+  approvals: () => `${API}/approvals`,
+  backbrief: (id: string) => `${API}/backbriefs/${id}`,
+  palette: () => `${API}/palette`,
 };
 
 export type {
+  ApprovalsView,
+  BackbriefView,
+  FmEntryView,
+  PaletteItem,
   BotDetailView,
   DocumentView,
   MetaView,
@@ -94,6 +115,82 @@ export class Api {
 
   reviseDocument(id: string, body: ReviseDocumentRequest) {
     return firstValueFrom(this.http.post<DocumentView>(`${API}/documents/${id}/versions`, body));
+  }
+
+  createMission(body: CreateMissionRequest) {
+    return firstValueFrom(this.http.post<MissionView>(`${API}/missions`, body));
+  }
+
+  approveBackbrief(id: string, expectedVersion: number, note: string | null = null) {
+    return firstValueFrom(
+      this.http.post<BackbriefView>(`${API}/backbriefs/${id}/approve`, { expectedVersion, note }),
+    );
+  }
+
+  amendBackbrief(id: string, body: AmendBackbriefRequest) {
+    return firstValueFrom(this.http.post<BackbriefView>(`${API}/backbriefs/${id}/amend`, body));
+  }
+
+  rejectBackbrief(id: string, expectedVersion: number, note: string) {
+    return firstValueFrom(
+      this.http.post<BackbriefView>(`${API}/backbriefs/${id}/reject`, { expectedVersion, note }),
+    );
+  }
+
+  reassignTask(id: string, botId: string, reason: string) {
+    return firstValueFrom(
+      this.http.post<TaskView>(`${API}/tasks/${id}/reassign`, { botId, reason }),
+    );
+  }
+
+  addBot(unitId: string, body: AddBotRequest) {
+    return firstValueFrom(this.http.post<BotView>(`${API}/units/${unitId}/bots`, body));
+  }
+
+  runColdStart(unitId: string) {
+    return firstValueFrom(
+      this.http.post<RecordEventOf<'coldstart.check'>>(`${API}/units/${unitId}/coldstart`, {}),
+    );
+  }
+
+  syncDocuments(unitId: string) {
+    return firstValueFrom(
+      this.http.post<{ imported: string[] }>(`${API}/units/${unitId}/documents/sync`, {}),
+    );
+  }
+
+  setStandingOrders(unitId: string, body: StandingOrdersRequest) {
+    return firstValueFrom(
+      this.http.put<UnitViewOf>(`${API}/units/${unitId}/standing-orders`, body),
+    );
+  }
+
+  createFmEntry(unitId: string, body: CreateFmEntryRequest) {
+    return firstValueFrom(this.http.post<FmEntryView>(`${API}/units/${unitId}/field-manual`, body));
+  }
+
+  reviseFmEntry(id: string, body: ReviseFmEntryRequest) {
+    return firstValueFrom(this.http.post<FmEntryView>(`${API}/fm-entries/${id}/versions`, body));
+  }
+
+  retireFmEntry(id: string, expectedVersion: number, reason: string) {
+    return firstValueFrom(
+      this.http.post<FmEntryView>(`${API}/fm-entries/${id}/retire`, { expectedVersion, reason }),
+    );
+  }
+
+  reinstateFmEntry(id: string, expectedVersion: number, reason: string) {
+    return firstValueFrom(
+      this.http.post<FmEntryView>(`${API}/fm-entries/${id}/reinstate`, { expectedVersion, reason }),
+    );
+  }
+
+  unitView(id: string) {
+    return firstValueFrom(this.http.get<UnitDetailView>(apiUrl.unit(id)));
+  }
+
+  palette() {
+    return firstValueFrom(this.http.get<PaletteItem[]>(apiUrl.palette()));
   }
 
   search(q: string, scope: SearchScope, extra: { types?: string[]; unitId?: string } = {}) {

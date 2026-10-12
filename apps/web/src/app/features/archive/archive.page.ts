@@ -14,6 +14,8 @@ import { TYPE_LABELS } from './entity-title';
 
 const FILTERS = [
   'document',
+  'fm-entry',
+  'backbrief',
   'task',
   'bot',
   'unit',

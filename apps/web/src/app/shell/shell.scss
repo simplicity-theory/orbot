@@ -110,8 +110,50 @@
   }
 }
 
+.palette-btn {
+  gap: var(--space-2);
+  color: var(--color-text-muted);
+  kbd {
+    font-size: var(--font-size-xs);
+  }
+}
+
+.inbox {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: min(var(--dialog-width), calc(var(--viewport-width) - var(--space-8)));
+  max-height: calc(var(--viewport-height) - var(--header-height) - var(--space-8));
+  overflow-y: auto;
+  padding: var(--space-4);
+  border: var(--border-width) solid var(--color-border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-1);
+  box-shadow: var(--shadow-2);
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+  h2 {
+    font-size: var(--font-size-lg);
+  }
+}
+
+.inbox-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding-top: var(--space-3);
+  border-top: var(--border-width) solid var(--color-border);
+}
+
 .needs-you {
   display: inline-flex;
+  border: 0;
+  background: none;
+  font: inherit;
+  cursor: pointer;
   align-items: center;
   gap: var(--space-2);
   min-height: var(--row-height-dense);
@@ -233,7 +275,9 @@ main {
     width: auto;
   }
   .crumbs,
-  .needs-you .label {
+  .needs-you .label,
+  .palette-btn .label,
+  .palette-btn kbd {
     display: none;
   }
   .rail {

@@ -1,8 +1,12 @@
 import { httpResource } from '@angular/common/http';
-import { Component, effect, inject, input } from '@angular/core';
+import { Dialog } from '@angular/cdk/dialog';
+import { NgTemplateOutlet } from '@angular/common';
+import { Component, effect, inject, input, signal } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import type { BotDetailView, TaskView } from '@orbot/shared';
-import { apiUrl } from '../../core/api';
+import { Api, apiUrl } from '../../core/api';
+import { toUserError } from '../../core/api-error';
 import { Breadcrumbs, ORBAT_CRUMB } from '../../core/breadcrumbs';
 import { reloadOnLive, touchedIds } from '../../core/live';
 import { PageTitle } from '../../core/title';
@@ -11,10 +15,22 @@ import { Skeleton } from '../../ui/skeleton';
 import { StatusBadge } from '../../ui/status-badge';
 import { Term } from '../../ui/term';
 import { RecordTimeline } from '../tasks/record-timeline';
+import { openDialog } from '../../ui/dialog';
+import { Toasts } from '../../ui/toast';
+import { AddBotDialog, type AddBotData } from '../units/add-bot.dialog';
 
 @Component({
   selector: 'orb-bot-page',
-  imports: [RouterLink, StatusBadge, Skeleton, LoadError, Term, RecordTimeline],
+  imports: [
+    RouterLink,
+    StatusBadge,
+    Skeleton,
+    LoadError,
+    Term,
+    RecordTimeline,
+    NgTemplateOutlet,
+    FormsModule,
+  ],
   template: `
     @if (view.error(); as err) {
       <div class="page"><orb-load-error [error]="err" (retry)="view.reload()" /></div>
@@ -34,8 +50,25 @@ import { RecordTimeline } from '../tasks/record-timeline';
               {{ v.bot.role }} · runtime <span class="mono">{{ v.bot.runtime }}</span>
             </p>
           </div>
-          <orb-status [status]="v.bot.status" />
+          <div class="header-actions">
+            <orb-status [status]="v.bot.status" />
+            @if (!v.bot.isOverseer && v.bot.status !== 'stood-down') {
+              <button
+                type="button"
+                class="btn"
+                [disabled]="v.bot.status === 'working'"
+                (click)="replace()"
+              >
+                Replace bot…
+              </button>
+            }
+          </div>
         </header>
+        @if (v.bot.status === 'stood-down') {
+          <p class="panel meta" role="status">
+            This bot is stood down. Its work moved to its replacement; its record is kept.
+          </p>
+        }
 
         <section class="panel" aria-labelledby="current-h">
           <h2 id="current-h" class="panel__title">Current task</h2>
@@ -47,8 +80,41 @@ import { RecordTimeline } from '../tasks/record-timeline';
             @if (t.statusReason) {
               <p class="meta">{{ t.statusReason }}</p>
             }
+            <ng-container *ngTemplateOutlet="reassignControl; context: { $implicit: t }" />
           } @else {
             <p class="meta">Idle — nothing in hand.</p>
+          }
+        </section>
+
+        <section class="panel" aria-labelledby="brief-h">
+          <h2 id="brief-h" class="panel__title">Last brief</h2>
+          @if (v.lastBrief; as b) {
+            <p>Briefed from the unit's documents only:</p>
+            <ul class="bullets">
+              <li>
+                @if (b.body.handoverId) {
+                  <a [routerLink]="['/units', v.unit.id, 'documents', b.body.handoverId]"
+                    ><orb-term key="handover">Handover</orb-term> v{{ b.body.handoverVersion }}</a
+                  >
+                } @else {
+                  No handover (first time anyone worked this).
+                }
+              </li>
+              <li>
+                <a [routerLink]="['/units', v.unit.id]" [queryParams]="{ section: 'field-manual' }"
+                  >{{ b.body.fieldManualEntryIds.length }}
+                  <orb-term key="field-manual">Field Manual</orb-term> entries</a
+                >
+              </li>
+              <li>
+                {{ b.body.diaryEventIds.length }} recent
+                <orb-term key="war-diary">War Diary</orb-term> entries
+              </li>
+            </ul>
+          } @else {
+            <p class="meta">
+              Not briefed yet. Every task starts with a brief from the unit's documents.
+            </p>
           }
         </section>
 
@@ -59,6 +125,7 @@ import { RecordTimeline } from '../tasks/record-timeline';
               <a [routerLink]="taskLink(t)">#{{ t.number }} {{ t.title }}</a>
               <orb-status [status]="t.status" />
             </div>
+            <ng-container *ngTemplateOutlet="reassignControl; context: { $implicit: t }" />
           } @empty {
             <p class="meta">Queue is empty.</p>
           }
@@ -81,6 +148,53 @@ import { RecordTimeline } from '../tasks/record-timeline';
           <orb-record-timeline [events]="v.recent" label="Recent working record" />
         </section>
       </div>
+      <ng-template #reassignControl let-t>
+        @if (reassignable(t) && v.peers.length) {
+          @if (reassigning()?.taskId === t.id) {
+            <form class="form reassign" (ngSubmit)="reassign(t)">
+              <label [for]="'to-' + t.id">Reassign #{{ t.number }} to</label>
+              <select
+                class="input"
+                [id]="'to-' + t.id"
+                name="to"
+                [(ngModel)]="reassigning()!.botId"
+              >
+                @for (p of v.peers; track p.id) {
+                  <option [ngValue]="p.id">{{ p.callsign }} — {{ p.role }} ({{ p.status }})</option>
+                }
+              </select>
+              <label [for]="'why-' + t.id">Reason</label>
+              <input
+                class="input"
+                [id]="'why-' + t.id"
+                name="why"
+                [(ngModel)]="reassigning()!.reason"
+                required
+              />
+              <div class="actions">
+                <button type="button" class="btn btn--ghost" (click)="reassigning.set(null)">
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  class="btn btn--primary"
+                  [disabled]="busy() || !reassigning()!.reason.trim()"
+                >
+                  Reassign
+                </button>
+              </div>
+            </form>
+          } @else {
+            <button
+              type="button"
+              class="btn btn--ghost small"
+              (click)="reassigning.set({ taskId: t.id, botId: v.peers[0]!.id, reason: '' })"
+            >
+              Reassign #{{ t.number }}…
+            </button>
+          }
+        }
+      </ng-template>
     } @else {
       <div class="page page--detail" aria-busy="true">
         <orb-skeleton [lines]="2" />
@@ -89,6 +203,24 @@ import { RecordTimeline } from '../tasks/record-timeline';
     }
   `,
   styles: `
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+    }
+    .bullets {
+      margin: var(--space-2) 0 0;
+      padding-left: var(--space-5);
+    }
+    .small {
+      min-height: auto;
+      margin-top: var(--space-1);
+      padding: 0 var(--space-2);
+      font-size: var(--font-size-sm);
+    }
+    .reassign {
+      margin-top: var(--space-2);
+    }
     .row {
       display: flex;
       justify-content: space-between;
@@ -121,6 +253,54 @@ export class BotPage {
       (n) => touchedIds(n).includes(this.botId()),
       () => this.view.reload(),
     );
+  }
+
+  private readonly api = inject(Api);
+  private readonly toasts = inject(Toasts);
+  private readonly dialog = inject(Dialog);
+  protected readonly busy = signal(false);
+  protected readonly reassigning = signal<{ taskId: string; botId: string; reason: string } | null>(
+    null,
+  );
+
+  protected reassignable(t: TaskView): boolean {
+    return ['queued', 'blocked', 'stood-down', 'failed'].includes(t.status);
+  }
+
+  protected async reassign(t: TaskView): Promise<void> {
+    const r = this.reassigning()!;
+    const to = this.view.value()!.peers.find((p) => p.id === r.botId);
+    this.busy.set(true);
+    try {
+      await this.api.reassignTask(t.id, r.botId, r.reason.trim());
+      this.reassigning.set(null);
+      this.toasts.show({
+        tone: 'success',
+        message: `Task #${t.number} reassigned to ${to?.callsign ?? 'another bot'}.`,
+        detail: 'Its branch and handover go with it.',
+      });
+      this.view.reload();
+    } catch (err) {
+      const e = toUserError(err);
+      this.toasts.show({ tone: 'danger', message: e.message, detail: e.action });
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
+  protected replace(): void {
+    const v = this.view.value()!;
+    openDialog<unknown, AddBotData, AddBotDialog>(
+      this.dialog,
+      AddBotDialog,
+      {
+        unitId: v.unit.id,
+        unitName: v.unit.name,
+        bots: [v.bot, ...v.peers],
+        replacesBotId: v.bot.id,
+      },
+      'Replace a bot',
+    ).closed.subscribe(() => this.view.reload());
   }
 
   protected taskLink(t: TaskView): string[] {

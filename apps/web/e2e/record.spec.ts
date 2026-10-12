@@ -11,7 +11,7 @@ test.describe('one bot, one task, on the record', () => {
       .getByRole('link', { name: 'Engineers' })
       .click();
     await page
-      .getByRole('region', { name: 'Tasks' })
+      .getByRole('region', { name: 'Tasks', exact: true })
       .getByRole('link', { name: /Add rate limiter middleware/ })
       .click();
     await expect(
@@ -63,11 +63,11 @@ test.describe('one bot, one task, on the record', () => {
     await expect(versions).toContainText('Current');
     await expect(versions).toContainText('Superseded');
 
-    await versions.getByRole('link', { name: /^v1/ }).click();
+    await versions.getByRole('link', { name: /^v2/ }).click();
     const banner = page.getByRole('note');
-    await expect(banner).toContainText('Version 1 is archived');
+    await expect(banner).toContainText('Version 2 is archived');
     await expect(banner).toContainText('Added rollback procedure');
-    await banner.getByRole('link', { name: /View version 2/ }).click();
+    await banner.getByRole('link', { name: /View version 3/ }).click();
     await expect(page.getByRole('note')).toHaveCount(0);
 
     await page.getByRole('tab', { name: 'Changes' }).click();
@@ -95,7 +95,7 @@ test.describe('one bot, one task, on the record', () => {
     );
     await page.getByLabel('Which tier').selectOption('archive');
     await expect(
-      page.getByRole('region', { name: 'Documents' }).getByText('Archived'),
+      page.getByRole('region', { name: 'Documents' }).getByText('Archived').first(),
     ).toBeVisible();
   });
 
@@ -116,7 +116,7 @@ test('starting a queued task shows the bot working live, with a toast', async ({
     .getByRole('link', { name: 'Engineers' })
     .click();
   await page
-    .getByRole('region', { name: 'Tasks' })
+    .getByRole('region', { name: 'Tasks', exact: true })
     .getByRole('link', { name: /Document rate limits/ })
     .click();
   await expect(page.locator('orb-status').first()).toContainText('Queued');

@@ -11,11 +11,11 @@ test.describe('app shell', () => {
       await expect(units.getByRole('heading', { name })).toBeVisible();
     }
     const engineers = page.getByRole('article', { name: 'Engineers' });
-    await expect(engineers.getByRole('region', { name: 'Needs you in Engineers' })).toContainText(
-      'E-2 blocked',
-    );
-    await expect(engineers).toContainText('failed');
-    await expect(page.getByRole('link', { name: /items need you/ })).toContainText('2');
+    const strip = engineers.getByRole('region', { name: 'Needs you in Engineers' });
+    await expect(strip).toContainText('E-2 blocked');
+    await expect(strip).toContainText('failed');
+    await expect(strip).toContainText('Backbrief awaiting approval: Harden session handling');
+    await expect(page.getByRole('button', { name: /items need you/ })).toContainText('3');
   });
 
   test('left rail navigates and collapses; breadcrumbs mirror the chain of command', async ({
@@ -91,7 +91,15 @@ test.describe('app shell', () => {
 });
 
 test.describe('accessibility (axe, WCAG 2.2 AA)', () => {
-  const screens = ['/', '/approvals', '/sitreps', '/archive', '/operations', '/settings'];
+  const screens = [
+    '/',
+    '/?view=tree',
+    '/approvals',
+    '/sitreps',
+    '/archive',
+    '/operations',
+    '/settings',
+  ];
   for (const theme of ['dark', 'light'] as const) {
     test(`main screens pass in ${theme} theme`, async ({ page }) => {
       await page.goto('/');

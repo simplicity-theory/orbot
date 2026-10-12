@@ -1,6 +1,7 @@
-import { Component, computed, input } from '@angular/core';
+import { Component, computed, input, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { STATUS_META, type BotStatus, type OrbatUnit } from '@orbot/shared';
+import { Backbrief } from '../../ui/backbrief';
 import { Icon } from '../../ui/icon';
 import { StatusBadge } from '../../ui/status-badge';
 import { Term } from '../../ui/term';
@@ -15,7 +16,7 @@ const ATTENTION_ICON = {
 /** A unit at a glance, with an attention strip of everything that needs the Commander. */
 @Component({
   selector: 'orb-unit-card',
-  imports: [RouterLink, Icon, StatusBadge, Term],
+  imports: [RouterLink, Icon, StatusBadge, Term, Backbrief],
   template: `
     @let u = unit();
     <article class="card" [attr.aria-labelledby]="'unit-' + u.unit.id">
@@ -64,10 +65,29 @@ const ATTENTION_ICON = {
           <h3><orb-icon class="sm" name="inbox" /> Needs you ({{ u.attention.length }})</h3>
           <ul class="list-reset">
             @for (a of u.attention; track a.entityId + a.kind) {
+              @let bb = backbriefFor(a.entityId);
               <li [attr.data-kind]="a.kind">
                 <orb-icon class="sm" [name]="icons[a.kind]" />
-                <a [routerLink]="a.link">{{ a.label }}</a>
+                @if (bb) {
+                  <span class="label">{{ a.label }}</span>
+                  <button
+                    type="button"
+                    class="btn btn--ghost review"
+                    [attr.aria-expanded]="reviewing() === bb.id"
+                    [attr.aria-controls]="'review-' + bb.id"
+                    (click)="reviewing.set(reviewing() === bb.id ? null : bb.id)"
+                  >
+                    {{ reviewing() === bb.id ? 'Close' : 'Review' }}
+                  </button>
+                } @else {
+                  <a [routerLink]="a.link">{{ a.label }}</a>
+                }
               </li>
+              @if (bb && reviewing() === bb.id) {
+                <li class="inline-review" [id]="'review-' + bb.id">
+                  <orb-backbrief [backbrief]="bb" (decided)="reviewing.set(null)" />
+                </li>
+              }
             }
           </ul>
         </section>
@@ -151,6 +171,21 @@ const ATTENTION_ICON = {
           color: var(--tone-warning);
         }
       }
+      .label {
+        flex: 1;
+      }
+      .review {
+        min-height: auto;
+        padding: 0 var(--space-2);
+        font-size: var(--font-size-xs);
+      }
+      .inline-review {
+        display: block;
+        margin-top: var(--space-2);
+        padding: var(--space-3);
+        border-radius: var(--radius-md);
+        background: var(--color-surface-1);
+      }
       li[data-kind='failed-task'] orb-icon {
         color: var(--tone-danger);
       }
@@ -170,6 +205,11 @@ const ATTENTION_ICON = {
 })
 export class UnitCard {
   readonly unit = input.required<OrbatUnit>();
+  /** Backbrief being reviewed inline, if any. */
+  protected readonly reviewing = signal<string | null>(null);
+  protected backbriefFor(entityId: string) {
+    return this.unit().backbriefs.find((b) => b.id === entityId) ?? null;
+  }
   protected readonly icons = ATTENTION_ICON;
   protected readonly statusCounts = computed(() =>
     (Object.entries(this.unit().botsByStatus) as [BotStatus, number][])

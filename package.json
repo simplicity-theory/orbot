@@ -23,7 +23,8 @@
     "test": "npm run test --workspaces --if-present",
     "test:e2e": "npm run test:e2e -w @orbot/api",
     "test:ui": "npm run test:ui -w @orbot/web",
-    "ci": "bash scripts/ci.sh"
+    "ci": "bash scripts/ci.sh",
+    "db:reset": "node scripts/db-reset.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",

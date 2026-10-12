@@ -2,55 +2,79 @@ import { Component, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { Breadcrumbs, ORBAT_CRUMB } from '../../core/breadcrumbs';
 import { NeedsYou } from '../../core/needs-you';
+import { Backbrief } from '../../ui/backbrief';
 import { EmptyState } from '../../ui/empty-state';
 import { Icon } from '../../ui/icon';
+import { LoadError } from '../../ui/load-error';
+import { Skeleton } from '../../ui/skeleton';
 import { Term } from '../../ui/term';
+import { scrollToFragment } from './scroll-to-fragment';
 
-/** The single inbox of everything waiting on the Commander. */
+/** The single inbox of everything waiting on the Commander, resolvable in place. */
 @Component({
   selector: 'orb-approvals-page',
-  imports: [EmptyState, Term, RouterLink, Icon],
+  imports: [EmptyState, Term, RouterLink, Icon, Backbrief, LoadError, Skeleton],
   template: `
-    <div class="page">
+    <div class="page page--detail">
       <header class="page-header">
         <div>
           <h1>Needs you</h1>
           <p class="page-header__lede">
-            <orb-term key="backbrief">Backbriefs</orb-term> and
-            <orb-term key="escalation">escalations</orb-term> waiting on your decision, plus
-            anything blocked or failed.
+            <orb-term key="backbrief">Backbriefs</orb-term> to decide, and anything blocked or
+            failed. Everything else proceeds without you.
           </p>
         </div>
       </header>
-      @if (needsYou.items().length) {
-        <ul class="list-reset panel">
-          @for (a of needsYou.items(); track a.entityId + a.kind) {
-            <li>
-              <orb-icon
-                class="sm"
-                [name]="
-                  a.kind === 'failed-task'
-                    ? 'triangle-alert'
-                    : a.kind === 'blocked-bot'
-                      ? 'octagon-pause'
-                      : 'stamp'
-                "
-              />
-              <span class="meta">{{ a.unit }}</span>
-              <a [routerLink]="a.link">{{ a.label }}</a>
-            </li>
-          }
-        </ul>
-      } @else {
+
+      @if (needsYou.inbox.error(); as err) {
+        <orb-load-error [error]="err" (retry)="needsYou.reload()" />
+      } @else if (!needsYou.inbox.hasValue()) {
+        <orb-skeleton variant="block" [lines]="2" />
+      } @else if (needsYou.count() === 0) {
         <orb-empty-state icon="stamp" title="Nothing waiting on you">
           When a unit sends a plan for approval, a bot escalates something it may not decide alone,
           or work gets blocked, it appears here.
         </orb-empty-state>
+      } @else {
+        @if (needsYou.backbriefs().length) {
+          <section aria-labelledby="bb-h">
+            <h2 id="bb-h" class="panel__title">
+              Backbriefs awaiting approval ({{ needsYou.backbriefs().length }})
+            </h2>
+            <ul class="list-reset stack">
+              @for (bb of needsYou.backbriefs(); track bb.id) {
+                <li class="panel"><orb-backbrief [backbrief]="bb" /></li>
+              }
+            </ul>
+          </section>
+        }
+        @if (needsYou.items().length) {
+          <section aria-labelledby="other-h">
+            <h2 id="other-h" class="panel__title">Blocked and failed</h2>
+            <ul class="list-reset panel items">
+              @for (a of needsYou.items(); track a.entityId + a.kind) {
+                <li>
+                  <orb-icon
+                    class="sm"
+                    [name]="a.kind === 'failed-task' ? 'triangle-alert' : 'octagon-pause'"
+                  />
+                  <span class="meta">{{ a.unitName }}</span>
+                  <a [routerLink]="a.link">{{ a.label }}</a>
+                </li>
+              }
+            </ul>
+          </section>
+        }
       }
     </div>
   `,
   styles: `
-    li {
+    .stack {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-4);
+    }
+    .items li {
       display: grid;
       grid-template-columns: max-content max-content minmax(0, 1fr);
       align-items: center;
@@ -70,5 +94,6 @@ export class ApprovalsPage {
   protected readonly needsYou = inject(NeedsYou);
   constructor() {
     inject(Breadcrumbs).set([ORBAT_CRUMB, { label: 'Approvals' }]);
+    scrollToFragment();
   }
 }
