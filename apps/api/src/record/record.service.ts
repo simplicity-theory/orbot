@@ -116,6 +116,16 @@ const eventCols = {
   createdAt: recordEvent.createdAt,
 };
 
+/** An entity write about to happen: its type, id, the body before (null if new) and after. */
+export interface GuardedChange {
+  type: EntityType;
+  id: string;
+  before: unknown;
+  after: unknown;
+  actor: string;
+}
+export type WriteGuard = (change: GuardedChange) => Promise<void>;
+
 /**
  * A unit of work against the record. All writes in one `RecordService.transaction`
  * commit together; notifications go out only after commit.
@@ -126,7 +136,12 @@ export class RecordWriter {
   constructor(
     private readonly tx: Tx,
     private readonly redaction: RedactionService,
+    private readonly guards: readonly WriteGuard[] = [],
   ) {}
+
+  private async guard(change: GuardedChange) {
+    for (const g of this.guards) await g(change);
+  }
 
   /** Create a new entity (version 1). */
   async create<T extends EntityType>(
@@ -135,6 +150,7 @@ export class RecordWriter {
     ctx: WriteContext,
     id: string = randomUUID(),
   ): Promise<RecordVersion<EntityBodyMap[T]>> {
+    await this.guard({ type, id, before: null, after: body, actor: ctx.actor });
     return this.insertVersion(type, id, 1, body, ctx);
   }
 
@@ -158,6 +174,7 @@ export class RecordWriter {
     }
     const next = change(structuredClone(current.body));
     if (JSON.stringify(next) === JSON.stringify(current.body)) return current;
+    await this.guard({ type, id, before: current.body, after: next, actor: ctx.actor });
     const created = await this.insertVersion(type, id, current.version + 1, next, ctx);
     const stamp = this.redaction.clean({ actor: ctx.actor, reason: ctx.reason });
     await this.tx.insert(recordSupersession).values({
@@ -318,12 +335,22 @@ export class RecordService {
    * Run `fn` in one transaction. Retried automatically if a concurrent writer
    * claimed the same version number, so `fn` must only touch the database.
    */
+  private readonly guards: WriteGuard[] = [];
+
+  /**
+   * Check every entity write before it lands (e.g. separation of duties). A guard refuses
+   * by throwing; the whole transaction is then rolled back.
+   */
+  addGuard(guard: WriteGuard): void {
+    this.guards.push(guard);
+  }
+
   async transaction<R>(fn: (w: RecordWriter) => Promise<R>): Promise<R> {
     for (let attempt = 1; ; attempt++) {
       let writer: RecordWriter | undefined;
       try {
         const result = await this.db.transaction(async (tx) => {
-          writer = new RecordWriter(tx, this.redaction);
+          writer = new RecordWriter(tx, this.redaction, this.guards);
           return fn(writer);
         });
         writer!.pending.forEach((n) => this.bus.publish(n));

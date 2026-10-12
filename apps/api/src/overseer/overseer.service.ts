@@ -30,7 +30,7 @@ import { RecordService, type RecordWriter } from '../record/record.service.js';
 import { words } from '../common/similarity.js';
 import { BriefingService } from './briefing.service.js';
 import { CurationService } from './curation.service.js';
-import { Overseers } from './overseers.js';
+import { HQ_ACTOR, Overseers } from './overseers.js';
 
 const REASSIGNABLE: readonly TaskStatus[] = ['queued', 'blocked', 'stood-down', 'failed'];
 
@@ -193,12 +193,14 @@ export class OverseerService implements OnApplicationBootstrap, OnModuleDestroy 
       }
       return saved;
     });
+    // On "escalations only" the Commander has delegated plan approval to HQ. Never to the
+    // Overseer that wrote the plan: no bot approves its own work.
     if (autoApprove)
       return this.approveAs(
         bb.entityId,
         { note: null, expectedVersion: bb.version },
         null,
-        cmd.actor,
+        HQ_ACTOR,
         'auto-approved',
       );
     return bb;

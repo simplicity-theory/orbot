@@ -19,6 +19,9 @@ export interface UnitCommand {
 }
 
 /** Finds a unit's Overseer and the runtime it thinks with. */
+/** HQ acts as a system actor, not a bot. */
+export const HQ_ACTOR = 'system:hq';
+
 @Injectable()
 export class Overseers {
   constructor(

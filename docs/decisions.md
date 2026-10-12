@@ -150,3 +150,14 @@ A single failure is not an escalation: it already shows as a failed task, and a 
 **D65. Deconfliction: the map comes from git, the notices go on the record.** Each task already has its own worktree and branch (`orbot/task-<n>`). "Who touches what" is worked out from git on demand: the files each active task (queued, working, blocked, stood-down, awaiting approval) changes since it branched, committed or not. ORBOT's own per-task notes under `orbot/` are left out. Nothing is cached that could drift from the branches.
 
 **D66. HQ informs; it does not block.** When a task writes or commits a file that another active task in the same repository is also changing, HQ records one `deconfliction` notice per pair of tasks (and per new file), posts an HQ sitrep, and sends both running bots a frago naming the other task. Both keep working: whichever lands second rebases. Tasks in the same operation are not flagged against each other, because they land in order on the operation's integration branch.
+
+**D67. Separation of duties is enforced where every write lands, not at each door.** `RecordService` runs write guards before any entity version is stored. `DutiesService` registers one: if the actor is a bot, it refuses the bot doing any of these to itself or its own unit, by whatever path the write comes:
+
+- approving a backbrief or a production deploy (its own work, or its own unit's);
+- changing its own unit's standing orders, ROE or approval gate;
+- adding supply, budget or credentials to itself or its unit;
+- lifting a stand-down that covers it.
+
+The refusal is a policy decision on the record ("Separation of duties: …", action `duty:<kind>`), and the write is rolled back. The Commander, HQ and other system actors are not bots and are not limited by this. Bots acting on other units are not "their own" and are left to the other rules.
+
+**D68. On "escalations only", HQ approves plans on the Commander's behalf.** Before, the Overseer that wrote the plan also approved it. Now `system:hq` does, so no bot approves its own work. The Commander still sees every approval on the record.

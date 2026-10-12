@@ -22,8 +22,9 @@ import { RuntimeRegistry } from '../runtime/runtime.registry.js';
 import { WorkspaceManager } from '../runtime/workspace-manager.js';
 import { SupplyService } from '../supply/supply.service.js';
 import { OverseerService } from './overseer.service.js';
+import { HQ_ACTOR } from './overseers.js';
 
-export const HQ_ACTOR = 'system:hq';
+export { HQ_ACTOR };
 
 /**
  * HQ, the planning layer. Turns the Commander's intent into an operation, splits it into

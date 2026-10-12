@@ -17,6 +17,7 @@ import { ViewsService } from './domain/views.service.js';
 import { WorkService } from './domain/work.service.js';
 import { TaskRunner } from './execution/task-runner.js';
 import { EventsGateway } from './gateway/events.gateway.js';
+import { DutiesService } from './policy/duties.service.js';
 import { PolicyService } from './policy/policy.service.js';
 import { RecordBus } from './record/record-bus.js';
 import { RecordController } from './record/record.controller.js';
@@ -105,6 +106,7 @@ export class AppModule {
         RecordService,
         SecretsService,
         PolicyService,
+        DutiesService,
         {
           provide: RuntimeRegistry,
           inject: [APP_CONFIG],
