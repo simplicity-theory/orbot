@@ -41,6 +41,7 @@ describe('SimulatedOverseer', () => {
             'Warm the test cache first; the suite is slow cold',
             'Obsolete: Fax policy',
             'Brand new rule about logging format',
+            'Nothing changed on orbot/task-7 yet',
           ],
           ['Caching the HTTP client'],
         ),
@@ -55,11 +56,11 @@ describe('SimulatedOverseer', () => {
         { entryId: 'e2', title: 'Fax policy', body: 'Fax everything.', tags: [] },
       ],
     });
-    expect(actions.map((a) => a.kind)).toEqual(['retire', 'merge', 'promote', 'promote']);
-    expect(actions[3]).toMatchObject({
+    // Task-specific flags and tried-and-failed notes stay in the handover.
+    expect(actions.map((a) => a.kind)).toEqual(['retire', 'merge', 'promote']);
+    expect(actions[2]).toMatchObject({
       kind: 'promote',
-      title: 'Tried and failed',
-      tags: ['tried-and-failed'],
+      title: 'Brand new rule about logging format',
     });
   });
 

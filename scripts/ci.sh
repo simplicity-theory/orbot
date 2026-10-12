@@ -32,7 +32,7 @@ npm run test -w @orbot/web
 step "Start Postgres"
 docker compose up -d --wait db
 
-step "API e2e (append-only, secret leaks, record history, Phase 1 done-when)"
+step "API e2e (record, secrets, Overseer, briefing, curation, docs, cold-start, phase done-when tests)"
 npm run test:e2e -w @orbot/api
 
 step "Production build"

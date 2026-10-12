@@ -10,6 +10,11 @@ import {
 } from '@orbot/shared';
 import { DUPLICATE_THRESHOLD, similarity, titleFrom } from '../common/similarity.js';
 
+/** A lesson that applies beyond the task it came from. */
+export function isGeneral(lesson: string): boolean {
+  return !/orbot\/task-\d+|task #\d+|#\d+\b|\byet\b/i.test(lesson);
+}
+
 /**
  * The simulated Overseer's judgement. Deterministic rules standing in for a model:
  * the command system around it is what is being exercised.
@@ -88,10 +93,10 @@ export class SimulatedOverseer {
         });
     }
 
-    const lessons = [
-      ...note.flagsForSuccessor.filter((l) => !/^obsolete:/i.test(l)),
-      ...note.triedAndFailed.map((l) => `Tried and failed: ${l}`),
-    ];
+    // Only general flags are lasting lessons. Anything tied to this task (its branch, its
+    // number, "yet") stays in the handover, where a successor on the same task will read it.
+    // Tried-and-failed notes stay in the handover too: they are about this piece of work.
+    const lessons = note.flagsForSuccessor.filter((l) => !/^obsolete:/i.test(l) && isGeneral(l));
     for (const lesson of lessons) {
       const dup = entries.find(
         (e) => similarity(`${e.title} ${e.body}`, lesson) >= DUPLICATE_THRESHOLD,
@@ -116,7 +121,7 @@ export class SimulatedOverseer {
         kind: 'promote',
         title: promoted.title,
         body: lesson,
-        tags: lesson.startsWith('Tried and failed') ? ['tried-and-failed'] : ['lesson'],
+        tags: ['lesson'],
         reason: `Lasting lesson from ${source}.`,
       });
     }

@@ -164,6 +164,36 @@ export class FieldManualService {
     return next;
   }
 
+  /** Bring a retired entry back into the active Field Manual (a new version; history kept). */
+  async reinstate(
+    w: RecordWriter,
+    entryId: string,
+    ctx: WriteContext & { expectedVersion?: number },
+  ) {
+    const current = await w.getActive('fm-entry', entryId);
+    if (!current) return null;
+    if (!current.body.retired) throw new ConflictException('That entry is not retired.');
+    const next = await w.revise(
+      'fm-entry',
+      entryId,
+      (e) => ({ ...e, retired: false, retiredReason: null }),
+      ctx,
+    );
+    await w.event(
+      'curation',
+      {
+        action: 'edit',
+        entryId,
+        title: current.body.title,
+        sources: [],
+        reason: `Reinstated: ${ctx.reason}`,
+      },
+      { unitId: current.body.unitId },
+      ctx.actor,
+    );
+    return next;
+  }
+
   async edit(
     w: RecordWriter,
     entryId: string,

@@ -227,6 +227,29 @@ export class OverseerController {
     return toView(entry);
   }
 
+  @Post('fm-entries/:id/reinstate')
+  @HttpCode(200)
+  async reinstateEntry(
+    @Param('id', Uuid) id: string,
+    @Body(new ZodPipe(RetireFmEntryRequest)) body: z.output<typeof RetireFmEntryRequest>,
+    @Actor() actor: string,
+  ) {
+    const current = await this.record.requireActive('fm-entry', id);
+    const entry = await this.record.transaction(async (w) => {
+      const e = await this.fieldManual.reinstate(w, id, {
+        actor,
+        reason: body.reason,
+        expectedVersion: body.expectedVersion,
+      });
+      await this.fieldManual.rerender(w, current.body.unitId, {
+        actor,
+        reason: `Reinstated “${current.body.title}”: ${body.reason}`,
+      });
+      return e!;
+    });
+    return toView(entry);
+  }
+
   @Get('palette')
   palette() {
     return this.views.palette();

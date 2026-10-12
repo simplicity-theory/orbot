@@ -41,3 +41,31 @@ Judgement calls made where the design was ambiguous or a choice had to be made. 
 **D18. Phase 1 screens beyond the bare shell.** ORBAT, Unit, Bot, Task, Archive (search + history/diff/as-of), Sitreps (read-only feed) and a Needs-you list are built minimally on the real API, because the Phase 1 test ("every step can be found in the record") is best demonstrated in the UI. Phase 2 polishes them (inline approvals, command palette, tree view).
 
 **D19. Rogue scenarios ship with the runtime.** `rogue-leak` and `rogue-crash` exist to prove principle 5 end-to-end; they're harmless (the redactor masks them) and useful for demonstrating redaction.
+
+## Phase 2
+
+**D20. Overseers think through `BotRuntime`.** Overseers are bots (settled decision), so planning (`draftBackbrief`), curation (`curate`) and cold-start checks (`assessColdStart`) are runtime methods. `SimulatedRuntime` answers them with deterministic rules (`runtime/simulated-overseer.ts`); `ClaudeRuntime` will use the model. Nothing outside `runtime/` knows which brain is in use.
+
+**D21. The Field Manual is a set of versioned entries.** Each lesson is an `fm-entry` with its own history and provenance (`sources`: handover id + version, commander, git, cold-start). Merging a repeated lesson adds a source instead of a duplicate; retiring sets `retired: true` (a new version), which moves it to the archive tier — search treats a retired entity's current version as archived. The unit's `field-manual` document is re-rendered from active entries in the same transaction, so whole-document history/diff/as-of keep working. That document cannot be rewritten as a blob (400 with a pointer to entries).
+
+**D22. Only general lessons are promoted automatically.** The simulated Overseer promotes `flagsForSuccessor` items that don't name a specific task, branch or "yet"; task-specific notes and tried-and-failed items stay in the handover, which a successor on the same task is briefed with anyway. This keeps the Field Manual from filling with noise.
+
+**D23. Unit documents in git, one-way mirror plus import.** `UnitDocumentStore` (interface) / `GitDocumentStore` writes `.orbot/units/<slug>/` on an `orbot/unit-docs` branch of the unit's first connected repository, via its own worktree, committing each batch of changes (coalesced per unit). Field Manual sections carry hidden `<!-- fm:<id> -->` markers so human edits map back to entries; standing orders carry `<!-- so:<id> -->`. `sync()` imports human edits as new versions by `system:git-import` and runs before every briefing. War Diary files are read-only (events are immutable); edits are restored and reported. Units without a repository simply have no mirror. Pushing the branch upstream is a Phase 4 connections concern.
+
+**D24. Approval gates.** `approve-everything` and `backbriefs-and-deploys` both hold backbriefs for the Commander; `escalations-only` auto-approves (decision recorded as `auto-approved` by the Overseer). Deploy gating arrives with Logistics in Phase 4.
+
+**D25. Commander → unit missions are a temporary shortcut.** Until HQ exists (Phase 4), the Commander gives a mission straight to a unit's Overseer (`POST /missions`, "New mission" on the unit view). Missions may have `operationId: null`.
+
+**D26. Dispatch only what the Overseer issued.** Tasks created from an approved backbrief carry `autoStart: true` and are started by the Overseer's dispatcher whenever their bot is idle. Tasks issued directly by the Commander are started by hand ("Start task"), which keeps the Commander in control of ad-hoc work.
+
+**D27. Reject = re-plan in place.** Sending a backbrief back writes a `rejected` version with the note, then the Overseer writes the next round as a new version of the same backbrief (round + 1, notes carried forward). History shows every round.
+
+**D28. Approvals have no Undo.** Approving issues tasks that may start at once; a reversing entry can't un-run work. The toast says so. Field Manual, standing-order and document edits do have Undo (a new version restoring the old text; retire is undone by reinstating).
+
+**D29. Background work is serialized per unit.** Bus-driven reactions (plan, curate, dispatch, after-task sitreps, docs mirror) run through `Background`, one job at a time per key, so an Overseer never acts on a half-applied change. Tests and the seed wait on `settled()` (no pending jobs, no running bots).
+
+**D30. "A fresh bot" is proven, not assumed.** The `relay` scenario's second half reads only the brief: it blocks if the handover or the Field Manual convention is missing. The Phase 2 test runs it with the documents, then twice with them withheld (handover; Field Manual + search), and both controls block naming what's missing. The only thing a successor inherits physically is the branch.
+
+**D31. Unit view sections are navigation, not tabs.** Overview / Field Manual / War Diary / Handovers / Rules / Supply are links (`?section=`) with `aria-current`, so each is deep-linkable and the back button works.
+
+**D32. Keyboard.** Ctrl/⌘+K command palette (ARIA combobox + listbox, CDK dialog focus trap); `g` then `o/a/s/r/p/,` to go to screens; `?` for the cheat sheet. Shortcuts are ignored while typing in a field, except Ctrl/⌘+K.

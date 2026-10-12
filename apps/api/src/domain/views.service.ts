@@ -72,6 +72,10 @@ export class ViewsService {
           status: unitStatus(ub, ut, ubb),
           attention: attentionFor(u.entityId, ub, ut, ubb),
           backbriefs: ubb,
+          bots: ub
+            .filter((b) => !b.isOverseer)
+            .sort(byCallsign)
+            .map((b) => ({ ...b, currentTask: ut.find((t) => t.id === b.currentTaskId) ?? null })),
         };
       });
     return {
@@ -170,11 +174,12 @@ export class ViewsService {
 
   async bot(id: string): Promise<BotDetailView> {
     const b = await this.record.requireActive('bot', id);
-    const [unit, tasks, recent, briefs] = await Promise.all([
+    const [unit, tasks, recent, briefs, peers] = await Promise.all([
       this.record.requireActive('unit', b.body.unitId),
       this.record.listActive('task', { bodyContains: { botId: id } }),
       this.record.listEvents({ botId: id, limit: 50 }, { latest: true }),
       this.record.listEvents({ botId: id, kinds: ['task.briefed'], limit: 1 }, { latest: true }),
+      this.record.listActive('bot', { unitId: b.body.unitId }),
     ]);
     const tv = toViews(tasks);
     return {
@@ -187,6 +192,9 @@ export class ViewsService {
         .sort((x, y) => y.number - x.number),
       recent: [...recent].reverse(),
       lastBrief: (briefs[0] as RecordEvent<'task.briefed'> | undefined) ?? null,
+      peers: toViews(peers)
+        .filter((p) => p.id !== id && !p.isOverseer && p.status !== 'stood-down')
+        .sort(byCallsign),
     };
   }
 
