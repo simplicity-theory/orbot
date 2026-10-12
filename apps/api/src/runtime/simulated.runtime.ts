@@ -11,11 +11,14 @@ import {
   type CurationAction,
   type CurationInput,
   type HandoverNote,
+  type InterpretInput,
+  type Interpretation,
   type RunContext,
   type TaskBrief,
 } from '@orbot/shared';
 import { git } from '../common/git.js';
 import { loadScenarios, mulberry32, type Scenario, type ScenarioStep } from './scenario.js';
+import { SimulatedInterpreter } from './simulated-interpreter.js';
 import { SimulatedOverseer } from './simulated-overseer.js';
 
 export const DEFAULT_SCENARIO = 'happy-path';
@@ -37,6 +40,7 @@ export class SimulatedRuntime implements BotRuntime {
   readonly kind = 'simulated';
   private readonly scenarios: Map<string, Scenario>;
   private readonly overseer = new SimulatedOverseer();
+  private readonly interpreter = new SimulatedInterpreter();
 
   constructor(scenarios?: Map<string, Scenario>) {
     this.scenarios = scenarios ?? loadScenarios();
@@ -56,6 +60,10 @@ export class SimulatedRuntime implements BotRuntime {
 
   assessColdStart(input: ColdStartInput): Promise<ColdStartAssessment> {
     return Promise.resolve(this.overseer.assessColdStart(input));
+  }
+
+  interpret(input: InterpretInput): Promise<Interpretation> {
+    return Promise.resolve(this.interpreter.interpret(input));
   }
 
   async *run(brief: TaskBrief, ctx: RunContext): AsyncIterable<BotEvent> {
@@ -245,6 +253,57 @@ export class SimulatedRuntime implements BotRuntime {
           );
           if (stop) return true;
         }
+        return false;
+      }
+      case 'respect-order': {
+        const re = new RegExp(step.pattern, 'i');
+        const forbidding = async () =>
+          (await ctx.orders()).standingOrders.find((o) => re.test(o)) ?? null;
+        let order = await forbidding();
+        if (order && step.holdMs > 0) {
+          yield {
+            type: 'step',
+            action: 'hold',
+            detail: `Holding: standing order “${order}” forbids going on. Waiting for a frago.`,
+          };
+          const until = Date.now() + step.holdMs;
+          while (order && Date.now() < until && !ctx.signal.aborted) {
+            const frago = await ctx.waitForFrago(until - Date.now());
+            if (frago)
+              yield {
+                type: 'step',
+                action: 'frago',
+                detail: `Frago received: ${frago.text}`,
+                outcome: 'rechecking orders',
+              };
+            order = await forbidding();
+          }
+        }
+        if (order) {
+          yield { type: 'blocked', reason: text(step.blocked) };
+          return true;
+        }
+        yield {
+          type: 'step',
+          action: 'check-orders',
+          detail: 'Current standing orders allow going on.',
+          outcome: 'ok',
+        };
+        return false;
+      }
+      case 'require-supply': {
+        const re = new RegExp(step.pattern, 'i');
+        const item = (await ctx.orders()).supply.find((s) => re.test(s.name));
+        if (!item) {
+          yield { type: 'blocked', reason: text(step.missing) };
+          return true;
+        }
+        yield {
+          type: 'step',
+          action: 'check-supply',
+          detail: `Using ${item.name} (${item.kind}) issued to the unit.`,
+          outcome: 'ok',
+        };
         return false;
       }
       case 'leak-credential': {

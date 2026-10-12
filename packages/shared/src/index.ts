@@ -11,3 +11,4 @@ export * from './redaction/redactor.js';
 export * from './glossary.js';
 export * from './api/requests.js';
 export * from './api/views.js';
+export * from './chat/chat.js';

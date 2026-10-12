@@ -1,0 +1,39 @@
+{
+  "id": "needs-supply",
+  "description": "Needs the payments repository. Blocks until it is issued to the unit, then finishes.",
+  "seed": 6606,
+  "script": [
+    {
+      "do": "step",
+      "action": "read-brief",
+      "detail": "Read the brief for “{task}”.",
+      "outcome": "understood"
+    },
+    {
+      "do": "require-supply",
+      "pattern": "payments",
+      "missing": "No access to the payments repository: it has not been issued to {unit}."
+    },
+    {
+      "do": "step",
+      "action": "review",
+      "detail": "Reviewed the payments service's token handling.",
+      "outcome": "no findings"
+    },
+    {
+      "do": "write-file",
+      "path": "orbot/payments-review-{number}.md",
+      "content": "# Payments review, task #{number}\n\nToken handling reviewed; no findings."
+    },
+    { "do": "commit", "message": "Payments review for task #{number}" },
+    {
+      "do": "handover",
+      "state": "Payments review complete.",
+      "nextSteps": [],
+      "triedAndFailed": [],
+      "openProblems": [],
+      "flagsForSuccessor": []
+    },
+    { "do": "done", "summary": "Payments review for task #{number} complete." }
+  ]
+}

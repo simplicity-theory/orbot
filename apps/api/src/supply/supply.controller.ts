@@ -1,11 +1,21 @@
-import { Body, Controller, Get, Post } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Post } from '@nestjs/common';
 import { ConnectRepositoryRequest, StoreCredentialRequest } from '@orbot/shared';
-import type { z } from 'zod';
+import { z } from 'zod';
 import { Actor } from '../auth/auth.guard.js';
 import { ZodPipe } from '../common/zod.pipe.js';
 import { toView, toViews } from '../domain/view.js';
 import { SecretsService } from '../secrets/secrets.service.js';
 import { SupplyService } from './supply.service.js';
+
+const ConnectEnvironment = z.object({
+  name: z.string().trim().min(1).max(100),
+  tier: z.enum(['staging', 'production']),
+});
+const Allotment = z.object({
+  supplyId: z.uuid(),
+  unitId: z.uuid(),
+  revoke: z.boolean().default(false),
+});
 
 @Controller('supply')
 export class SupplyController {
@@ -40,6 +50,36 @@ export class SupplyController {
   ) {
     return toView(
       await this.supply.storeCredential(body, { actor, reason: `Credential ${body.name} stored` }),
+    );
+  }
+
+  @Post('environments')
+  async connectEnvironment(
+    @Body(new ZodPipe(ConnectEnvironment)) body: z.output<typeof ConnectEnvironment>,
+    @Actor() actor: string,
+  ) {
+    return toView(
+      await this.supply.connectEnvironment(body, {
+        actor,
+        reason: `Environment ${body.name} connected`,
+      }),
+    );
+  }
+
+  @Post('allot')
+  @HttpCode(200)
+  async allot(
+    @Body(new ZodPipe(Allotment)) body: z.output<typeof Allotment>,
+    @Actor() actor: string,
+  ) {
+    const ctx = {
+      actor,
+      reason: body.revoke ? 'Supply withdrawn from the unit' : 'Supply issued to the unit',
+    };
+    return toView(
+      body.revoke
+        ? await this.supply.revokeFromUnit(body.supplyId, body.unitId, ctx)
+        : await this.supply.allotToUnit(body.supplyId, body.unitId, ctx),
     );
   }
 

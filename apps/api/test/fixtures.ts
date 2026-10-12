@@ -51,6 +51,7 @@ export async function makeUnitWithBot(
       standingOrders: [],
       supplyIds: opts.supplyIds ?? [],
       order: 1,
+      computeBudget: 0,
     },
     ctx,
   );

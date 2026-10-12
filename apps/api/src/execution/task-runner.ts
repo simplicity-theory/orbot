@@ -5,6 +5,8 @@ import {
   renderHandoverMarkdown,
   type BotEvent,
   type BotStatus,
+  type FragoNote,
+  type LiveOrders,
   type Principal,
   type RecordEventRefs,
   type RecordVersion,
@@ -35,6 +37,11 @@ interface ActiveRun {
   runId: string;
   abort: AbortController;
   stopReason: string | null;
+  unitId: string;
+  botId: string;
+  /** Fragos delivered but not yet read by the bot. */
+  fragos: FragoNote[];
+  wake: (() => void) | null;
 }
 
 const STARTABLE: readonly TaskStatus[] = ['queued', 'blocked', 'stood-down'];
@@ -66,6 +73,64 @@ export class TaskRunner {
 
   runningCount(): number {
     return this.active.size;
+  }
+
+  /** Task ids currently running in a unit. */
+  runningIn(unitId: string): string[] {
+    return [...this.active.entries()].filter(([, r]) => r.unitId === unitId).map(([id]) => id);
+  }
+
+  /**
+   * Deliver a change of orders to a running bot. Recorded first; the bot picks it up at
+   * its next check (or immediately, if it is waiting for one).
+   */
+  async frago(
+    taskId: string,
+    text: string,
+    source: string | null,
+    actor: string,
+  ): Promise<boolean> {
+    const run = this.active.get(taskId);
+    if (!run) return false;
+    const ev = await this.record.event(
+      'frago',
+      { text, source },
+      { unitId: run.unitId, botId: run.botId, taskId },
+      actor,
+    );
+    run.fragos.push({ text: ev.body.text, at: ev.createdAt });
+    run.wake?.();
+    return true;
+  }
+
+  private async liveOrders(unitId: string): Promise<LiveOrders> {
+    const unit = await this.record.requireActive('unit', unitId);
+    const supply = await Promise.all(
+      unit.body.supplyIds.map((id) => this.record.getActive('supply', id)),
+    );
+    return {
+      standingOrders: unit.body.standingOrders.map((o) => o.text),
+      supply: supply
+        .filter((s): s is NonNullable<typeof s> => !!s && s.body.connected)
+        .map((s) => ({ name: s.body.name, kind: s.body.spec.kind })),
+    };
+  }
+
+  private waitForFrago(run: ActiveRun, ms: number): Promise<FragoNote | null> {
+    const next = () => run.fragos.shift() ?? null;
+    const ready = next();
+    if (ready || ms <= 0 || run.abort.signal.aborted) return Promise.resolve(ready);
+    return new Promise((resolve) => {
+      const done = () => {
+        clearTimeout(timer);
+        run.wake = null;
+        run.abort.signal.removeEventListener('abort', done);
+        resolve(next());
+      };
+      const timer = setTimeout(done, ms);
+      run.wake = done;
+      run.abort.signal.addEventListener('abort', done, { once: true });
+    });
   }
 
   /** Start a task in the background. Resolves once the run has started. */
@@ -111,7 +176,15 @@ export class TaskRunner {
     const runtime = this.runtimes.get(bot.body.runtime);
 
     const runId = randomUUID();
-    const run: ActiveRun = { runId, abort: new AbortController(), stopReason: null };
+    const run: ActiveRun = {
+      runId,
+      abort: new AbortController(),
+      stopReason: null,
+      unitId: t.unitId,
+      botId: bot.entityId,
+      fragos: [],
+      wake: null,
+    };
     this.active.set(taskId, run);
 
     const botPrincipal: Principal = {
@@ -170,6 +243,8 @@ export class TaskRunner {
         withCredential: (name, purpose, fn) =>
           this.useCredential(name, purpose, fn, t, botPrincipal, refs),
         searchRecord: (q) => this.briefing.search(t.unitId, q),
+        orders: () => this.liveOrders(t.unitId),
+        waitForFrago: (ms) => this.waitForFrago(run, ms),
       };
 
       const finished = this.drive(runtime.run(brief, ctx), run, task, botPrincipal, refs).finally(

@@ -26,6 +26,7 @@ import { WorkService } from '../domain/work.service.js';
 import { TaskRunner } from '../execution/task-runner.js';
 import { RecordBus } from '../record/record-bus.js';
 import { RecordService, type RecordWriter } from '../record/record.service.js';
+import { words } from '../common/similarity.js';
 import { BriefingService } from './briefing.service.js';
 import { CurationService } from './curation.service.js';
 import { Overseers } from './overseers.js';
@@ -572,6 +573,59 @@ export class OverseerService implements OnApplicationBootstrap, OnModuleDestroy 
         );
       }
       return bot;
+    });
+  }
+
+  /**
+   * Orders or supply changed: make it reach work already in progress. Running bots get a
+   * frago (they re-read their orders); blocked tasks whose reason the change speaks to are
+   * started again. New tasks pick the change up from their brief anyway.
+   */
+  applyToLiveWork(
+    unitId: string,
+    change: { summary: string; affects: string[] },
+    actor: string,
+  ): void {
+    if (!change.affects.length) return;
+    this.enqueue(unitId, 'live-work', async () => {
+      const cmd = await this.overseers.of(unitId);
+      for (const taskId of this.runner.runningIn(unitId)) {
+        await this.runner.frago(taskId, change.summary, actor, cmd.actor);
+      }
+      const about = change.affects.flatMap((a) => [...words(a)]);
+      const blocked = (await this.record.listActive('task', { unitId })).filter(
+        (t) => t.body.status === 'blocked',
+      );
+      for (const t of blocked) {
+        const reason = words(t.body.statusReason ?? '');
+        const shared = about.filter(
+          (w) =>
+            reason.has(w) || [...reason].some((r) => r.startsWith(w.slice(0, 5)) && w.length > 4),
+        );
+        if (shared.length < 2 || this.runner.isRunning(t.entityId)) continue;
+        await this.record.event(
+          'sitrep',
+          {
+            level: 'unit',
+            text: `Frago: task #${t.body.number} was blocked (“${t.body.statusReason}”); orders changed (${change.summary}) — resuming.`,
+            status: null,
+          },
+          { unitId, taskId: t.entityId, botId: t.body.botId, missionId: t.body.missionId },
+          cmd.actor,
+        );
+        await this.runner.start(t.entityId, cmd.actor).catch(async (err: Error) => {
+          await this.record.event(
+            'sitrep',
+            {
+              level: 'unit',
+              text: `Could not resume task #${t.body.number}: ${err.message}`,
+              status: null,
+            },
+            { unitId, taskId: t.entityId },
+            cmd.actor,
+          );
+        });
+      }
     });
   }
 

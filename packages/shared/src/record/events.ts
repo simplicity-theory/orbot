@@ -1,6 +1,9 @@
 import { z } from 'zod';
 import { Id } from '../domain/entities.js';
 import { TaskStatus } from '../status/status.js';
+import { ChatAction, MessageKind } from '../chat/chat.js';
+
+const Link = z.object({ label: z.string(), link: z.string() });
 
 /**
  * Immutable, never-versioned record events: the War Diary, sitreps, each bot's
@@ -68,7 +71,64 @@ export const RecordEventBodies = {
     channel: z.string(),
     from: z.enum(['commander', 'overseer', 'hq']),
     text: z.string(),
+    /** For orders relayed by HQ: the channel they came from. */
+    relayedFrom: z.string().nullable().default(null),
   }),
+  /** The Overseer's structured reply to a Commander message. */
+  'chat.readback': z.object({
+    channel: z.string(),
+    replyTo: z.string(),
+    kinds: z.array(MessageKind),
+    /** "Wilco." when something changed; otherwise the answer or a question back. */
+    text: z.string(),
+    answer: z.string().nullable(),
+    items: z.array(
+      z.object({
+        ordersLogId: z.string(),
+        summary: z.string(),
+        links: z.array(Link),
+        reversible: z.boolean(),
+        routedVia: z.string().nullable(),
+      }),
+    ),
+    pending: z.array(
+      z.object({
+        pendingId: z.string(),
+        summary: z.string(),
+        reason: z.enum(['musing', 'irreversible']),
+        phrase: z.string().nullable(),
+      }),
+    ),
+    missing: z.array(z.string()),
+    unclear: z.array(z.string()),
+  }),
+  /** One chat-caused change. Undo appends another entry that `reverses` it. */
+  'orders.log': z.object({
+    messageId: z.string().nullable(),
+    channel: z.string(),
+    action: ChatAction,
+    summary: z.string(),
+    links: z.array(Link),
+    /** How to reverse it; null if it cannot be undone. */
+    inverse: ChatAction.nullable(),
+    reverses: z.string().nullable(),
+    routedVia: z.string().nullable(),
+  }),
+  'pending.action': z.object({
+    messageId: z.string(),
+    channel: z.string(),
+    action: ChatAction,
+    summary: z.string(),
+    reason: z.enum(['musing', 'irreversible']),
+    phrase: z.string().nullable(),
+  }),
+  'pending.resolved': z.object({
+    pendingId: z.string(),
+    outcome: z.enum(['confirmed', 'declined']),
+    ordersLogId: z.string().nullable(),
+  }),
+  /** A change to orders delivered to a bot mid-task. */
+  frago: z.object({ text: z.string(), source: z.string().nullable() }),
   'secret.stored': z.object({ secretName: z.string() }),
   'secret.revoked': z.object({ secretName: z.string() }),
   'run.started': z.object({ runId: z.string(), runtime: z.string() }),

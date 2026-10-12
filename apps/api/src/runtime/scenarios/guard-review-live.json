@@ -1,0 +1,56 @@
+{
+  "id": "guard-review-live",
+  "description": "Like guard-review, but holds mid-task (up to 20s) waiting for a frago instead of blocking straight away.",
+  "seed": 5506,
+  "script": [
+    {
+      "do": "step",
+      "action": "read-brief",
+      "detail": "Read the brief for \u201c{task}\u201d.",
+      "outcome": "understood"
+    },
+    {
+      "do": "sitrep",
+      "text": "{callsign} on task #{number}: scanning.",
+      "status": "working"
+    },
+    {
+      "do": "step",
+      "action": "scan",
+      "detail": "Ran the dependency audit and static scan.",
+      "outcome": "2 low-severity findings, 0 high"
+    },
+    {
+      "do": "diary",
+      "category": "surprise",
+      "text": "Two low-severity findings (verbose error messages) on {branch}."
+    },
+    {
+      "do": "respect-order",
+      "pattern": "low-severity findings (also )?block",
+      "holdMs": 20000,
+      "blocked": "Two low-severity findings, and standing orders say low-severity findings block release."
+    },
+    {
+      "do": "write-file",
+      "path": "orbot/security-review-{number}.md",
+      "content": "# Security review, task #{number}\n\nNo high or critical findings. Two low-severity findings noted, not blocking."
+    },
+    {
+      "do": "commit",
+      "message": "Security review for task #{number}"
+    },
+    {
+      "do": "handover",
+      "state": "Review complete on {branch}; low-severity findings recorded, not blocking.",
+      "nextSteps": [],
+      "triedAndFailed": [],
+      "openProblems": [],
+      "flagsForSuccessor": []
+    },
+    {
+      "do": "done",
+      "summary": "Security review for task #{number} complete."
+    }
+  ]
+}

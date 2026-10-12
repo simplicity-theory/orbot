@@ -107,6 +107,28 @@ export class SupplyService {
     );
   }
 
+  /** Connect an environment (e.g. staging, production). Deploy rights come from issuing it to a unit. */
+  connectEnvironment(input: { name: string; tier: 'staging' | 'production' }, ctx: WriteContext) {
+    return this.record.create(
+      'supply',
+      {
+        name: input.name,
+        connected: true,
+        spec: { kind: 'environment', details: { tier: input.tier } },
+      },
+      ctx,
+    );
+  }
+
+  revokeFromUnit(supplyId: string, unitId: string, ctx: WriteContext) {
+    return this.record.revise(
+      'unit',
+      unitId,
+      (u) => ({ ...u, supplyIds: u.supplyIds.filter((s) => s !== supplyId) }),
+      ctx,
+    );
+  }
+
   async allotToUnit(supplyId: string, unitId: string, ctx: WriteContext) {
     await this.get(supplyId);
     return this.record.revise(

@@ -99,7 +99,12 @@ describe('secrets never leak', () => {
       .get(RecordService)
       .event(
         'chat.message',
-        { channel: unitId, from: 'commander', text: `here is the token: ${SECRET}` },
+        {
+          channel: unitId,
+          from: 'commander',
+          text: `here is the token: ${SECRET}`,
+          relayedFrom: null,
+        },
         { unitId },
         'commander:commander',
       );

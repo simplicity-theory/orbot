@@ -16,6 +16,7 @@ export const ENTITY_TYPES = [
   'document',
   'backbrief',
   'fm-entry',
+  'settings',
 ] as const;
 export const EntityType = z.enum(ENTITY_TYPES);
 export type EntityType = z.infer<typeof EntityType>;
@@ -57,6 +58,8 @@ export const UnitBody = z.object({
   supplyIds: z.array(Id),
   /** Display order on the ORBAT. */
   order: z.number().int(),
+  /** Compute budget granted to the unit, in units (caps are enforced in Phase 5). */
+  computeBudget: z.number().nonnegative().default(0),
 });
 export type UnitBody = z.infer<typeof UnitBody>;
 
@@ -99,6 +102,7 @@ export const OperationBody = z.object({
 export type OperationBody = z.infer<typeof OperationBody>;
 
 export const MissionStatus = z.enum([
+  'withdrawn',
   'planning',
   'awaiting-approval',
   'working',
@@ -179,6 +183,7 @@ export const CredentialSupply = z.object({
 
 export const GenericSupply = z.object({
   kind: z.enum(['environment', 'tool', 'compute']),
+  /** For environments: `tier` is `staging` or `production` (production deploy rights are irreversible). */
   details: z.record(z.string(), z.string()),
 });
 
@@ -280,6 +285,25 @@ export const FmEntryBody = z.object({
 });
 export type FmEntryBody = z.infer<typeof FmEntryBody>;
 
+// ---------- Settings ----------
+
+/** Product settings that change behaviour without code changes. One versioned entity. */
+export const SettingsBody = z.object({
+  /** Chat action kinds that need a typed one-line confirmation before they run. */
+  irreversibleActions: z.array(z.string()),
+  /** The phrase the Commander types to confirm an irreversible order. */
+  confirmationPhrase: z.string().min(1),
+});
+export type SettingsBody = z.infer<typeof SettingsBody>;
+
+/** Well-known id of the settings entity. */
+export const SETTINGS_ID = '00000000-0000-4000-8000-000000000001';
+
+export const DEFAULT_SETTINGS: SettingsBody = {
+  irreversibleActions: ['grant-deploy-rights'],
+  confirmationPhrase: 'confirm',
+};
+
 // ---------- Registry ----------
 
 export const ENTITY_BODY_SCHEMAS = {
@@ -292,6 +316,7 @@ export const ENTITY_BODY_SCHEMAS = {
   document: DocumentBody,
   backbrief: BackbriefBody,
   'fm-entry': FmEntryBody,
+  settings: SettingsBody,
 } as const satisfies Record<EntityType, z.ZodType>;
 
 export interface EntityBodyMap {
@@ -304,4 +329,5 @@ export interface EntityBodyMap {
   document: DocumentBody;
   backbrief: BackbriefBody;
   'fm-entry': FmEntryBody;
+  settings: SettingsBody;
 }

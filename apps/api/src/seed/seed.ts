@@ -12,13 +12,15 @@ import { WorkService } from '../domain/work.service.js';
 import { ColdStartService } from '../overseer/coldstart.service.js';
 import { OverseerService } from '../overseer/overseer.service.js';
 import { settled } from '../testing/settle.js';
+import { ChatService } from '../chat/chat.service.js';
+import { TaskRunner } from '../execution/task-runner.js';
 import { RecordService } from '../record/record.service.js';
 import { SupplyService } from '../supply/supply.service.js';
 
 const SEED = { actor: 'system:seed', reason: 'Demo force seeded' };
 
 interface UnitSeed {
-  body: Omit<UnitBody, 'overseerBotId' | 'supplyIds'>;
+  body: Omit<UnitBody, 'overseerBotId' | 'supplyIds' | 'computeBudget'>;
   overseerRole: string;
   botRoles: string[];
   fieldManual: {
@@ -158,7 +160,10 @@ const UNITS: UnitSeed[] = [
         ],
         mustEscalate: ['Accepting a known vulnerability', 'Rotating production credentials'],
       },
-      standingOrders: [{ id: 'grd-1', text: 'High and critical findings block release.' }],
+      standingOrders: [
+        { id: 'grd-1', text: 'High and critical findings block release.' },
+        { id: 'grd-2', text: 'Low-severity findings also block release.' },
+      ],
       order: 4,
     },
     overseerRole: 'Overseer — security lead',
@@ -212,6 +217,20 @@ export async function seedDemoForce(app: INestApplication): Promise<SeedResult> 
     { ...SEED, reason: 'Demo credential stored' },
   );
 
+  // In the depot but not issued to anyone yet: the payments service and production.
+  const paymentsPath = await createDemoRepo(
+    join(config.workspacesDir, 'source', 'payments-service'),
+    'payments-service',
+  );
+  await supply.connectRepository(
+    { name: 'payments-service', location: paymentsPath },
+    { ...SEED, reason: 'Payments repository connected' },
+  );
+  await supply.connectEnvironment(
+    { name: 'production', tier: 'production' },
+    { ...SEED, reason: 'Production environment connected' },
+  );
+
   const unitIds: Record<string, string> = {};
   const botIds: Record<string, string[]> = {};
   let botCount = 0;
@@ -221,9 +240,11 @@ export async function seedDemoForce(app: INestApplication): Promise<SeedResult> 
     unitIds[u.body.slug] = unitId;
     const supplied = ['engineers', 'inspection'].includes(u.body.slug)
       ? [repo.entityId, token.entityId]
-      : [];
+      : u.body.slug === 'guard'
+        ? [repo.entityId]
+        : [];
     await force.createUnit(
-      { ...u.body, overseerBotId: overseerId, supplyIds: supplied },
+      { ...u.body, overseerBotId: overseerId, supplyIds: supplied, computeBudget: 20 },
       SEED,
       unitId,
     );
@@ -370,6 +391,41 @@ export async function seedDemoForce(app: INestApplication): Promise<SeedResult> 
     { ...SEED, reason: 'Issued directly by the Commander' },
   );
 
+  // Guard: two tasks held up — one by a standing order, one waiting for the payments repo.
+  // One chat message ("Stop blocking on low-severity findings. I'll give you access to the
+  // payments repo.") clears both.
+  for (const [i, [title, scenario]] of [
+    ['Security review of the login change', 'guard-review'],
+    ['Review payments token handling', 'needs-supply'],
+  ].entries()) {
+    const t = await work.createTask(
+      {
+        unitId: unitIds['guard']!,
+        botId: botIds['guard']![i]!,
+        missionId: null,
+        title: title!,
+        description: '',
+        repoSupplyId: repo.entityId,
+        credentialNames: [],
+        scenario: scenario!,
+        budgetLimitUnits: 10,
+        continuesTaskId: null,
+      },
+      { ...SEED, reason: 'Issued directly by the Commander' },
+    );
+    await app.get(TaskRunner).start(t.entityId, 'system:seed');
+  }
+  await settled(app);
+
+  // A short chat history, through the real chat path.
+  await app
+    .get(ChatService)
+    .send(
+      unitIds['engineers']!,
+      'How far along is the login rate limiting?',
+      'commander:commander',
+    );
+
   await coldStart.check(unitIds['engineers']!);
   await settled(app);
 
@@ -377,12 +433,12 @@ export async function seedDemoForce(app: INestApplication): Promise<SeedResult> 
   return { seeded: true, units: UNITS.length, bots: botCount + UNITS.length, tasks: tasks.length };
 }
 
-async function createDemoRepo(path: string): Promise<string> {
+async function createDemoRepo(path: string, name = 'demo-app'): Promise<string> {
   if (existsSync(join(path, '.git'))) return path;
   await mkdir(join(path, 'src'), { recursive: true });
   await writeFile(
     join(path, 'README.md'),
-    '# demo-app\n\nA tiny login service used by the ORBOT demo force.\n',
+    `# ${name}\n\nA tiny service used by the ORBOT demo force.\n`,
   );
   await writeFile(
     join(path, 'src', 'login.js'),
@@ -390,7 +446,7 @@ async function createDemoRepo(path: string): Promise<string> {
   );
   await writeFile(
     join(path, 'package.json'),
-    JSON.stringify({ name: 'demo-app', version: '0.1.0', type: 'module' }, null, 2) + '\n',
+    JSON.stringify({ name, version: '0.1.0', type: 'module' }, null, 2) + '\n',
   );
   await git(path, ['init', '--quiet', '-b', 'main']);
   await git(path, ['add', '-A']);

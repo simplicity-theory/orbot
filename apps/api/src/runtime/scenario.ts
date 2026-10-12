@@ -51,6 +51,18 @@ export const ScenarioStep = z.discriminatedUnion('do', [
   }),
   /** Carry out the handover's next steps of the form ``Write `path`: content``. */
   z.object({ do: z.literal('follow-handover') }),
+  /**
+   * Re-read the unit's live standing orders. While one matches `pattern` (it forbids going on),
+   * wait up to `holdMs` (real time) for a frago, re-checking after each; then block with `blocked`.
+   */
+  z.object({
+    do: z.literal('respect-order'),
+    pattern: z.string(),
+    holdMs: z.number().int().nonnegative().default(0),
+    blocked: Text,
+  }),
+  /** Block unless the unit's live supply has an item whose name matches `pattern`. */
+  z.object({ do: z.literal('require-supply'), pattern: z.string(), missing: Text }),
 ]);
 export type ScenarioStep = z.infer<typeof ScenarioStep>;
 

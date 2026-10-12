@@ -464,6 +464,32 @@ export class RecordService {
     return opts.latest ? events.reverse() : events;
   }
 
+  async getEvent(id: string): Promise<RecordEvent | null> {
+    const [row] = await this.db.select(eventCols).from(recordEvent).where(eq(recordEvent.id, id));
+    return row ? toEvent(row) : null;
+  }
+
+  /** Events of the given kinds whose body contains `body` (JSON containment), oldest first. */
+  async findEvents(
+    kinds: RecordEventKind[],
+    body: Record<string, unknown>,
+    opts: { limit?: number; latest?: boolean } = {},
+  ): Promise<RecordEvent[]> {
+    const rows = await this.db
+      .select(eventCols)
+      .from(recordEvent)
+      .where(
+        and(
+          inArray(recordEvent.kind, kinds),
+          sql`${recordEvent.body} @> ${JSON.stringify(body)}::jsonb`,
+        ),
+      )
+      .orderBy(opts.latest ? desc(recordEvent.seq) : asc(recordEvent.seq))
+      .limit(opts.limit ?? 1000);
+    const events = rows.map(toEvent);
+    return opts.latest ? events.reverse() : events;
+  }
+
   /** Every version of every entity that refers to `id` in its body (e.g. a task's handover). */
   async versionsReferencing(field: string, id: string): Promise<RecordVersion[]> {
     const rows = await this.db

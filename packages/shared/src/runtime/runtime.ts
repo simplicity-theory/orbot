@@ -1,4 +1,5 @@
 import type { ProposedTask, TaskBody, Workspace } from '../domain/entities.js';
+import type { Interpretation } from '../chat/chat.js';
 import type { DiaryCategory } from '../record/events.js';
 import type { TaskStatus } from '../status/status.js';
 
@@ -25,6 +26,8 @@ export interface BotRuntime {
   curate(input: CurationInput): Promise<CurationAction[]>;
   /** Given only the unit's documents, could a fresh bot continue this task? What is missing? */
   assessColdStart(input: ColdStartInput): Promise<ColdStartAssessment>;
+  /** Read a Commander's chat message: answer it and/or turn it into typed actions. */
+  interpret(input: InterpretInput): Promise<Interpretation>;
 }
 
 // ---------- Briefing ----------
@@ -87,6 +90,20 @@ export interface RunContext {
   ): Promise<T>;
   /** Search the unit's knowledge on demand: current versions first, the archive as fallback. */
   searchRecord(query: string): Promise<RecordSearchResult[]>;
+  /** The unit's orders and supply as they stand right now (they can change mid-task). */
+  orders(): Promise<LiveOrders>;
+  /** Wait up to `ms` (real time) for a frago; resolves null on timeout or abort. */
+  waitForFrago(ms: number): Promise<FragoNote | null>;
+}
+
+export interface LiveOrders {
+  standingOrders: string[];
+  supply: { name: string; kind: string }[];
+}
+
+export interface FragoNote {
+  text: string;
+  at: string;
 }
 
 export interface HandoverNote {
@@ -209,4 +226,31 @@ export interface ColdStartAssessment {
   /** 0–100: how confidently a fresh bot could continue from the documents alone. */
   score: number;
   gaps: ColdStartGap[];
+}
+
+export interface InterpretUnit {
+  id: string;
+  name: string;
+  slug: string;
+  standingOrders: { id: string; text: string }[];
+  supplyIds: string[];
+  computeBudget: number;
+  tasks: {
+    id: string;
+    number: number;
+    title: string;
+    status: string;
+    statusReason: string | null;
+    missionId: string | null;
+    botCallsign: string | null;
+  }[];
+  missions: { id: string; goal: string; status: string; done: number; total: number }[];
+}
+
+export interface InterpretInput {
+  message: string;
+  /** The unit whose Overseer is being addressed, or null for HQ. */
+  channelUnitId: string | null;
+  units: InterpretUnit[];
+  depot: { id: string; name: string; kind: string; connected: boolean; tier: string | null }[];
 }

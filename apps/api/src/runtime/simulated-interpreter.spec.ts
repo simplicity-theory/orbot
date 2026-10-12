@@ -1,0 +1,118 @@
+import type { InterpretInput, InterpretUnit } from '@orbot/shared';
+import { SimulatedInterpreter } from './simulated-interpreter.js';
+
+const unit = (over: Partial<InterpretUnit> = {}): InterpretUnit => ({
+  id: '00000000-0000-4000-8000-0000000000a1',
+  name: 'Guard',
+  slug: 'guard',
+  standingOrders: [
+    { id: 'hi', text: 'High and critical findings block release.' },
+    { id: 'lo', text: 'Low-severity findings also block release.' },
+  ],
+  supplyIds: [],
+  computeBudget: 0,
+  tasks: [
+    {
+      id: '00000000-0000-4000-8000-0000000000b1',
+      number: 7,
+      title: 'Build the mobile layout',
+      status: 'working',
+      statusReason: null,
+      missionId: null,
+      botCallsign: 'G-1',
+    },
+  ],
+  missions: [],
+  ...over,
+});
+const input = (message: string, over: Partial<InterpretInput> = {}): InterpretInput => ({
+  message,
+  channelUnitId: '00000000-0000-4000-8000-0000000000a1',
+  units: [unit()],
+  depot: [
+    {
+      id: '00000000-0000-4000-8000-0000000000c1',
+      name: 'payments-service',
+      kind: 'repository',
+      connected: true,
+      tier: null,
+    },
+    {
+      id: '00000000-0000-4000-8000-0000000000c2',
+      name: 'production',
+      kind: 'environment',
+      connected: true,
+      tier: 'production',
+    },
+  ],
+  ...over,
+});
+const i = new SimulatedInterpreter();
+
+describe('SimulatedInterpreter', () => {
+  it('splits a message into a rule change and a supply grant', () => {
+    const r = i.interpret(
+      input('Stop blocking on low-severity findings. I’ll give you access to the payments repo.'),
+    );
+    expect(r.kinds).toEqual(['rule-change', 'supply-grant']);
+    expect(r.actions[0]).toMatchObject({
+      kind: 'rule-change',
+      removeOrders: ['lo'],
+      addOrders: ['Stop blocking on low-severity findings.'],
+    });
+    expect(r.actions[1]).toMatchObject({
+      kind: 'supply-grant',
+      supplyId: '00000000-0000-4000-8000-0000000000c1',
+    });
+  });
+
+  it.each([
+    ['How far along is the mobile layout?', 'question'],
+    ['Add rate limiting to the API.', 'order'],
+    ['Drop the mobile layout for now.', 'frago'],
+    ['From now on, scan every branch.', 'rule-change'],
+    ['I might give you more budget.', 'musing'],
+  ])('%s → %s', (msg, kind) => {
+    expect(i.interpret(input(msg)).kinds).toEqual([kind]);
+  });
+
+  it('answers questions from the record', () => {
+    expect(i.interpret(input('How far along is the mobile layout?')).answer).toBe(
+      'Task #7 “Build the mobile layout” (Guard) is working with G-1.',
+    );
+  });
+
+  it('holds musings as possible actions, changing nothing', () => {
+    const r = i.interpret(input('Maybe I could give you 5 more units of budget.'));
+    expect(r.actions).toEqual([]);
+    expect(r.musings).toEqual([expect.objectContaining({ kind: 'budget-grant', units: 5 })]);
+  });
+
+  it('names what is missing from the depot', () => {
+    expect(i.interpret(input('I’ll give you access to the billing repo.')).missing).toEqual([
+      { what: 'billing repository', kind: 'repository' },
+    ]);
+  });
+
+  it('routes orders that name another unit', () => {
+    const eng = unit({
+      id: '00000000-0000-4000-8000-0000000000a2',
+      name: 'Engineers',
+      slug: 'engineers',
+      standingOrders: [],
+      tasks: [],
+    });
+    const r = i.interpret(input('Engineers, fix the login bug.', { units: [unit(), eng] }));
+    expect(r.actions[0]).toMatchObject({
+      kind: 'create-mission',
+      unitId: eng.id,
+      goal: 'Fix the login bug',
+    });
+  });
+
+  it('recognises production deploy rights', () => {
+    expect(i.interpret(input('Grant Guard production deploy rights.')).actions[0]).toMatchObject({
+      kind: 'grant-deploy-rights',
+    });
+  });
+});

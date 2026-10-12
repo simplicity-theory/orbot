@@ -141,3 +141,29 @@ export interface MetaView {
   productName: string;
   runtime: string;
 }
+
+export interface ChatView {
+  channel: string;
+  /** "Engineers Overseer (E-0)" or "HQ". */
+  label: string;
+  unitId: string | null;
+  /** chat.message and chat.readback events, oldest first. */
+  items: RecordEvent[];
+  /** Orders-log entries that have been undone: entry id → the entry that reversed it. */
+  reversed: Record<string, string>;
+  /** Pending actions that were answered: pending id → outcome. */
+  resolved: Record<string, 'confirmed' | 'declined'>;
+}
+
+export interface ChatSendResult {
+  message: RecordEvent<'chat.message'>;
+  readback: RecordEvent<'chat.readback'>;
+}
+
+export interface OrdersLogEntryView {
+  entry: RecordEvent<'orders.log'>;
+  reversedBy: string | null;
+  /** The Commander message that caused it (null for undos). */
+  message: RecordEvent<'chat.message'> | null;
+  unitName: string;
+}

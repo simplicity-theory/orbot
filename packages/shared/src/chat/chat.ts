@@ -1,0 +1,106 @@
+import { z } from 'zod';
+import { Id } from '../domain/entities.js';
+
+/** What a Commander's message is, sentence by sentence. A message can be several at once. */
+export const MessageKind = z.enum([
+  'question',
+  'order',
+  'frago',
+  'rule-change',
+  'supply-grant',
+  'musing',
+]);
+export type MessageKind = z.infer<typeof MessageKind>;
+
+/** `hq` or a unit id. */
+export const ChatChannel = z.union([z.literal('hq'), Id]);
+export type ChatChannel = z.infer<typeof ChatChannel>;
+
+export const RoeLine = z.object({
+  list: z.enum(['mayDoAlone', 'mustEscalate']),
+  text: z.string().min(1),
+});
+
+/**
+ * Everything chat can change. Closed and typed: the interpreter can only emit these,
+ * and each runs through the same services the UI uses. No free-text side effects.
+ */
+export const ChatAction = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('create-mission'),
+    unitId: Id,
+    goal: z.string().min(1).max(500),
+    definitionOfDone: z.array(z.string().min(1)).min(1),
+  }),
+  z.object({ kind: z.literal('withdraw-mission'), unitId: Id, missionId: Id, note: z.string() }),
+  z.object({
+    kind: z.literal('frago'),
+    unitId: Id,
+    change: z.enum(['stand-down', 'amend']),
+    taskIds: z.array(Id).min(1),
+    note: z.string().min(1),
+  }),
+  z.object({
+    kind: z.literal('resume'),
+    unitId: Id,
+    taskIds: z.array(Id).min(1),
+    note: z.string(),
+  }),
+  z.object({
+    kind: z.literal('rule-change'),
+    unitId: Id,
+    /** Standing-order ids to remove. */
+    removeOrders: z.array(z.string()),
+    /** Standing-order texts to add. */
+    addOrders: z.array(z.string().min(1)),
+    removeRoe: z.array(RoeLine).default([]),
+    addRoe: z.array(RoeLine).default([]),
+  }),
+  z.object({ kind: z.literal('supply-grant'), unitId: Id, supplyId: Id }),
+  z.object({ kind: z.literal('supply-revoke'), unitId: Id, supplyId: Id }),
+  z.object({ kind: z.literal('budget-grant'), unitId: Id, units: z.number() }),
+  /** Issue a production environment to a unit: deploy rights. Irreversible by default. */
+  z.object({ kind: z.literal('grant-deploy-rights'), unitId: Id, supplyId: Id }),
+]);
+export type ChatAction = z.infer<typeof ChatAction>;
+export type ChatActionKind = ChatAction['kind'];
+export const CHAT_ACTION_KINDS = ChatAction.options.map(
+  (o) => o.shape.kind.value,
+) as ChatActionKind[];
+
+/** What the Overseer made of a message. Produced by `BotRuntime.interpret`. */
+export const Interpretation = z.object({
+  kinds: z.array(MessageKind),
+  /** Answer to a question, or anything the Overseer wants to say. */
+  answer: z.string().nullable(),
+  /** Changes to make now (irreversible ones are still held for confirmation by ORBOT). */
+  actions: z.array(ChatAction),
+  /** Hedged statements ("I might…"): nothing happens until the Commander says it was an order. */
+  musings: z.array(ChatAction),
+  /** Promised supply that isn't connected in the depot. */
+  missing: z.array(
+    z.object({
+      what: z.string(),
+      kind: z.enum(['repository', 'credential', 'environment', 'supply']),
+    }),
+  ),
+  /** Sentences the Overseer could not turn into anything. */
+  unclear: z.array(z.string()),
+});
+export type Interpretation = z.infer<typeof Interpretation>;
+
+export interface ChatLink {
+  label: string;
+  link: string;
+}
+
+export const SendChatRequest = z.object({
+  text: z.string().trim().min(1).max(5000),
+});
+export type SendChatRequest = z.input<typeof SendChatRequest>;
+
+export const ConfirmPendingRequest = z.object({
+  /** Required for irreversible orders: must equal the confirmation phrase. */
+  phrase: z.string().trim().max(200).optional(),
+});
+export type ConfirmPendingRequest = z.input<typeof ConfirmPendingRequest>;

@@ -31,13 +31,22 @@ describe('demo seed', () => {
       'failed-task',
     ]);
     expect(eng.backbriefs.map((b) => b.mission.goal)).toEqual(['Harden session handling']);
-    expect(orbat.needsYou).toBe(3);
+    expect(orbat.needsYou).toBe(5);
 
     // Inspection's gate is "escalations only": its plan ran without waiting for approval.
     const inspection = (await t.agent.get(`/api/units/${orbat.units[2]!.unit.id}`).expect(200))
       .body;
     expect(inspection.missions[0].mission.status).toBe('done');
     expect(inspection.missions[0].backbrief.decision.outcome).toBe('auto-approved');
+
+    // Guard has two tasks held up by a standing order and by missing supply.
+    const guard = orbat.units[3]!;
+    expect(guard.attention.map((a) => a.kind).sort()).toEqual(['blocked-bot', 'blocked-bot']);
+    const chat = (await t.agent.get(`/api/chat/${eng.unit.id}`).expect(200)).body;
+    expect(chat.items.map((i: { kind: string }) => i.kind)).toEqual([
+      'chat.message',
+      'chat.readback',
+    ]);
 
     // Engineers has a curated Field Manual and a cold-start result.
     const engineers = (await t.agent.get(`/api/units/${eng.unit.id}`).expect(200)).body;
