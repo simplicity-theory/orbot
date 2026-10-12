@@ -1,0 +1,26 @@
+name: orbot
+
+services:
+  db:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: orbot_admin
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:-change-me-admin}
+      POSTGRES_DB: postgres
+      ORBOT_DB_OWNER_PASSWORD: ${ORBOT_DB_OWNER_PASSWORD:-change-me-owner}
+      ORBOT_DB_APP_PASSWORD: ${ORBOT_DB_APP_PASSWORD:-change-me-app}
+      ORBOT_DB_SECRETS_PASSWORD: ${ORBOT_DB_SECRETS_PASSWORD:-change-me-secrets}
+    ports:
+      - '${ORBOT_DB_PORT:-5432}:5432'
+    volumes:
+      - orbot-pg:/var/lib/postgresql
+      - ./docker/postgres-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U orbot_admin -d orbot']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  orbot-pg:

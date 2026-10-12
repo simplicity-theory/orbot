@@ -1,0 +1,36 @@
+{
+  "name": "orbot",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Command teams of software-development bots: state intent, issue orders, read reports.",
+  "engines": {
+    "node": ">=24"
+  },
+  "workspaces": [
+    "packages/shared",
+    "apps/api"
+  ],
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "db:up": "docker compose up -d --wait db",
+    "db:migrate": "npm run migrate -w @orbot/api",
+    "db:seed": "npm run seed -w @orbot/api",
+    "build": "npm run build -w @orbot/shared && npm run build -w @orbot/api && npm run build -w @orbot/web",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "oxlint packages apps",
+    "format": "prettier --write .",
+    "test": "npm run test --workspaces --if-present",
+    "test:e2e": "npm run test:e2e -w @orbot/api",
+    "test:ui": "npm run test:ui -w @orbot/web",
+    "ci": "bash scripts/ci.sh"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "concurrently": "^10.0.6",
+    "oxlint": "^1.87.0",
+    "prettier": "^3.9.10",
+    "typescript": "~6.0.2",
+    "vite": "^8.0.0",
+    "vitest": "^5.0.4"
+  }
+}

@@ -1,0 +1,6 @@
+dist
+node_modules
+.angular
+coverage
+apps/api/src/db/migrations/meta
+BUILD_PROMPT.md

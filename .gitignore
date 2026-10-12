@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.angular/
+coverage/
+.env
+*.log
+/workspaces/
+/apps/web/test-results/
+/apps/web/playwright-report/
+/apps/api/.workspaces/
+.DS_Store
