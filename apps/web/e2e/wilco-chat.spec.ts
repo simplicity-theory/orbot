@@ -16,6 +16,8 @@ async function openGuardChat(page: Page) {
 
 async function say(drawer: ReturnType<Page['getByRole']>, text: string) {
   const replies = drawer.getByRole('article', { name: 'Overseer reply' });
+  // Count only once the history has loaded.
+  await expect(drawer.getByRole('log')).toHaveAttribute('aria-busy', 'false');
   const before = await replies.count();
   const box = drawer.getByRole('textbox', { name: /Message/ });
   await box.fill(text);

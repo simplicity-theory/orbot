@@ -1,10 +1,11 @@
-import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post } from '@nestjs/common';
-import { CreateOperationRequest, DeployDecisionRequest } from '@orbot/shared';
+import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Put } from '@nestjs/common';
+import { CreateOperationRequest, DeployDecisionRequest, SetBudgetRequest } from '@orbot/shared';
 import type { z } from 'zod';
 import { Actor } from '../auth/auth.guard.js';
 import { ZodPipe } from '../common/zod.pipe.js';
 import { toView } from '../domain/view.js';
 import { ViewsService } from '../domain/views.service.js';
+import { BudgetService } from './budget.service.js';
 import { HqService } from './hq.service.js';
 import { OverseerService } from './overseer.service.js';
 
@@ -17,6 +18,7 @@ export class OperationsController {
     private readonly hq: HqService,
     private readonly overseer: OverseerService,
     private readonly views: ViewsService,
+    private readonly budgets: BudgetService,
   ) {}
 
   @Get('operations')
@@ -34,7 +36,36 @@ export class OperationsController {
     @Body(new ZodPipe(CreateOperationRequest)) body: z.output<typeof CreateOperationRequest>,
     @Actor() actor: string,
   ) {
-    return toView(await this.hq.createOperation(body.intent, body.name ?? null, actor));
+    return toView(
+      await this.hq.createOperation(
+        body.intent,
+        body.name ?? null,
+        actor,
+        body.budgetUnits ?? null,
+      ),
+    );
+  }
+
+  /** Set the operation's compute budget cap (null = none); work held at the old cap resumes. */
+  @Put('operations/:id/budget')
+  async budget(
+    @Param('id', Uuid) id: string,
+    @Body(new ZodPipe(SetBudgetRequest)) body: z.output<typeof SetBudgetRequest>,
+    @Actor() actor: string,
+  ) {
+    await this.budgets.setOperationCap(id, body.units, body.reason, actor);
+    return this.views.operation(id);
+  }
+
+  /** Set a unit's compute budget cap (0 = none); work held at the old cap resumes. */
+  @Put('units/:id/budget')
+  async unitBudget(
+    @Param('id', Uuid) id: string,
+    @Body(new ZodPipe(SetBudgetRequest)) body: z.output<typeof SetBudgetRequest>,
+    @Actor() actor: string,
+  ) {
+    await this.budgets.setUnitCap(id, body.units, body.reason, actor);
+    return this.budgets.unitBudget(id);
   }
 
   /** Approve (or reject) a production deploy waiting on the Commander. */

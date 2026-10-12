@@ -2,6 +2,7 @@ import { Component, computed, input, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { STATUS_META, type BotStatus, type OrbatUnit } from '@orbot/shared';
 import { Backbrief } from '../../ui/backbrief';
+import { BudgetMeter } from '../../ui/budget';
 import { Icon } from '../../ui/icon';
 import { StatusBadge } from '../../ui/status-badge';
 import { Term } from '../../ui/term';
@@ -11,12 +12,13 @@ const ATTENTION_ICON = {
   'failed-task': 'triangle-alert',
   'awaiting-approval': 'stamp',
   escalation: 'arrow-right',
+  budget: 'coins',
 } as const;
 
 /** A unit at a glance, with an attention strip of everything that needs the Commander. */
 @Component({
   selector: 'orb-unit-card',
-  imports: [RouterLink, Icon, StatusBadge, Term, Backbrief],
+  imports: [RouterLink, Icon, StatusBadge, Term, Backbrief, BudgetMeter],
   template: `
     @let u = unit();
     <article class="card" [attr.aria-labelledby]="'unit-' + u.unit.id">
@@ -57,6 +59,10 @@ const ATTENTION_ICON = {
         <div class="wide">
           <dt><orb-term key="mission">Mission</orb-term></dt>
           <dd>{{ u.currentMission?.goal ?? u.unit.standingMission }}</dd>
+        </div>
+        <div class="wide">
+          <dt>Budget</dt>
+          <dd><orb-budget [budget]="u.budget" [label]="'Compute budget of ' + u.unit.name" /></dd>
         </div>
       </dl>
 

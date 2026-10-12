@@ -244,7 +244,7 @@ export async function seedDemoForce(app: INestApplication): Promise<SeedResult> 
         ? [repo.entityId]
         : [];
     await force.createUnit(
-      { ...u.body, overseerBotId: overseerId, supplyIds: supplied, computeBudget: 20 },
+      { ...u.body, overseerBotId: overseerId, supplyIds: supplied, computeBudget: 100 },
       SEED,
       unitId,
     );

@@ -465,6 +465,37 @@ export class RecordService {
     return opts.latest ? events.reverse() : events;
   }
 
+  /** Compute units spent (sum of `cost` events), grouped by unit, operation or task. */
+  async costBy(by: 'unit' | 'operation' | 'task'): Promise<Map<string, number>> {
+    const col =
+      by === 'unit'
+        ? recordEvent.unitId
+        : by === 'operation'
+          ? recordEvent.operationId
+          : recordEvent.taskId;
+    const rows = await this.db
+      .select({ id: col, spent: sql<string>`sum((${recordEvent.body}->>'units')::numeric)` })
+      .from(recordEvent)
+      .where(and(eq(recordEvent.kind, 'cost'), sql`${col} IS NOT NULL`))
+      .groupBy(col);
+    return new Map(rows.map((r) => [r.id!, Number(r.spent)]));
+  }
+
+  /** Compute units spent by one unit, operation or task. */
+  async costOf(ref: { unitId: string } | { operationId: string } | { taskId: string }) {
+    const [col, id] =
+      'unitId' in ref
+        ? [recordEvent.unitId, ref.unitId]
+        : 'operationId' in ref
+          ? [recordEvent.operationId, ref.operationId]
+          : [recordEvent.taskId, ref.taskId];
+    const [row] = await this.db
+      .select({ spent: sql<string>`coalesce(sum((${recordEvent.body}->>'units')::numeric), 0)` })
+      .from(recordEvent)
+      .where(and(eq(recordEvent.kind, 'cost'), eq(col, id)));
+    return Number(row?.spent ?? 0);
+  }
+
   async getEvent(id: string): Promise<RecordEvent | null> {
     const [row] = await this.db.select(eventCols).from(recordEvent).where(eq(recordEvent.id, id));
     return row ? toEvent(row) : null;

@@ -54,6 +54,22 @@ export const RecordEventBodies = {
     documentId: z.string(),
     lessons: z.array(z.object({ unitId: z.string().nullable(), text: z.string() })),
   }),
+  /** Spending crossed the warning share of a compute budget (unit, operation or task). */
+  'budget.warning': z.object({
+    scope: z.enum(['unit', 'operation', 'task']),
+    targetId: z.string(),
+    label: z.string(),
+    spent: z.number(),
+    cap: z.number(),
+  }),
+  /** A compute budget cap changed; work held at the old cap is released. */
+  'budget.set': z.object({
+    scope: z.enum(['unit', 'operation']),
+    targetId: z.string(),
+    from: z.number().nullable(),
+    to: z.number().nullable(),
+    releasedTaskIds: z.array(z.string()),
+  }),
   /** A stand-down order given (or lifted) for one bot, one unit or everything. */
   'stand-down': z.object({
     scope: z.enum(['all', 'unit', 'bot']),

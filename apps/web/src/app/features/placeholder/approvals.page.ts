@@ -57,7 +57,13 @@ import { scrollToFragment } from './scroll-to-fragment';
                 <li>
                   <orb-icon
                     class="sm"
-                    [name]="a.kind === 'failed-task' ? 'triangle-alert' : 'octagon-pause'"
+                    [name]="
+                      a.kind === 'failed-task'
+                        ? 'triangle-alert'
+                        : a.kind === 'budget'
+                          ? 'coins'
+                          : 'octagon-pause'
+                    "
                   />
                   <span class="meta">{{ a.unitName }}</span>
                   <a [routerLink]="a.link">{{ a.label }}</a>

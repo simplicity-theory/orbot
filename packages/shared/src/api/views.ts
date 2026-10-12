@@ -46,7 +46,18 @@ export interface MissionProgress {
   backbrief: BackbriefView | null;
 }
 
-export type AttentionKind = 'blocked-bot' | 'failed-task' | 'awaiting-approval' | 'escalation';
+export type AttentionKind =
+  'blocked-bot' | 'failed-task' | 'awaiting-approval' | 'escalation' | 'budget';
+
+/** A compute budget and what has been spent against it. */
+export interface BudgetView {
+  /** Hard cap in units; null = no cap set. */
+  cap: number | null;
+  spent: number;
+  /** Share (0–1) at which ORBOT warns. */
+  warnAt: number;
+  state: 'uncapped' | 'ok' | 'warning' | 'capped';
+}
 
 export interface AttentionItem {
   kind: AttentionKind;
@@ -61,6 +72,7 @@ export interface AttentionItem {
 export interface OrbatUnit {
   unit: UnitView;
   overseer: BotView | null;
+  budget: BudgetView;
   botCount: number;
   botsByStatus: Partial<Record<BotStatus, number>>;
   currentMission: MissionView | null;
@@ -85,6 +97,7 @@ export interface BotWithTask extends BotView {
 export interface UnitDetailView {
   unit: UnitView;
   status: Status;
+  budget: BudgetView;
   overseer: BotView | null;
   bots: BotWithTask[];
   missions: MissionProgress[];
@@ -186,6 +199,7 @@ export interface OperationMissionView {
 
 export interface OperationSummary {
   operation: OperationView;
+  budget: BudgetView;
   missions: OperationMissionView[];
   /** Things on this operation waiting on the Commander. */
   needsYou: AttentionItem[];
@@ -203,4 +217,11 @@ export interface StandDownView {
   all: Halt | null;
   units: { id: string; name: string; halt: Halt }[];
   bots: { id: string; callsign: string; unitId: string; halt: Halt }[];
+}
+
+/** Work out a budget's state from its cap, spend and warning share. */
+export function budgetView(cap: number | null, spent: number, warnAt: number): BudgetView {
+  const state =
+    cap === null ? 'uncapped' : spent >= cap ? 'capped' : spent >= cap * warnAt ? 'warning' : 'ok';
+  return { cap, spent, warnAt, state };
 }

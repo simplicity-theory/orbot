@@ -70,7 +70,7 @@ export const UnitBody = z.object({
   supplyIds: z.array(Id),
   /** Display order on the ORBAT. */
   order: z.number().int(),
-  /** Compute budget granted to the unit, in units (caps are enforced in Phase 5). */
+  /** The unit's compute budget: a hard cap on what its bots may spend, in units. 0 = no cap set. */
   computeBudget: z.number().nonnegative().default(0),
   /** Stand-down order on the whole unit (Phase 5). */
   halt: Halt.nullable().default(null),
@@ -133,6 +133,8 @@ export const OperationBody = z.object({
   /** The shared cross-unit record (a document) and the After Action review. */
   recordDocumentId: Id.nullable().default(null),
   afterActionDocumentId: Id.nullable().default(null),
+  /** Hard cap on what the whole operation may spend, in compute units; null = no cap. */
+  budgetUnits: z.number().nonnegative().nullable().default(null),
 });
 export type OperationBody = z.infer<typeof OperationBody>;
 
@@ -169,7 +171,7 @@ export const MissionBody = z.object({
 export type MissionBody = z.infer<typeof MissionBody>;
 
 export const Budget = z.object({
-  /** Hard cap in compute units; null = uncapped (Phase 5 enforces caps). */
+  /** Hard cap in compute units for this task; null = uncapped. */
   limitUnits: z.number().nonnegative().nullable(),
   spentUnits: z.number().nonnegative(),
 });
@@ -360,6 +362,8 @@ export const SettingsBody = z.object({
   irreversibleActions: z.array(z.string()),
   /** The phrase the Commander types to confirm an irreversible order. */
   confirmationPhrase: z.string().min(1),
+  /** Share of a compute budget (0–1) at which ORBOT warns before the hard cap. */
+  budgetWarnAt: z.number().min(0.1).max(1).default(0.8),
   /** "Everything, stand down": a stand-down order on every unit (Phase 5). */
   halt: Halt.nullable().default(null),
 });
@@ -371,6 +375,7 @@ export const SETTINGS_ID = '00000000-0000-4000-8000-000000000001';
 export const DEFAULT_SETTINGS: SettingsBody = {
   irreversibleActions: ['grant-deploy-rights'],
   confirmationPhrase: 'confirm',
+  budgetWarnAt: 0.8,
   halt: null,
 };
 

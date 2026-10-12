@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { SETTINGS_ID, STAGE_ORDER } from '@orbot/shared';
+import { budgetView, SETTINGS_ID, STAGE_ORDER, type BudgetView } from '@orbot/shared';
 import type {
   ApprovalsView,
   AttentionItem,
@@ -55,10 +55,14 @@ export class ViewsService {
       this.record.listActive('backbrief', { bodyContains: { status: 'awaiting-approval' } }),
     ]);
     const bbViews = backbriefViews(backbriefs, missions, units, bots);
-    const allHalted = !!(await this.record.getActive('settings', SETTINGS_ID))?.body.halt;
+    const settings = (await this.record.getActive('settings', SETTINGS_ID))?.body;
+    const allHalted = !!settings?.halt;
+    const warnAt = settings?.budgetWarnAt ?? 0.8;
+    const spentBy = await this.record.costBy('unit');
     const out: OrbatUnit[] = units
       .sort((a, b) => a.body.order - b.body.order)
       .map((u) => {
+        const budget = unitBudget(u.body.computeBudget, spentBy.get(u.entityId) ?? 0, warnAt);
         const ub = bots.filter((b) => b.body.unitId === u.entityId).map(toView);
         const ut = tasks.filter((t) => t.body.unitId === u.entityId).map(toView);
         const um = missions.filter((m) => m.body.unitId === u.entityId).map(toView);
@@ -70,11 +74,15 @@ export class ViewsService {
         return {
           unit: toView(u),
           overseer: ub.find((b) => b.id === u.body.overseerBotId) ?? null,
+          budget,
           botCount: ub.filter((b) => !b.isOverseer && b.status !== 'stood-down').length,
           botsByStatus,
           currentMission: um.find((m) => m.status !== 'done') ?? null,
           status: unitStatus(ub, ut, ubb, allHalted || !!u.body.halt),
-          attention: attentionFor(u.entityId, ub, ut, ubb),
+          attention: [
+            ...attentionFor(u.entityId, ub, ut, ubb),
+            ...budgetAttention(u.body.name, `/units/${u.entityId}`, u.entityId, budget),
+          ],
           backbriefs: ubb,
           bots: ub
             .filter((b) => !b.isOverseer)
@@ -150,14 +158,15 @@ export class ViewsService {
       .flatMap((b) =>
         b.queue.map((q) => tv.find((t) => t.id === q)).filter((t): t is TaskView => !!t),
       );
+    const settings = (await this.record.getActive('settings', SETTINGS_ID))?.body;
     return {
       unit: toView(u),
-      status: unitStatus(
-        bv,
-        tv,
-        awaiting,
-        !!u.body.halt || !!(await this.record.getActive('settings', SETTINGS_ID))?.body.halt,
+      budget: unitBudget(
+        u.body.computeBudget,
+        await this.record.costOf({ unitId: id }),
+        settings?.budgetWarnAt ?? 0.8,
       ),
+      status: unitStatus(bv, tv, awaiting, !!u.body.halt || !!settings?.halt),
       overseer: bv.find((b) => b.id === u.body.overseerBotId) ?? null,
       bots: bv.map((b) => ({
         ...b,
@@ -301,7 +310,13 @@ export class ViewsService {
         [],
       ),
     ]);
-    return { operation: toView(op), missions: rows, needsYou };
+    const budget = budgetView(
+      op.body.budgetUnits,
+      await this.record.costOf({ operationId: id }),
+      (await this.record.getActive('settings', SETTINGS_ID))?.body.budgetWarnAt ?? 0.8,
+    );
+    needsYou.push(...budgetAttention(`Operation ${op.body.name}`, `/operations/${id}`, id, budget));
+    return { operation: toView(op), budget, missions: rows, needsYou };
   }
 
   async operation(id: string): Promise<OperationDetailView> {
@@ -420,6 +435,31 @@ function backbriefViews(
 function byCallsign(a: BotView, b: BotView) {
   if (a.isOverseer !== b.isOverseer) return a.isOverseer ? -1 : 1;
   return a.callsign.localeCompare(b.callsign, undefined, { numeric: true });
+}
+
+/** A unit's budget: `computeBudget` 0 means no cap has been set. */
+function unitBudget(computeBudget: number, spent: number, warnAt: number): BudgetView {
+  return budgetView(computeBudget > 0 ? computeBudget : null, spent, warnAt);
+}
+
+function budgetAttention(
+  label: string,
+  link: string,
+  entityId: string,
+  b: BudgetView,
+): AttentionItem[] {
+  if (b.state !== 'warning' && b.state !== 'capped') return [];
+  return [
+    {
+      kind: 'budget',
+      label:
+        b.state === 'capped'
+          ? `${label} is at its compute budget cap (${b.spent} of ${b.cap} units): work is held`
+          : `${label} has used ${b.spent} of ${b.cap} compute units`,
+      link,
+      entityId,
+    },
+  ];
 }
 
 function unitStatus(

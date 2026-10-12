@@ -4,6 +4,7 @@ import type { ChatAction, ChatLink, TaskBody, TaskStatus } from '@orbot/shared';
 import { TaskRunner } from '../execution/task-runner.js';
 import { HqService } from '../overseer/hq.service.js';
 import { StandDownService } from '../overseer/stand-down.service.js';
+import { BudgetService } from '../overseer/budget.service.js';
 import { OverseerService } from '../overseer/overseer.service.js';
 import { RecordService, type WriteContext } from '../record/record.service.js';
 import { SupplyService } from '../supply/supply.service.js';
@@ -35,6 +36,7 @@ export class ActionsService {
     private readonly runner: TaskRunner,
     private readonly hq: HqService,
     private readonly standDowns: StandDownService,
+    private readonly budget: BudgetService,
   ) {}
 
   async run(action: ChatAction, ctx: WriteContext): Promise<ActionResult> {
@@ -311,11 +313,14 @@ export class ActionsService {
           (b) => ({ ...b, computeBudget: Math.max(0, (b.computeBudget ?? 0) + action.units) }),
           ctx,
         );
+        const released = await this.budget.release({ unitId: action.unitId }, ctx.actor);
         return {
-          summary: `${u} compute budget ${action.units >= 0 ? 'raised' : 'lowered'} by ${Math.abs(action.units)} to ${next.body.computeBudget} units.`,
+          summary: `${u} compute budget ${action.units >= 0 ? 'raised' : 'lowered'} by ${Math.abs(action.units)} to ${next.body.computeBudget} units.${
+            released.length ? ` ${released.length} task(s) held at the cap resumed.` : ''
+          }`,
           links: [{ label: `${u}`, link: unitLink(action.unitId) }],
           inverse: { kind: 'budget-grant', unitId: action.unitId, units: -action.units },
-          affects: ['budget'],
+          affects: [],
         };
       }
     }

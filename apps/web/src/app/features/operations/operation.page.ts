@@ -11,6 +11,7 @@ import { Backbrief } from '../../ui/backbrief';
 import { DeployApproval } from '../../ui/deploy-approval';
 import { LoadError } from '../../ui/load-error';
 import { PhaseStepper } from '../../ui/phase-stepper';
+import { BudgetControl } from '../../ui/budget';
 import { Skeleton } from '../../ui/skeleton';
 import { StatusBadge } from '../../ui/status-badge';
 import { Term } from '../../ui/term';
@@ -25,6 +26,7 @@ import { MissionChain } from './mission-chain';
     DeployApproval,
     LoadError,
     PhaseStepper,
+    BudgetControl,
     Skeleton,
     StatusBadge,
     Term,
@@ -50,6 +52,16 @@ import { MissionChain } from './mission-chain';
         </header>
         <section class="panel" aria-label="Phase">
           <orb-phase-stepper [phase]="v.operation.phase" />
+        </section>
+        <section class="panel" aria-labelledby="op-budget-h">
+          <h2 id="op-budget-h" class="panel__title">Compute budget</h2>
+          <orb-budget-control
+            scope="operation"
+            [targetId]="v.operation.id"
+            [name]="'Operation ' + v.operation.name"
+            [budget]="v.budget"
+            (changed)="view.reload()"
+          />
         </section>
 
         @if (backbriefs().length || deploys().length) {

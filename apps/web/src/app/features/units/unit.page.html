@@ -53,6 +53,17 @@
           </section>
         }
 
+        <section class="panel" aria-labelledby="budget-h">
+          <h2 id="budget-h" class="panel__title">Compute budget</h2>
+          <orb-budget-control
+            scope="unit"
+            [targetId]="v.unit.id"
+            [name]="v.unit.name"
+            [budget]="v.budget"
+            (changed)="view.reload()"
+          />
+        </section>
+
         <div class="columns">
           <section class="panel" aria-labelledby="missions-h">
             <h2 id="missions-h" class="panel__title">

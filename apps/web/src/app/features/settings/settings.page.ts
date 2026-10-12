@@ -46,7 +46,7 @@ import { ThemeService } from '../../core/theme';
         </fieldset>
       </section>
       <section class="panel" aria-labelledby="irrev-h">
-        <h2 id="irrev-h" class="panel__title">Orders that need confirmation</h2>
+        <h2 id="irrev-h" class="panel__title">Orders and budgets</h2>
         @if (settings.value(); as st) {
           <form class="form" (ngSubmit)="save(st.version)">
             <p class="hint">
@@ -64,6 +64,18 @@ import { ThemeService } from '../../core/theme';
             </fieldset>
             <label for="phrase">Confirmation phrase</label>
             <input id="phrase" name="phrase" class="input" [(ngModel)]="phrase" required />
+            <label for="warn-at">Budget warning at (% of a cap)</label>
+            <input
+              id="warn-at"
+              name="warnAt"
+              class="input"
+              type="number"
+              min="10"
+              max="100"
+              step="5"
+              [(ngModel)]="warnAt"
+              required
+            />
             <label for="settings-reason">Why the change?</label>
             <input id="settings-reason" name="reason" class="input" [(ngModel)]="reason" required />
             <div class="actions">
@@ -133,6 +145,7 @@ export class SettingsPage {
   protected readonly chosen = signal<string[]>([]);
   protected readonly busy = signal(false);
   protected phrase = '';
+  protected warnAt = 80;
   protected reason = '';
 
   constructor() {
@@ -142,6 +155,7 @@ export class SettingsPage {
       if (!st) return;
       this.chosen.set(st.irreversibleActions);
       this.phrase = st.confirmationPhrase;
+      this.warnAt = Math.round((st.budgetWarnAt ?? 0.8) * 100);
     });
   }
 
@@ -155,6 +169,7 @@ export class SettingsPage {
       await this.api.updateSettings({
         irreversibleActions: this.chosen(),
         confirmationPhrase: this.phrase.trim(),
+        budgetWarnAt: Math.min(100, Math.max(10, this.warnAt)) / 100,
         reason: this.reason.trim(),
         expectedVersion: version,
       });

@@ -8,6 +8,7 @@ import { SettingsService } from './settings.service.js';
 const UpdateSettings = z.object({
   irreversibleActions: z.array(z.enum(CHAT_ACTION_KINDS as [string, ...string[]])).optional(),
   confirmationPhrase: z.string().trim().min(1).max(50).optional(),
+  budgetWarnAt: z.number().min(0.1).max(1).optional(),
   reason: z.string().trim().min(1).max(500),
   expectedVersion: z.number().int().nonnegative(),
 });

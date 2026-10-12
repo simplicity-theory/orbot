@@ -130,6 +130,8 @@ export type StandingOrdersRequest = z.input<typeof StandingOrdersRequest>;
 export const CreateOperationRequest = z.object({
   intent: z.string().trim().min(1).max(1000),
   name: z.string().trim().min(1).max(100).optional(),
+  /** Hard cap on the operation's compute spend; omit for none. */
+  budgetUnits: z.number().int().positive().max(1_000_000).nullable().optional(),
 });
 export type CreateOperationRequest = z.input<typeof CreateOperationRequest>;
 
@@ -155,3 +157,10 @@ export const StandDownRequest = z
     path: ['targetId'],
   });
 export type StandDownRequest = z.input<typeof StandDownRequest>;
+
+/** Set a unit's or an operation's compute budget cap (null on an operation = no cap). */
+export const SetBudgetRequest = z.object({
+  units: z.number().int().nonnegative().max(1_000_000).nullable(),
+  reason: z.string().trim().min(1).max(500),
+});
+export type SetBudgetRequest = z.input<typeof SetBudgetRequest>;

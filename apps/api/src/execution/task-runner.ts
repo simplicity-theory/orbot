@@ -396,10 +396,32 @@ export class TaskRunner {
               run.runId,
               spent,
             );
-          case 'cost':
+          case 'cost': {
             spent += ev.units;
             await this.record.event('cost', { units: ev.units, total: spent }, refs, botActor);
+            // The spend is on the record either way; at a budget cap the run stops here.
+            const go = await this.policy.check({
+              principal: bot,
+              action: 'task.continue',
+              unitId: refs.unitId ?? null,
+              taskId: refs.taskId ?? null,
+              details: { units: ev.units },
+            });
+            if (!go.allowed) {
+              run.abort.abort();
+              if (run.stopReason !== null) return this.standDown(run, task, refs, botActor, spent);
+              return this.finish(
+                'blocked',
+                `Held by policy: ${go.reason}`,
+                task.body,
+                refs,
+                botActor,
+                run.runId,
+                spent,
+              );
+            }
             break;
+          }
           case 'handover':
             await this.writeHandover(task, ev.note, refs, botActor);
             run.handoverWritten = true;

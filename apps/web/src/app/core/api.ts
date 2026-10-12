@@ -252,15 +252,30 @@ export class Api {
   updateSettings(body: {
     irreversibleActions?: string[];
     confirmationPhrase?: string;
+    budgetWarnAt?: number;
     reason: string;
     expectedVersion: number;
   }) {
     return firstValueFrom(this.http.put<SettingsView>(apiUrl.settings(), body));
   }
 
-  createOperation(intent: string, name?: string) {
+  createOperation(intent: string, name?: string, budgetUnits?: number | null) {
     return firstValueFrom(
-      this.http.post<OperationView>(`${API}/operations`, { intent, ...(name ? { name } : {}) }),
+      this.http.post<OperationView>(`${API}/operations`, {
+        intent,
+        ...(name ? { name } : {}),
+        ...(budgetUnits ? { budgetUnits } : {}),
+      }),
+    );
+  }
+
+  /** Set a unit's (0 = none) or an operation's (null = none) compute budget cap. */
+  setBudget(scope: 'unit' | 'operation', id: string, units: number | null, reason: string) {
+    return firstValueFrom(
+      this.http.put<unknown>(`${API}/${scope === 'unit' ? 'units' : 'operations'}/${id}/budget`, {
+        units,
+        reason,
+      }),
     );
   }
 

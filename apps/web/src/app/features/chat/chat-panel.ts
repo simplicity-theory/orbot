@@ -34,6 +34,7 @@ const CHAT_KINDS = new Set(['chat.message', 'chat.readback', 'orders.log', 'pend
         tabindex="0"
         role="log"
         [attr.aria-label]="'Conversation with ' + label()"
+        [attr.aria-busy]="view.isLoading() || !view.hasValue()"
         aria-live="polite"
       >
         @if (view.error(); as err) {

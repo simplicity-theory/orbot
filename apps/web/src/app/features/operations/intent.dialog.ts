@@ -30,6 +30,18 @@ import { Toasts } from '../../ui/toast';
       ></textarea>
       <label for="op-name">Code name <span class="hint">(optional)</span></label>
       <input id="op-name" name="name" class="input" [(ngModel)]="name" placeholder="Gatekeeper" />
+      <label for="op-budget"
+        >Compute budget <span class="hint">(optional hard cap, in units)</span></label
+      >
+      <input
+        id="op-budget"
+        name="budget"
+        class="input"
+        type="number"
+        min="1"
+        step="1"
+        [(ngModel)]="budget"
+      />
       @if (error(); as e) {
         <p role="alert" class="error">{{ e.message }} {{ e.action }}</p>
       }
@@ -54,13 +66,18 @@ export class IntentDialog {
   private readonly toasts = inject(Toasts);
   protected intent = '';
   protected name = '';
+  protected budget: number | null = null;
   protected readonly busy = signal(false);
   protected readonly error = signal<UserFacingError | null>(null);
 
   protected async submit(): Promise<void> {
     this.busy.set(true);
     try {
-      const op = await this.api.createOperation(this.intent.trim(), this.name.trim() || undefined);
+      const op = await this.api.createOperation(
+        this.intent.trim(),
+        this.name.trim() || undefined,
+        this.budget ? Math.round(this.budget) : null,
+      );
       this.toasts.show({
         tone: 'success',
         message: `Operation ${op.name} launched.`,

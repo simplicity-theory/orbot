@@ -98,12 +98,13 @@ export class HqService implements OnApplicationBootstrap, OnModuleDestroy {
     intent: string,
     name: string | null,
     actor: string,
+    budgetUnits: number | null = null,
   ): Promise<RecordVersion<OperationBody>> {
     const opName = name ?? intent.split(/\s+/).slice(0, 3).join(' ');
     const op = await this.record.transaction(async (w) => {
       const created = await w.create(
         'operation',
-        { name: opName, intent, phase: 'intent', supplyIds: [] },
+        { name: opName, intent, phase: 'intent', supplyIds: [], budgetUnits },
         { actor, reason: 'Commander stated intent' },
       );
       const doc = await w.create(

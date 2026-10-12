@@ -199,6 +199,20 @@ export function describeEvent(e: RecordEvent): EventSummary {
         text: `${(b['lessons'] as unknown[]).length} lesson(s) kept as standing orders`,
         tone: 'info',
       };
+    case 'budget.warning':
+      return {
+        icon: 'coins',
+        label: 'Budget warning',
+        text: `${s('label')} has used ${String(b['spent'])} of ${String(b['cap'])} units`,
+        tone: 'warning',
+      };
+    case 'budget.set':
+      return {
+        icon: 'coins',
+        label: 'Budget set',
+        text: `Cap ${String(b['from'] ?? 'none')} → ${String(b['to'] ?? 'none')}`,
+        tone: 'info',
+      };
     case 'stand-down':
       return {
         icon: 'octagon-pause',

@@ -406,6 +406,11 @@ async function* writeInWorkspace(
 
 async function* commit(brief: TaskBrief, message: string): AsyncGenerator<BotEvent, void> {
   await git(brief.workspace.path, ['add', '-A']);
+  if (!(await git(brief.workspace.path, ['status', '--porcelain']))) {
+    // Picked up again after a pause: this part was committed last time.
+    yield { type: 'step', action: 'commit', detail: message, outcome: 'already committed' };
+    return;
+  }
   await git(brief.workspace.path, ['commit', '--quiet', '-m', message]);
   const sha = await git(brief.workspace.path, ['rev-parse', 'HEAD']);
   yield { type: 'step', action: 'commit', detail: message, outcome: sha };

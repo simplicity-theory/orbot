@@ -13,6 +13,7 @@ import { Icon } from '../../ui/icon';
 import { LoadError } from '../../ui/load-error';
 import { fullDate, RelativeTimePipe } from '../../ui/relative-time';
 import { Skeleton } from '../../ui/skeleton';
+import { BudgetControl } from '../../ui/budget';
 import { StandDownButton } from '../../ui/stand-down';
 import { StatusBadge } from '../../ui/status-badge';
 import { Term } from '../../ui/term';
@@ -39,6 +40,7 @@ export type UnitSection = (typeof UNIT_SECTIONS)[number]['id'];
     RouterLink,
     StatusBadge,
     StandDownButton,
+    BudgetControl,
     Skeleton,
     LoadError,
     Term,
