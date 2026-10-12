@@ -9,9 +9,10 @@
     "dev": "nest start --watch --preserveWatchOutput",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "migrate": "tsx src/db/migrate.ts",
-    "seed": "tsx src/seed/seed.cli.ts",
+    "seed": "nest build && node dist/src/seed/seed.cli.js",
     "test": "vitest run",
-    "test:e2e": "vitest run --config ./vitest.config.e2e.ts"
+    "test:e2e": "vitest run --config ./vitest.config.e2e.ts",
+    "e2e-server": "nest build && node dist/src/testing/e2e-server.js"
   },
   "dependencies": {
     "@nestjs/common": "^12.1.3",

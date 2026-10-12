@@ -39,7 +39,16 @@ export async function makeUnitWithBot(app: INestApplication, name = 'Engineers')
     ctx,
   );
   const bot = await force.createBot(
-    { unitId: unit.entityId, callsign: 'E-1', role: 'Developer', isOverseer: false, status: 'idle', currentTaskId: null, queue: [], runtime: 'simulated' },
+    {
+      unitId: unit.entityId,
+      callsign: 'E-1',
+      role: 'Developer',
+      isOverseer: false,
+      status: 'idle',
+      currentTaskId: null,
+      queue: [],
+      runtime: 'simulated',
+    },
     ctx,
   );
   return { unit, bot };
@@ -64,7 +73,10 @@ export class SpyRuntime implements BotRuntime {
   }
 }
 
-export async function waitFor<T>(fn: () => Promise<T | undefined | null | false>, timeoutMs = 20_000): Promise<T> {
+export async function waitFor<T>(
+  fn: () => Promise<T | undefined | null | false>,
+  timeoutMs = 20_000,
+): Promise<T> {
   const start = Date.now();
   for (;;) {
     const v = await fn();

@@ -65,7 +65,10 @@ export class RedactingLogger implements LoggerService {
     const fields: Record<string, unknown> = context ? { context } : {};
     if (rest.length) fields['detail'] = rest;
     if (message instanceof Error) {
-      this.pino[level]({ ...fields, err: { name: message.name, message: message.message, stack: message.stack } }, message.message);
+      this.pino[level](
+        { ...fields, err: { name: message.name, message: message.message, stack: message.stack } },
+        message.message,
+      );
     } else if (typeof message === 'object' && message !== null) {
       this.pino[level]({ ...fields, ...(message as object) });
     } else {

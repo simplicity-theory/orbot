@@ -10,7 +10,7 @@ import request from 'supertest';
 import type TestAgent from 'supertest/lib/agent.js';
 import { loadConfig, type AppConfig, type DbConnection } from '../src/config/config.js';
 import { createApp } from '../src/bootstrap.js';
-import { migrate } from '../src/db/migrator.js';
+import { resetTestDatabases } from '../src/testing/reset.js';
 
 export const TEST_PASSPHRASE = 'test-commander-passphrase';
 
@@ -29,32 +29,8 @@ export function testConfig(overrides: Record<string, string> = {}): AppConfig {
   });
 }
 
-function assertTestDb(conn: DbConnection) {
-  if (!conn.database.endsWith('_test')) {
-    throw new Error(`Refusing to reset non-test database "${conn.database}".`);
-  }
-}
-
-async function resetSchema(conn: DbConnection, grantTo?: string) {
-  assertTestDb(conn);
-  const c = new pg.Client(conn);
-  await c.connect();
-  try {
-    await c.query('DROP SCHEMA IF EXISTS public CASCADE');
-    await c.query('CREATE SCHEMA public');
-    if (grantTo) await c.query(`GRANT USAGE ON SCHEMA public TO ${grantTo}`);
-  } finally {
-    await c.end();
-  }
-}
-
 /** Drops and re-migrates both test databases. Test-only: the real record is never reset. */
-export async function resetDatabases(config: AppConfig) {
-  await resetSchema(config.recordDb.owner, 'orbot_app');
-  await resetSchema(config.secretsDb);
-  await migrate(config.recordDb.owner, 'record');
-  await migrate(config.secretsDb, 'secrets');
-}
+export const resetDatabases = resetTestDatabases;
 
 /** Collects every log line the app writes. */
 export class LogCapture extends Writable {
@@ -77,7 +53,9 @@ export interface TestApp {
   close(): Promise<void>;
 }
 
-export async function startTestApp(opts: { reset?: boolean; overrides?: Record<string, string> } = {}): Promise<TestApp> {
+export async function startTestApp(
+  opts: { reset?: boolean; overrides?: Record<string, string> } = {},
+): Promise<TestApp> {
   const config = testConfig(opts.overrides);
   if (opts.reset !== false) await resetDatabases(config);
   const logs = new LogCapture();

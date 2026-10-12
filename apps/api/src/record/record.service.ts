@@ -315,7 +315,12 @@ export class RecordService {
     return this.transaction((w) => w.revise(type, id, change, ctx));
   }
 
-  event<K extends RecordEventKind>(kind: K, body: RecordEventBody<K>, refs: RecordEventRefs, actor: string) {
+  event<K extends RecordEventKind>(
+    kind: K,
+    body: RecordEventBody<K>,
+    refs: RecordEventRefs,
+    actor: string,
+  ) {
     return this.transaction((w) => w.event(kind, body, refs, actor));
   }
 
@@ -330,7 +335,10 @@ export class RecordService {
     return getActive(this.db, type, id);
   }
 
-  async requireActive<T extends EntityType>(type: T, id: string): Promise<RecordVersion<EntityBodyMap[T]>> {
+  async requireActive<T extends EntityType>(
+    type: T,
+    id: string,
+  ): Promise<RecordVersion<EntityBodyMap[T]>> {
     const v = await this.getActive(type, id);
     if (!v) throw new NotFoundException(`No ${type} with id ${id}.`);
     return v;
@@ -397,8 +405,16 @@ export class RecordService {
     const all = await this.history(entityId);
     const a = all.find((x) => x.version === from);
     const b = all.find((x) => x.version === to);
-    if (!a || !b) throw new NotFoundException(`Cannot diff ${entityId}: version ${!a ? from : to} does not exist.`);
-    return { entityId, from, to, lines: lineDiff(diffableText(a.entityType, a.body), diffableText(b.entityType, b.body)) };
+    if (!a || !b)
+      throw new NotFoundException(
+        `Cannot diff ${entityId}: version ${!a ? from : to} does not exist.`,
+      );
+    return {
+      entityId,
+      from,
+      to,
+      lines: lineDiff(diffableText(a.entityType, a.body), diffableText(b.entityType, b.body)),
+    };
   }
 
   async listEvents(q: EventQuery): Promise<RecordEvent[]> {
@@ -435,7 +451,11 @@ export class RecordService {
   async search(q: SearchQuery): Promise<SearchHit[]> {
     const query = sql`websearch_to_tsquery('english', ${q.q})`;
     const versionSource =
-      q.scope === 'active' ? sql`record_active` : q.scope === 'archive' ? sql`record_archive` : sql`record_version`;
+      q.scope === 'active'
+        ? sql`record_active`
+        : q.scope === 'archive'
+          ? sql`record_archive`
+          : sql`record_version`;
 
     const vWhere: SQL[] = [sql`v.search @@ ${query}`];
     const eWhere: SQL[] = [sql`e.search @@ ${query}`];
@@ -452,7 +472,10 @@ export class RecordService {
       eWhere.push(sql`e.created_at <= ${q.to}`);
     }
     if (q.types?.length) {
-      const types = sql.join(q.types.map((t) => sql`${t}`), sql`, `);
+      const types = sql.join(
+        q.types.map((t) => sql`${t}`),
+        sql`, `,
+      );
       vWhere.push(sql`v.entity_type IN (${types})`);
       eWhere.push(sql`e.kind IN (${types})`);
     }
@@ -462,14 +485,18 @@ export class RecordService {
              v.version, EXISTS (
                SELECT 1 FROM record_supersession s WHERE s.entity_id = v.entity_id AND s.version = v.version
              ) AS archived,
-             v.unit_id::text AS unit_id, v.title,
-             ts_headline('english', v.body_text, ${query}, 'MaxFragments=2,MaxWords=18,MinWords=6') AS snippet,
+             v.unit_id::text AS unit_id,
+             CASE WHEN v.entity_type = 'task' THEN v.entity_id::text ELSE v.body->>'taskId' END AS task_id,
+             CASE WHEN v.entity_type = 'bot' THEN v.entity_id::text ELSE v.body->>'botId' END AS bot_id,
+             v.title,
+             ts_headline('english', v.body_text, ${query}, 'MaxFragments=2,MaxWords=18,MinWords=6,StartSel=⟦,StopSel=⟧,FragmentDelimiter= … ') AS snippet,
              v.created_at, ts_rank(v.search, ${query}) AS rank
       FROM ${versionSource} v WHERE ${sql.join(vWhere, sql` AND `)}`;
     const eventsSql = sql`
       SELECT 'event' AS source, e.kind AS type, e.id::text AS id, NULL AS entity_id, NULL::int AS version,
-             false AS archived, e.unit_id::text AS unit_id, e.kind AS title,
-             ts_headline('english', e.body_text, ${query}, 'MaxFragments=2,MaxWords=18,MinWords=6') AS snippet,
+             false AS archived, e.unit_id::text AS unit_id, e.task_id::text AS task_id, e.bot_id::text AS bot_id,
+             e.kind AS title,
+             ts_headline('english', e.body_text, ${query}, 'MaxFragments=2,MaxWords=18,MinWords=6,StartSel=⟦,StopSel=⟧,FragmentDelimiter= … ') AS snippet,
              e.created_at, ts_rank(e.search, ${query}) AS rank
       FROM record_event e WHERE ${sql.join(eWhere, sql` AND `)}`;
 
@@ -482,6 +509,8 @@ export class RecordService {
       version: number | null;
       archived: boolean;
       unit_id: string | null;
+      task_id: string | null;
+      bot_id: string | null;
       title: string;
       snippet: string;
       created_at: string | Date;
@@ -495,6 +524,8 @@ export class RecordService {
       version: h.version,
       archived: h.archived,
       unitId: h.unit_id,
+      taskId: h.task_id,
+      botId: h.bot_id,
       title: h.title,
       snippet: h.snippet,
       createdAt: iso(h.created_at),

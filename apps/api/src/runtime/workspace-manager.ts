@@ -25,7 +25,15 @@ export class WorkspaceManager {
     const path = join(tasksDir, `task-${task.number}`);
     const branch = this.branchFor(task);
     if (!existsSync(path)) {
-      await git(repo.spec.localPath, ['worktree', 'add', '--quiet', '-b', branch, path, repo.spec.defaultBranch]);
+      await git(repo.spec.localPath, [
+        'worktree',
+        'add',
+        '--quiet',
+        '-b',
+        branch,
+        path,
+        repo.spec.defaultBranch,
+      ]);
     }
     const baseCommit = await git(repo.spec.localPath, ['rev-parse', repo.spec.defaultBranch]);
     return { path, branch, repoSupplyId: repoId, baseCommit };

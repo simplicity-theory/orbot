@@ -25,11 +25,10 @@ const Env = z.object({
   ORBOT_DB_APP_PASSWORD: z.string().default('change-me-app'),
   ORBOT_SECRETS_DB_NAME: z.string().default('orbot_secrets'),
   ORBOT_DB_SECRETS_PASSWORD: z.string().default('change-me-secrets'),
-  ORBOT_SECRETS_KEY: z
-    .string()
-    .refine((k) => Buffer.from(k, 'base64').length === 32, {
-      message: 'ORBOT_SECRETS_KEY must be 32 bytes, base64-encoded. Run `npm run dev` once to generate one.',
-    }),
+  ORBOT_SECRETS_KEY: z.string().refine((k) => Buffer.from(k, 'base64').length === 32, {
+    message:
+      'ORBOT_SECRETS_KEY must be 32 bytes, base64-encoded. Run `npm run dev` once to generate one.',
+  }),
   ORBOT_COMMANDER_PASSPHRASE: z.string().min(8, {
     message: 'ORBOT_COMMANDER_PASSPHRASE must be at least 8 characters.',
   }),
@@ -42,7 +41,9 @@ const Env = z.object({
   ORBOT_SIM_SPEED: z.coerce.number().min(0).default(1),
   ORBOT_WORKSPACES_DIR: z.string().default('./workspaces'),
   ORBOT_CLAUDE_MODEL: z.string().default('claude-opus-5-5'),
-  ORBOT_LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
+  ORBOT_LOG_LEVEL: z
+    .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
+    .default('info'),
 });
 
 export interface DbConnection {
@@ -76,7 +77,9 @@ export function loadConfig(overrides: Record<string, string | undefined> = {}): 
   loadDotenv({ path: resolve(REPO_ROOT, '.env'), quiet: true });
   const parsed = Env.safeParse({ ...process.env, ...overrides });
   if (!parsed.success) {
-    const problems = parsed.error.issues.map((i) => `  - ${i.path.join('.')}: ${i.message}`).join('\n');
+    const problems = parsed.error.issues
+      .map((i) => `  - ${i.path.join('.')}: ${i.message}`)
+      .join('\n');
     throw new Error(`ORBOT configuration is invalid:\n${problems}`);
   }
   const e = parsed.data;

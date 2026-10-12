@@ -6,7 +6,15 @@ import { BotStatus, TaskStatus } from '../status/status.js';
  * These schemas describe the `body` of a version; identity, version number,
  * author and timestamps live on the record row itself.
  */
-export const ENTITY_TYPES = ['unit', 'bot', 'operation', 'mission', 'task', 'supply', 'document'] as const;
+export const ENTITY_TYPES = [
+  'unit',
+  'bot',
+  'operation',
+  'mission',
+  'task',
+  'supply',
+  'document',
+] as const;
 export const EntityType = z.enum(ENTITY_TYPES);
 export type EntityType = z.infer<typeof EntityType>;
 
@@ -14,7 +22,11 @@ export const Id = z.uuid();
 
 // ---------- Unit ----------
 
-export const ApprovalGate = z.enum(['approve-everything', 'backbriefs-and-deploys', 'escalations-only']);
+export const ApprovalGate = z.enum([
+  'approve-everything',
+  'backbriefs-and-deploys',
+  'escalations-only',
+]);
 export type ApprovalGate = z.infer<typeof ApprovalGate>;
 
 export const RulesOfEngagement = z.object({
@@ -84,7 +96,14 @@ export const OperationBody = z.object({
 });
 export type OperationBody = z.infer<typeof OperationBody>;
 
-export const MissionStatus = z.enum(['planning', 'awaiting-approval', 'working', 'blocked', 'done', 'failed']);
+export const MissionStatus = z.enum([
+  'planning',
+  'awaiting-approval',
+  'working',
+  'blocked',
+  'done',
+  'failed',
+]);
 export type MissionStatus = z.infer<typeof MissionStatus>;
 
 export const MissionBody = z.object({
@@ -165,7 +184,13 @@ export type SupplyBody = z.infer<typeof SupplyBody>;
 
 // ---------- Documents ----------
 
-export const DocumentKind = z.enum(['field-manual', 'standing-orders', 'handover', 'after-action', 'note']);
+export const DocumentKind = z.enum([
+  'field-manual',
+  'standing-orders',
+  'handover',
+  'after-action',
+  'note',
+]);
 export type DocumentKind = z.infer<typeof DocumentKind>;
 
 export const DocumentBody = z.object({

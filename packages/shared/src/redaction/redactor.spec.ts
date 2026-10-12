@@ -34,7 +34,10 @@ describe('Redactor', () => {
       ['anthropic-key', 'key is sk-ant-api03-AbCdEfGhIjKlMnOpQrStUv'],
       ['github-token', 'ghp_aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456789'],
       ['aws-access-key', 'AKIAIOSFODNN7EXAMPLE'],
-      ['jwt', 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U'],
+      [
+        'jwt',
+        'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U',
+      ],
       ['url-credentials', 'git clone https://deploy:s3cr3tPassw0rd@github.com/acme/app.git'],
       ['assignment', 'password=hunter2xyz'],
       ['assignment', '"api_key": "abcd1234efgh"'],

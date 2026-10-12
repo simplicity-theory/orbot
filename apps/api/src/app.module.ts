@@ -43,7 +43,13 @@ export class AppModule {
     return {
       module: AppModule,
       imports: [ConfigModule.forRoot(opts.config)],
-      controllers: [MetaController, AuthController, DomainController, RecordController, SupplyController],
+      controllers: [
+        MetaController,
+        AuthController,
+        DomainController,
+        RecordController,
+        SupplyController,
+      ],
       providers: [
         { provide: LOG_DESTINATION, useValue: opts.logDestination ?? null },
         RedactionService,
@@ -53,7 +59,11 @@ export class AppModule {
           inject: [APP_CONFIG],
           useFactory: (c: AppConfig) => createPool(c.recordDb.app),
         },
-        { provide: RECORD_DB, inject: [RECORD_POOL], useFactory: (p: pg.Pool) => createRecordDb(p) },
+        {
+          provide: RECORD_DB,
+          inject: [RECORD_POOL],
+          useFactory: (p: pg.Pool) => createRecordDb(p),
+        },
         { provide: SECRETS_POOL, inject: [APP_CONFIG], useFactory: createSecretsPool },
         RecordBus,
         RecordService,
@@ -84,4 +94,3 @@ export class AppModule {
     };
   }
 }
-

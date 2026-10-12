@@ -59,7 +59,12 @@ export class SimulatedRuntime implements BotRuntime {
   ): AsyncIterable<BotEvent> {
     switch (step.do) {
       case 'step':
-        yield { type: 'step', action: step.action, detail: text(step.detail), ...(step.outcome ? { outcome: text(step.outcome) } : {}) };
+        yield {
+          type: 'step',
+          action: step.action,
+          detail: text(step.detail),
+          ...(step.outcome ? { outcome: text(step.outcome) } : {}),
+        };
         return;
       case 'wait':
         await sleep(step.ms * ctx.timeScale, ctx.signal);
@@ -68,7 +73,11 @@ export class SimulatedRuntime implements BotRuntime {
         yield { type: 'diary', category: step.category, text: text(step.text) };
         return;
       case 'sitrep':
-        yield { type: 'sitrep', text: text(step.text), ...(step.status ? { status: step.status } : {}) };
+        yield {
+          type: 'sitrep',
+          text: text(step.text),
+          ...(step.status ? { status: step.status } : {}),
+        };
         return;
       case 'write-file': {
         const rel = text(step.path);
@@ -94,7 +103,12 @@ export class SimulatedRuntime implements BotRuntime {
       }
       case 'use-credential': {
         if (!credentialName) {
-          yield { type: 'step', action: 'use-credential', detail: 'No credential issued for this task; skipped.', outcome: 'skipped' };
+          yield {
+            type: 'step',
+            action: 'use-credential',
+            detail: 'No credential issued for this task; skipped.',
+            outcome: 'skipped',
+          };
           return;
         }
         const purpose = text(step.purpose);
@@ -103,7 +117,12 @@ export class SimulatedRuntime implements BotRuntime {
         await ctx.withCredential(credentialName, purpose, async (value) => {
           if (!value) throw new Error(`Credential ${credentialName} was empty.`);
         });
-        yield { type: 'step', action: 'use-credential', detail: `Used ${credentialName} to ${purpose}`, outcome: 'ok' };
+        yield {
+          type: 'step',
+          action: 'use-credential',
+          detail: `Used ${credentialName} to ${purpose}`,
+          outcome: 'ok',
+        };
         return;
       }
       case 'cost':
@@ -132,7 +151,11 @@ export class SimulatedRuntime implements BotRuntime {
         return;
       case 'leak-credential': {
         if (!credentialName) return;
-        const leaked = await ctx.withCredential(credentialName, 'debugging (rogue)', async (v) => v);
+        const leaked = await ctx.withCredential(
+          credentialName,
+          'debugging (rogue)',
+          async (v) => v,
+        );
         yield { type: 'diary', category: 'note', text: `The token is ${leaked}` };
         yield { type: 'sitrep', text: `Pushed using ${leaked}` };
         yield { type: 'step', action: 'debug', detail: `env TOKEN=${leaked}`, outcome: leaked };
@@ -161,9 +184,13 @@ function sleep(ms: number, signal: AbortSignal): Promise<void> {
   if (ms <= 0) return Promise.resolve();
   return new Promise((res) => {
     const t = setTimeout(res, ms);
-    signal.addEventListener('abort', () => {
-      clearTimeout(t);
-      res();
-    }, { once: true });
+    signal.addEventListener(
+      'abort',
+      () => {
+        clearTimeout(t);
+        res();
+      },
+      { once: true },
+    );
   });
 }

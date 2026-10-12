@@ -13,7 +13,12 @@ describe('demo seed', () => {
     const r = await seedDemoForce(t.app);
     expect(r.seeded).toBe(true);
     const orbat: OrbatView = (await t.agent.get('/api/orbat').expect(200)).body;
-    expect(orbat.units.map((u) => u.unit.name)).toEqual(['Engineers', 'Logistics', 'Inspection', 'Guard']);
+    expect(orbat.units.map((u) => u.unit.name)).toEqual([
+      'Engineers',
+      'Logistics',
+      'Inspection',
+      'Guard',
+    ]);
     for (const u of orbat.units) {
       expect(u.botCount).toBe(3);
       expect(u.overseer?.isOverseer).toBe(true);

@@ -70,27 +70,25 @@ const PATTERNS: PatternDetector[] = [
 ];
 
 /** Object keys whose string values are always secret, whatever they look like. */
-const SECRET_KEYS = new Set(
-  [
-    'password',
-    'passwd',
-    'passphrase',
-    'secret',
-    'secretvalue',
-    'clientsecret',
-    'token',
-    'accesstoken',
-    'refreshtoken',
-    'authtoken',
-    'apikey',
-    'accesskey',
-    'secretkey',
-    'privatekey',
-    'authorization',
-    'cookie',
-    'setcookie',
-  ],
-);
+const SECRET_KEYS = new Set([
+  'password',
+  'passwd',
+  'passphrase',
+  'secret',
+  'secretvalue',
+  'clientsecret',
+  'token',
+  'accesstoken',
+  'refreshtoken',
+  'authtoken',
+  'apikey',
+  'accesskey',
+  'secretkey',
+  'privatekey',
+  'authorization',
+  'cookie',
+  'setcookie',
+]);
 
 const HIGH_ENTROPY_TOKEN = /[A-Za-z0-9+/_=-]{32,}/g;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -144,7 +142,10 @@ function encodingsOf(secret: string): string[] {
 }
 
 function toBase64(s: string): string | null {
-  const g = globalThis as { Buffer?: { from(s: string, enc: string): { toString(enc: string): string } }; btoa?: (s: string) => string };
+  const g = globalThis as {
+    Buffer?: { from(s: string, enc: string): { toString(enc: string): string } };
+    btoa?: (s: string) => string;
+  };
   if (g.Buffer) return g.Buffer.from(s, 'utf8').toString('base64');
   if (g.btoa) {
     try {

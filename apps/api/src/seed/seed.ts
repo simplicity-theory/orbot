@@ -32,8 +32,16 @@ const UNITS: UnitSeed[] = [
       callsignPrefix: 'E',
       approvalGate: 'backbriefs-and-deploys',
       rulesOfEngagement: {
-        mayDoAlone: ['Create branches and commits in the task workspace', 'Run tests', 'Refactor within the task scope'],
-        mustEscalate: ['Changing a public API', 'Adding a new dependency', 'Anything touching authentication'],
+        mayDoAlone: [
+          'Create branches and commits in the task workspace',
+          'Run tests',
+          'Refactor within the task scope',
+        ],
+        mustEscalate: [
+          'Changing a public API',
+          'Adding a new dependency',
+          'Anything touching authentication',
+        ],
       },
       standingOrders: [
         { id: 'eng-1', text: 'Every change ships with tests.' },
@@ -61,7 +69,9 @@ const UNITS: UnitSeed[] = [
         mayDoAlone: ['Restart failed pipeline jobs', 'Deploy to staging'],
         mustEscalate: ['Deploy to production', 'Change infrastructure cost by more than 10%'],
       },
-      standingOrders: [{ id: 'log-1', text: 'Nothing reaches production without a green pipeline.' }],
+      standingOrders: [
+        { id: 'log-1', text: 'Nothing reaches production without a green pipeline.' },
+      ],
       order: 2,
     },
     overseerRole: 'Overseer — platform lead',
@@ -84,7 +94,9 @@ const UNITS: UnitSeed[] = [
         mayDoAlone: ['Run any test suite', 'Send work back to Engineers with a reason'],
         mustEscalate: ['Waiving a failing test'],
       },
-      standingOrders: [{ id: 'ins-1', text: 'A failed check goes back to Engineers with the reason.' }],
+      standingOrders: [
+        { id: 'ins-1', text: 'A failed check goes back to Engineers with the reason.' },
+      ],
       order: 3,
     },
     overseerRole: 'Overseer — test lead',
@@ -104,7 +116,10 @@ const UNITS: UnitSeed[] = [
       callsignPrefix: 'G',
       approvalGate: 'backbriefs-and-deploys',
       rulesOfEngagement: {
-        mayDoAlone: ['Run dependency and static scans', 'Block a release on a high-severity finding'],
+        mayDoAlone: [
+          'Run dependency and static scans',
+          'Block a release on a high-severity finding',
+        ],
         mustEscalate: ['Accepting a known vulnerability', 'Rotating production credentials'],
       },
       standingOrders: [{ id: 'grd-1', text: 'High and critical findings block release.' }],
@@ -142,7 +157,10 @@ export async function seedDemoForce(app: INestApplication): Promise<SeedResult> 
 
   // Supply: a small demo repository and a credential for it.
   const sourcePath = await createDemoRepo(join(config.workspacesDir, 'source', 'demo-app'));
-  const repo = await supply.connectRepository({ name: 'demo-app', location: sourcePath }, { ...SEED, reason: 'Demo repository connected' });
+  const repo = await supply.connectRepository(
+    { name: 'demo-app', location: sourcePath },
+    { ...SEED, reason: 'Demo repository connected' },
+  );
   const tokenName = 'demo-app-push-token';
   await supply.storeCredential(
     { name: tokenName, value: `demo-${randomBytes(18).toString('base64url')}` },
@@ -156,36 +174,102 @@ export async function seedDemoForce(app: INestApplication): Promise<SeedResult> 
     const unitId = randomUUID();
     const overseerId = randomUUID();
     unitIds[u.body.slug] = unitId;
-    await force.createUnit({ ...u.body, overseerBotId: overseerId, supplyIds: u.body.slug === 'engineers' ? [repo.entityId] : [] }, SEED, unitId);
+    await force.createUnit(
+      {
+        ...u.body,
+        overseerBotId: overseerId,
+        supplyIds: u.body.slug === 'engineers' ? [repo.entityId] : [],
+      },
+      SEED,
+      unitId,
+    );
     await force.createBot(
-      { unitId, callsign: `${u.body.callsignPrefix}-0`, role: u.overseerRole, isOverseer: true, status: 'idle', currentTaskId: null, queue: [], runtime: 'simulated' },
+      {
+        unitId,
+        callsign: `${u.body.callsignPrefix}-0`,
+        role: u.overseerRole,
+        isOverseer: true,
+        status: 'idle',
+        currentTaskId: null,
+        queue: [],
+        runtime: 'simulated',
+      },
       SEED,
       overseerId,
     );
     botIds[u.body.slug] = [];
     for (const [i, role] of u.botRoles.entries()) {
       const b = await force.createBot(
-        { unitId, callsign: `${u.body.callsignPrefix}-${i + 1}`, role, isOverseer: false, status: 'idle', currentTaskId: null, queue: [], runtime: 'simulated' },
+        {
+          unitId,
+          callsign: `${u.body.callsignPrefix}-${i + 1}`,
+          role,
+          isOverseer: false,
+          status: 'idle',
+          currentTaskId: null,
+          queue: [],
+          runtime: 'simulated',
+        },
         SEED,
       );
       botIds[u.body.slug]!.push(b.entityId);
       botCount++;
     }
-    const fm = await docs.create({ kind: 'field-manual', unitId, title: `${u.body.name} Field Manual`, markdown: u.fieldManual.v1 }, SEED);
-    await docs.revise(fm.entityId, { markdown: u.fieldManual.v2, reason: u.fieldManual.v2Reason, expectedVersion: 1 }, `bot:${overseerId}`);
+    const fm = await docs.create(
+      {
+        kind: 'field-manual',
+        unitId,
+        title: `${u.body.name} Field Manual`,
+        markdown: u.fieldManual.v1,
+      },
+      SEED,
+    );
+    await docs.revise(
+      fm.entityId,
+      { markdown: u.fieldManual.v2, reason: u.fieldManual.v2Reason, expectedVersion: 1 },
+      `bot:${overseerId}`,
+    );
   }
 
   // One operation in flight.
   const op = await work.createOperation(
-    { name: 'Gatekeeper', intent: 'Stop credential-stuffing on the login endpoint without locking out real users.', phase: 'execution', supplyIds: [repo.entityId] },
+    {
+      name: 'Gatekeeper',
+      intent: 'Stop credential-stuffing on the login endpoint without locking out real users.',
+      phase: 'execution',
+      supplyIds: [repo.entityId],
+    },
     { ...SEED, reason: 'Commander stated intent' },
   );
   const mission = (slug: string, goal: string, dod: string[], status: 'planning' | 'working') =>
-    work.createMission({ operationId: op.entityId, unitId: unitIds[slug]!, goal, definitionOfDone: dod, status }, SEED);
-  const engMission = await mission('engineers', 'Add rate limiting to the login endpoint', ['Limiter in place', 'Configurable per environment', 'Tests green'], 'working');
-  const insMission = await mission('inspection', 'Prove rate limiting holds under load', ['Test plan written', 'Load test passes'], 'planning');
-  await mission('guard', 'Review rate limiting for bypasses', ['No high-severity findings'], 'planning');
-  await mission('logistics', 'Deploy rate limiting to production', ['Staging deploy green', 'Production deploy approved and done'], 'planning');
+    work.createMission(
+      { operationId: op.entityId, unitId: unitIds[slug]!, goal, definitionOfDone: dod, status },
+      SEED,
+    );
+  const engMission = await mission(
+    'engineers',
+    'Add rate limiting to the login endpoint',
+    ['Limiter in place', 'Configurable per environment', 'Tests green'],
+    'working',
+  );
+  const insMission = await mission(
+    'inspection',
+    'Prove rate limiting holds under load',
+    ['Test plan written', 'Load test passes'],
+    'planning',
+  );
+  await mission(
+    'guard',
+    'Review rate limiting for bypasses',
+    ['No high-severity findings'],
+    'planning',
+  );
+  await mission(
+    'logistics',
+    'Deploy rate limiting to production',
+    ['Staging deploy green', 'Production deploy approved and done'],
+    'planning',
+  );
 
   const e = botIds['engineers']!;
   const task = (title: string, botId: string, scenario: string | null, description: string) =>
@@ -203,10 +287,30 @@ export async function seedDemoForce(app: INestApplication): Promise<SeedResult> 
       },
       { ...SEED, reason: 'Overseer issued task' },
     );
-  const t1 = await task('Add rate limiter middleware', e[0]!, 'happy-path', 'Token-bucket limiter on POST /login keyed by IP and username.');
-  const t2 = await task('Wire limiter settings into environment config', e[1]!, 'blocked-on-dependency', 'Read limits from env; defaults for dev.');
-  const t3 = await task('Update login tests for rate limiting', e[2]!, 'tests-fail', 'Cover limit reached, reset window and allow-list.');
-  await task('Document rate limits in the README', e[0]!, 'happy-path', 'Short section for operators.');
+  const t1 = await task(
+    'Add rate limiter middleware',
+    e[0]!,
+    'happy-path',
+    'Token-bucket limiter on POST /login keyed by IP and username.',
+  );
+  const t2 = await task(
+    'Wire limiter settings into environment config',
+    e[1]!,
+    'blocked-on-dependency',
+    'Read limits from env; defaults for dev.',
+  );
+  const t3 = await task(
+    'Update login tests for rate limiting',
+    e[2]!,
+    'tests-fail',
+    'Cover limit reached, reset window and allow-list.',
+  );
+  await task(
+    'Document rate limits in the README',
+    e[0]!,
+    'happy-path',
+    'Short section for operators.',
+  );
   await work.createTask(
     {
       unitId: unitIds['inspection']!,
@@ -234,12 +338,18 @@ export async function seedDemoForce(app: INestApplication): Promise<SeedResult> 
 async function createDemoRepo(path: string): Promise<string> {
   if (existsSync(join(path, '.git'))) return path;
   await mkdir(join(path, 'src'), { recursive: true });
-  await writeFile(join(path, 'README.md'), '# demo-app\n\nA tiny login service used by the ORBOT demo force.\n');
+  await writeFile(
+    join(path, 'README.md'),
+    '# demo-app\n\nA tiny login service used by the ORBOT demo force.\n',
+  );
   await writeFile(
     join(path, 'src', 'login.js'),
-    "export function login(username, password, users) {\n  const u = users.get(username);\n  return Boolean(u && u.password === password);\n}\n",
+    'export function login(username, password, users) {\n  const u = users.get(username);\n  return Boolean(u && u.password === password);\n}\n',
   );
-  await writeFile(join(path, 'package.json'), JSON.stringify({ name: 'demo-app', version: '0.1.0', type: 'module' }, null, 2) + '\n');
+  await writeFile(
+    join(path, 'package.json'),
+    JSON.stringify({ name: 'demo-app', version: '0.1.0', type: 'module' }, null, 2) + '\n',
+  );
   await git(path, ['init', '--quiet', '-b', 'main']);
   await git(path, ['add', '-A']);
   await git(path, ['commit', '--quiet', '-m', 'Initial commit']);

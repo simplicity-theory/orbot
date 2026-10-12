@@ -1,4 +1,11 @@
-import { BadRequestException, Inject, Injectable, NotFoundException, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  NotFoundException,
+  type OnModuleDestroy,
+  type OnModuleInit,
+} from '@nestjs/common';
 import pg from 'pg';
 import { APP_CONFIG, type AppConfig } from '../config/config.js';
 import { createPool } from '../db/database.js';
@@ -64,7 +71,8 @@ export class SecretsService implements OnModuleInit, OnModuleDestroy {
         'Secret names use lowercase letters, digits, dots, dashes and underscores (2–100 characters).',
       );
     }
-    if (value.length < 4) throw new BadRequestException('A secret value must be at least 4 characters.');
+    if (value.length < 4)
+      throw new BadRequestException('A secret value must be at least 4 characters.');
     // Register before anything else so the value is masked even in errors from the steps below.
     const previous = await this.tryReveal(name);
     this.redaction.registerSecret(name, value);
@@ -106,7 +114,10 @@ export class SecretsService implements OnModuleInit, OnModuleDestroy {
   }
 
   async exists(name: string): Promise<boolean> {
-    const { rowCount } = await this.pool.query('SELECT 1 FROM secret WHERE name = $1 AND revoked_at IS NULL', [name]);
+    const { rowCount } = await this.pool.query(
+      'SELECT 1 FROM secret WHERE name = $1 AND revoked_at IS NULL',
+      [name],
+    );
     return (rowCount ?? 0) > 0;
   }
 
@@ -116,7 +127,10 @@ export class SecretsService implements OnModuleInit, OnModuleDestroy {
    */
   async reveal(name: string): Promise<string> {
     const v = await this.tryReveal(name);
-    if (v === null) throw new NotFoundException(`No live secret named "${name}". Connect it in the Supply Depot.`);
+    if (v === null)
+      throw new NotFoundException(
+        `No live secret named "${name}". Connect it in the Supply Depot.`,
+      );
     return v;
   }
 

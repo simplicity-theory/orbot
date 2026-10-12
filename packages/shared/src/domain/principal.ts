@@ -29,4 +29,8 @@ export function parseActorRef(ref: string): { kind: PrincipalKind; id: string } 
   return { kind, id: ref.slice(idx + 1) };
 }
 
-export const SYSTEM_PRINCIPAL: Principal = { kind: 'system', id: 'orbot', displayName: 'ORBOT system' };
+export const SYSTEM_PRINCIPAL: Principal = {
+  kind: 'system',
+  id: 'orbot',
+  displayName: 'ORBOT system',
+};

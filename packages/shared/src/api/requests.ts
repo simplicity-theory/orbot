@@ -25,9 +25,12 @@ export const ConnectRepositoryRequest = z.object({
 export type ConnectRepositoryRequest = z.input<typeof ConnectRepositoryRequest>;
 
 export const StoreCredentialRequest = z.object({
-  name: z.string().trim().regex(/^[a-z0-9][a-z0-9._-]{1,99}$/, {
-    message: 'Use lowercase letters, digits, dots, dashes and underscores.',
-  }),
+  name: z
+    .string()
+    .trim()
+    .regex(/^[a-z0-9][a-z0-9._-]{1,99}$/, {
+      message: 'Use lowercase letters, digits, dots, dashes and underscores.',
+    }),
   /** Write-only. Never returned by any endpoint. */
   value: z.string().min(4).max(20_000),
 });

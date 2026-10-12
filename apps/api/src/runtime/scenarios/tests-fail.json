@@ -3,13 +3,31 @@
   "description": "Makes a change, the test suite fails, hands over and reports failure.",
   "seed": 3303,
   "script": [
-    { "do": "step", "action": "read-brief", "detail": "Read the brief for “{task}”.", "outcome": "understood" },
+    {
+      "do": "step",
+      "action": "read-brief",
+      "detail": "Read the brief for “{task}”.",
+      "outcome": "understood"
+    },
     { "do": "sitrep", "text": "{callsign} on task #{number}: starting.", "status": "working" },
     { "do": "wait", "ms": 600 },
-    { "do": "write-file", "path": "orbot/task-{number}.md", "content": "# Task #{number}: {task}\n\nAttempted by {callsign}.\n" },
+    {
+      "do": "write-file",
+      "path": "orbot/task-{number}.md",
+      "content": "# Task #{number}: {task}\n\nAttempted by {callsign}.\n"
+    },
     { "do": "commit", "message": "WIP task #{number}: {task}" },
-    { "do": "step", "action": "run-tests", "detail": "Ran the unit test suite.", "outcome": "3 failing" },
-    { "do": "diary", "category": "surprise", "text": "Three tests fail: they assert the old behaviour this task changes." },
+    {
+      "do": "step",
+      "action": "run-tests",
+      "detail": "Ran the unit test suite.",
+      "outcome": "3 failing"
+    },
+    {
+      "do": "diary",
+      "category": "surprise",
+      "text": "Three tests fail: they assert the old behaviour this task changes."
+    },
     { "do": "cost", "units": 2 },
     {
       "do": "handover",
@@ -19,6 +37,9 @@
       "openProblems": ["Spec conflict between the task and existing tests."],
       "flagsForSuccessor": ["Do not delete the failing tests without an order to."]
     },
-    { "do": "fail", "reason": "3 tests fail against the new behaviour; needs a decision on the spec." }
+    {
+      "do": "fail",
+      "reason": "3 tests fail against the new behaviour; needs a decision on the spec."
+    }
   ]
 }

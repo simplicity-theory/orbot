@@ -1,5 +1,15 @@
 import { sql } from 'drizzle-orm';
-import { bigint, customType, integer, jsonb, pgTable, pgView, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import {
+  bigint,
+  customType,
+  integer,
+  jsonb,
+  pgTable,
+  pgView,
+  text,
+  timestamp,
+  uuid,
+} from 'drizzle-orm/pg-core';
 
 /**
  * Drizzle mapping of the record tables. The DDL itself lives in

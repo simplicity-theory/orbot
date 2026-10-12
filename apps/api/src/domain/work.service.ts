@@ -37,7 +37,9 @@ export class WorkService {
     if (input.botId) {
       const bot = await this.record.requireActive('bot', input.botId);
       if (bot.body.unitId !== input.unitId) {
-        throw new BadRequestException('That bot belongs to a different unit. Pick a bot from the same unit.');
+        throw new BadRequestException(
+          'That bot belongs to a different unit. Pick a bot from the same unit.',
+        );
       }
     }
     if (input.missionId) {
@@ -49,7 +51,9 @@ export class WorkService {
     if (input.repoSupplyId) {
       const s = await this.record.requireActive('supply', input.repoSupplyId);
       if (s.body.spec.kind !== 'repository' || !s.body.connected) {
-        throw new BadRequestException('The chosen supply is not a connected repository. Connect it in the Supply Depot first.');
+        throw new BadRequestException(
+          'The chosen supply is not a connected repository. Connect it in the Supply Depot first.',
+        );
       }
     }
     const number = await this.record.nextTaskNumber();
@@ -73,7 +77,12 @@ export class WorkService {
       await w.event(
         'task.assigned',
         { taskNumber: number, title: input.title },
-        { unitId: input.unitId, botId: input.botId, taskId: task.entityId, missionId: input.missionId },
+        {
+          unitId: input.unitId,
+          botId: input.botId,
+          taskId: task.entityId,
+          missionId: input.missionId,
+        },
         ctx.actor,
       );
       if (input.botId) {

@@ -1,5 +1,11 @@
 import { randomUUID } from 'node:crypto';
-import { Catch, HttpException, HttpStatus, type ArgumentsHost, type ExceptionFilter } from '@nestjs/common';
+import {
+  Catch,
+  HttpException,
+  HttpStatus,
+  type ArgumentsHost,
+  type ExceptionFilter,
+} from '@nestjs/common';
 import type { Response } from 'express';
 import { ZodError } from 'zod';
 import { RedactionService } from '../redaction/redaction.service.js';
@@ -56,12 +62,14 @@ export class ErrorFilter implements ExceptionFilter {
           : typeof (r as { message?: unknown }).message === 'string'
             ? (r as { message: string }).message
             : Array.isArray((r as { message?: unknown }).message)
-              ? ((r as { message: string[] }).message).join('; ')
+              ? (r as { message: string[] }).message.join('; ')
               : exception.message;
       const action =
         (typeof r === 'object' && typeof (r as { action?: unknown }).action === 'string'
           ? (r as { action: string }).action
-          : undefined) ?? DEFAULT_ACTIONS[status] ?? 'Try again in a moment.';
+          : undefined) ??
+        DEFAULT_ACTIONS[status] ??
+        'Try again in a moment.';
       return { status, body: { error: { code: codeFor(status), message, action } } };
     }
     if (pgCode(exception) === 'OR001') {
@@ -77,7 +85,11 @@ export class ErrorFilter implements ExceptionFilter {
       };
     }
     const ref = randomUUID().slice(0, 8);
-    this.logger.error(exception instanceof Error ? exception : new Error(String(exception)), `ref=${ref}`, 'ErrorFilter');
+    this.logger.error(
+      exception instanceof Error ? exception : new Error(String(exception)),
+      `ref=${ref}`,
+      'ErrorFilter',
+    );
     return {
       status: HttpStatus.INTERNAL_SERVER_ERROR,
       body: {

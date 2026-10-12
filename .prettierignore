@@ -4,3 +4,9 @@ node_modules
 coverage
 apps/api/src/db/migrations/meta
 BUILD_PROMPT.md
+.env
+workspaces
+apps/web/test-results
+apps/web/playwright-report
+apps/web/e2e/.auth
+apps/api/src/db/migrations

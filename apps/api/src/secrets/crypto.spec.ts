@@ -9,7 +9,9 @@ describe('secrets crypto', () => {
   });
 
   it('does not store the plaintext', () => {
-    expect(seal(key, 'a', 'hunter2-plaintext').ciphertext.toString('utf8')).not.toContain('hunter2');
+    expect(seal(key, 'a', 'hunter2-plaintext').ciphertext.toString('utf8')).not.toContain(
+      'hunter2',
+    );
   });
 
   it('refuses a ciphertext moved to another name', () => {

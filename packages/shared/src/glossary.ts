@@ -17,17 +17,20 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
   hq: {
     term: 'HQ',
     short: 'Headquarters',
-    meaning: 'The planning layer between you and the units. Splits operations into missions and routes cross-unit orders.',
+    meaning:
+      'The planning layer between you and the units. Splits operations into missions and routes cross-unit orders.',
   },
   overseer: {
     term: 'Overseer',
     short: 'Unit commander bot',
-    meaning: 'The bot that commands a unit: it takes your orders, directs the unit’s bots and reports back.',
+    meaning:
+      'The bot that commands a unit: it takes your orders, directs the unit’s bots and reports back.',
   },
   operation: {
     term: 'Operation',
     short: 'A large piece of work owned by HQ',
-    meaning: 'Starts from your statement of intent and is split into missions, one per unit involved.',
+    meaning:
+      'Starts from your statement of intent and is split into missions, one per unit involved.',
   },
   mission: {
     term: 'Mission',
@@ -47,7 +50,8 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
   backbrief: {
     term: 'Backbrief',
     short: 'A unit’s plan, briefed back for approval',
-    meaning: 'After orders, each Overseer explains how its unit will carry them out. You approve or amend it.',
+    meaning:
+      'After orders, each Overseer explains how its unit will carry them out. You approve or amend it.',
   },
   sitrep: {
     term: 'Sitrep',
@@ -57,7 +61,8 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
   frago: {
     term: 'Frago',
     short: 'Fragmentary order',
-    meaning: 'A change to orders already given — e.g. “drop the mobile layout for now”. Can be issued at any time.',
+    meaning:
+      'A change to orders already given — e.g. “drop the mobile layout for now”. Can be issued at any time.',
   },
   'after-action': {
     term: 'After Action review',
@@ -67,7 +72,8 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
   wilco: {
     term: 'Wilco',
     short: 'Will comply',
-    meaning: 'The Overseer understood your order and has acted on it. The read-back card lists exactly what changed.',
+    meaning:
+      'The Overseer understood your order and has acted on it. The read-back card lists exactly what changed.',
   },
   'standing-orders': {
     term: 'Standing orders',
@@ -92,12 +98,14 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
   handover: {
     term: 'Handover',
     short: 'Notes for whoever comes next',
-    meaning: 'Written by every bot at the end of every task: state, next steps, what failed, open problems.',
+    meaning:
+      'Written by every bot at the end of every task: state, next steps, what failed, open problems.',
   },
   supply: {
     term: 'Supply',
     short: 'What a unit is allowed to use',
-    meaning: 'Repositories, environments, tools, credential references and compute budget, issued from the Supply Depot.',
+    meaning:
+      'Repositories, environments, tools, credential references and compute budget, issued from the Supply Depot.',
   },
   'supply-depot': {
     term: 'Supply Depot',
@@ -112,12 +120,14 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
   escalation: {
     term: 'Escalation',
     short: 'Sent up the chain',
-    meaning: 'Something a bot or Overseer may not decide alone, waiting on a higher level — ultimately you.',
+    meaning:
+      'Something a bot or Overseer may not decide alone, waiting on a higher level — ultimately you.',
   },
   archive: {
     term: 'Archive',
     short: 'Every prior version, kept forever',
-    meaning: 'Nothing is deleted. Rewrites create a new version; the old one is archived with who, when and why.',
+    meaning:
+      'Nothing is deleted. Rewrites create a new version; the old one is archived with who, when and why.',
   },
 };
 

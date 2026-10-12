@@ -7,7 +7,9 @@ import { RedactingLogger } from './redaction/redacting-logger.js';
 
 /** Builds the Nest app. Shared by `main.ts`, the seed script and the e2e tests. */
 export async function createApp(opts: AppModuleOptions): Promise<INestApplication> {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule.forRoot(opts), { bufferLogs: true });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule.forRoot(opts), {
+    bufferLogs: true,
+  });
   app.useLogger(app.get(RedactingLogger));
   app.setGlobalPrefix('api');
   app.use(cookieParser());

@@ -10,7 +10,8 @@ import { git, GitError } from '../common/git.js';
 import { RecordService, type WriteContext } from '../record/record.service.js';
 import { SecretsService } from '../secrets/secrets.service.js';
 
-const looksLikeUrl = (s: string) => /^[a-z][a-z0-9+.-]*:\/\//i.test(s) || /^[^@\s]+@[^:\s]+:/.test(s);
+const looksLikeUrl = (s: string) =>
+  /^[a-z][a-z0-9+.-]*:\/\//i.test(s) || /^[^@\s]+@[^:\s]+:/.test(s);
 
 /**
  * The Supply Depot. Only what the Commander has connected exists.
@@ -76,7 +77,8 @@ export class SupplyService {
       });
     }
     const defaultBranch =
-      input.defaultBranch ?? (await git(localPath, ['symbolic-ref', '--short', 'HEAD']).catch(() => 'main'));
+      input.defaultBranch ??
+      (await git(localPath, ['symbolic-ref', '--short', 'HEAD']).catch(() => 'main'));
 
     const body: SupplyBody = {
       name: input.name,

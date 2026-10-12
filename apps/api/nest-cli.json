@@ -5,8 +5,15 @@
   "compilerOptions": {
     "deleteOutDir": true,
     "assets": [
-      { "include": "db/migrations/**/*.sql", "outDir": "dist/src" },
-      { "include": "runtime/scenarios/*.json", "outDir": "dist/src" }
+      {
+        "include": "db/migrations/**/*.sql",
+        "outDir": "dist"
+      },
+      {
+        "include": "runtime/scenarios/*.json",
+        "outDir": "dist"
+      }
     ]
-  }
+  },
+  "entryFile": "src/main"
 }

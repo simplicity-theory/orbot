@@ -14,12 +14,21 @@ interface SessionPayload {
 const b64 = (b: Buffer | string) => Buffer.from(b).toString('base64url');
 
 export function signSession(secret: string, p: Principal, now = Date.now()): string {
-  const payload: SessionPayload = { sub: p.id, kind: p.kind, name: p.displayName, exp: now + SESSION_TTL_MS };
+  const payload: SessionPayload = {
+    sub: p.id,
+    kind: p.kind,
+    name: p.displayName,
+    exp: now + SESSION_TTL_MS,
+  };
   const body = b64(JSON.stringify(payload));
   return `${body}.${b64(createHmac('sha256', secret).update(body).digest())}`;
 }
 
-export function verifySession(secret: string, token: string | undefined, now = Date.now()): Principal | null {
+export function verifySession(
+  secret: string,
+  token: string | undefined,
+  now = Date.now(),
+): Principal | null {
   if (!token) return null;
   const [body, sig] = token.split('.');
   if (!body || !sig) return null;
@@ -42,7 +51,11 @@ export function passphraseMatches(expected: string, given: string): boolean {
 }
 
 /** The single Commander for now. Additional officers with ranks come later. */
-export const COMMANDER: Principal = { kind: 'commander', id: 'commander', displayName: 'Commander' };
+export const COMMANDER: Principal = {
+  kind: 'commander',
+  id: 'commander',
+  displayName: 'Commander',
+};
 
 export function cookieValue(cookieHeader: string | undefined, name: string): string | undefined {
   if (!cookieHeader) return undefined;

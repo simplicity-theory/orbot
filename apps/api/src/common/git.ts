@@ -14,7 +14,11 @@ export class GitError extends Error {
 }
 
 /** Run git with a fixed identity and no interactive prompts. */
-export async function git(cwd: string, args: string[], env: Record<string, string> = {}): Promise<string> {
+export async function git(
+  cwd: string,
+  args: string[],
+  env: Record<string, string> = {},
+): Promise<string> {
   try {
     const { stdout } = await run('git', args, {
       cwd,

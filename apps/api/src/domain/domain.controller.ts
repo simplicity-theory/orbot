@@ -11,7 +11,11 @@ import { ViewsService } from './views.service.js';
 import { WorkService } from './work.service.js';
 
 const Uuid = new ParseUUIDPipe({ version: undefined });
-const TaskFilter = z.object({ unitId: z.uuid().optional(), botId: z.uuid().optional(), missionId: z.uuid().optional() });
+const TaskFilter = z.object({
+  unitId: z.uuid().optional(),
+  botId: z.uuid().optional(),
+  missionId: z.uuid().optional(),
+});
 
 @Controller()
 export class DomainController {
@@ -59,7 +63,10 @@ export class DomainController {
   }
 
   @Post('tasks')
-  async createTask(@Body(new ZodPipe(CreateTaskRequest)) body: z.output<typeof CreateTaskRequest>, @Actor() actor: string) {
+  async createTask(
+    @Body(new ZodPipe(CreateTaskRequest)) body: z.output<typeof CreateTaskRequest>,
+    @Actor() actor: string,
+  ) {
     return toView(await this.work.createTask(body, { actor, reason: 'Task created' }));
   }
 

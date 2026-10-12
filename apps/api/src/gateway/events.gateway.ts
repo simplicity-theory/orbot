@@ -1,5 +1,10 @@
 import { Inject, type OnModuleDestroy } from '@nestjs/common';
-import { WebSocketGateway, WebSocketServer, type OnGatewayConnection, type OnGatewayInit } from '@nestjs/websockets';
+import {
+  WebSocketGateway,
+  WebSocketServer,
+  type OnGatewayConnection,
+  type OnGatewayInit,
+} from '@nestjs/websockets';
 import type { Server, Socket } from 'socket.io';
 import type { Subscription } from 'rxjs';
 import { APP_CONFIG, type AppConfig } from '../config/config.js';
@@ -33,7 +38,11 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnModu
   handleConnection(client: Socket): void {
     const token = cookieValue(client.handshake.headers.cookie, SESSION_COOKIE);
     if (!verifySession(this.config.sessionSecret, token)) {
-      client.emit('error', { code: 'unauthenticated', message: 'You are not signed in.', action: 'Sign in to continue.' });
+      client.emit('error', {
+        code: 'unauthenticated',
+        message: 'You are not signed in.',
+        action: 'Sign in to continue.',
+      });
       client.disconnect(true);
     }
   }

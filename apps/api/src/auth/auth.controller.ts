@@ -1,11 +1,26 @@
-import { Body, Controller, Get, HttpCode, Inject, Post, Res, UnauthorizedException } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  Inject,
+  Post,
+  Res,
+  UnauthorizedException,
+} from '@nestjs/common';
 import type { Response } from 'express';
 import { z } from 'zod';
 import type { Principal } from '@orbot/shared';
 import { APP_CONFIG, type AppConfig } from '../config/config.js';
 import { ZodPipe } from '../common/zod.pipe.js';
 import { CurrentPrincipal, Public } from './auth.guard.js';
-import { COMMANDER, passphraseMatches, SESSION_COOKIE, SESSION_TTL_MS, signSession } from './session.js';
+import {
+  COMMANDER,
+  passphraseMatches,
+  SESSION_COOKIE,
+  SESSION_TTL_MS,
+  signSession,
+} from './session.js';
 
 const LoginBody = z.object({ passphrase: z.string().min(1).max(500) });
 
@@ -16,7 +31,10 @@ export class AuthController {
   @Public()
   @Post('login')
   @HttpCode(200)
-  login(@Body(new ZodPipe(LoginBody)) body: z.infer<typeof LoginBody>, @Res({ passthrough: true }) res: Response) {
+  login(
+    @Body(new ZodPipe(LoginBody)) body: z.infer<typeof LoginBody>,
+    @Res({ passthrough: true }) res: Response,
+  ) {
     if (!passphraseMatches(this.config.commanderPassphrase, body.passphrase)) {
       throw new UnauthorizedException({
         message: 'That passphrase is not correct.',

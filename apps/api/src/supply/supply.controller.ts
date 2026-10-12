@@ -24,7 +24,12 @@ export class SupplyController {
     @Body(new ZodPipe(ConnectRepositoryRequest)) body: z.output<typeof ConnectRepositoryRequest>,
     @Actor() actor: string,
   ) {
-    return toView(await this.supply.connectRepository(body, { actor, reason: `Repository ${body.name} connected` }));
+    return toView(
+      await this.supply.connectRepository(body, {
+        actor,
+        reason: `Repository ${body.name} connected`,
+      }),
+    );
   }
 
   /** Write-only: the value goes to the secrets store and is never returned. */
@@ -33,7 +38,9 @@ export class SupplyController {
     @Body(new ZodPipe(StoreCredentialRequest)) body: z.output<typeof StoreCredentialRequest>,
     @Actor() actor: string,
   ) {
-    return toView(await this.supply.storeCredential(body, { actor, reason: `Credential ${body.name} stored` }));
+    return toView(
+      await this.supply.storeCredential(body, { actor, reason: `Credential ${body.name} stored` }),
+    );
   }
 
   /** Names and dates only. */

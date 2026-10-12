@@ -74,7 +74,10 @@ export class TaskRunner {
       });
     }
     if (!t.botId) {
-      throw new BadRequestException({ message: `Task #${t.number} has no bot assigned.`, action: 'Assign a bot first.' });
+      throw new BadRequestException({
+        message: `Task #${t.number} has no bot assigned.`,
+        action: 'Assign a bot first.',
+      });
     }
     if (!t.repoSupplyId) {
       throw new BadRequestException({
@@ -105,21 +108,45 @@ export class TaskRunner {
     const run: ActiveRun = { runId, abort: new AbortController(), stopReason: null };
     this.active.set(taskId, run);
 
-    const botPrincipal: Principal = { kind: 'bot', id: bot.entityId, displayName: bot.body.callsign };
+    const botPrincipal: Principal = {
+      kind: 'bot',
+      id: bot.entityId,
+      displayName: bot.body.callsign,
+    };
     const botActor = actorRef(botPrincipal);
-    const refs: RecordEventRefs = { unitId: t.unitId, botId: bot.entityId, taskId, missionId: t.missionId };
+    const refs: RecordEventRefs = {
+      unitId: t.unitId,
+      botId: bot.entityId,
+      taskId,
+      missionId: t.missionId,
+    };
 
     try {
       await this.record.transaction(async (w) => {
         await w.event('run.started', { runId, runtime: runtime.kind }, refs, actor);
         await this.setStatus(w, task.entityId, 'working', null, refs, actor, `Started by ${actor}`);
-        await this.setBot(w, bot.entityId, 'working', taskId, `Working on task #${t.number}`, actor);
+        await this.setBot(
+          w,
+          bot.entityId,
+          'working',
+          taskId,
+          `Working on task #${t.number}`,
+          actor,
+        );
       });
 
       const workspace = await this.workspaces.prepare(repo.entityId, repo.body, t);
       await this.record.transaction(async (w) => {
-        await w.event('workspace.prepared', { path: workspace.path, branch: workspace.branch, baseCommit: workspace.baseCommit }, refs, botActor);
-        await w.revise('task', taskId, (b) => ({ ...b, workspace }), { actor: botActor, reason: 'Workspace prepared' });
+        await w.event(
+          'workspace.prepared',
+          { path: workspace.path, branch: workspace.branch, baseCommit: workspace.baseCommit },
+          refs,
+          botActor,
+        );
+        await w.revise('task', taskId, (b) => ({ ...b, workspace }), {
+          actor: botActor,
+          reason: 'Workspace prepared',
+        });
       });
 
       const brief: TaskBrief = {
@@ -127,7 +154,11 @@ export class TaskRunner {
         taskId,
         task: { ...t, workspace, status: 'working' },
         bot: { id: bot.entityId, callsign: bot.body.callsign, role: bot.body.role },
-        unit: { id: unit.entityId, name: unit.body.name, standingOrders: unit.body.standingOrders.map((s) => s.text) },
+        unit: {
+          id: unit.entityId,
+          name: unit.body.name,
+          standingOrders: unit.body.standingOrders.map((s) => s.text),
+        },
         workspace,
         lastHandover: null,
         fieldManual: [],
@@ -137,16 +168,24 @@ export class TaskRunner {
       const ctx: RunContext = {
         signal: run.abort.signal,
         timeScale: this.config.simSpeed,
-        withCredential: (name, purpose, fn) => this.useCredential(name, purpose, fn, t, botPrincipal, refs),
+        withCredential: (name, purpose, fn) =>
+          this.useCredential(name, purpose, fn, t, botPrincipal, refs),
       };
 
-      const finished = this.drive(runtime.run(brief, ctx), run, task, botPrincipal, refs).finally(() =>
-        this.active.delete(taskId),
+      const finished = this.drive(runtime.run(brief, ctx), run, task, botPrincipal, refs).finally(
+        () => this.active.delete(taskId),
       );
       return { runId, taskId, finished };
     } catch (err) {
       this.active.delete(taskId);
-      await this.finish('failed', `Could not start: ${this.message(err)}`, task.body, refs, botActor, runId).catch(() => undefined);
+      await this.finish(
+        'failed',
+        `Could not start: ${this.message(err)}`,
+        task.body,
+        refs,
+        botActor,
+        runId,
+      ).catch(() => undefined);
       throw err;
     }
   }
@@ -180,20 +219,48 @@ export class TaskRunner {
         });
         if (!decision.allowed) {
           run.abort.abort();
-          return this.finish('blocked', `Held by policy: ${decision.reason}`, task.body, refs, botActor, run.runId, spent);
+          return this.finish(
+            'blocked',
+            `Held by policy: ${decision.reason}`,
+            task.body,
+            refs,
+            botActor,
+            run.runId,
+            spent,
+          );
         }
         switch (ev.type) {
           case 'step':
-            await this.record.event('bot.step', { action: ev.action, detail: ev.detail, outcome: ev.outcome ?? null }, refs, botActor);
+            await this.record.event(
+              'bot.step',
+              { action: ev.action, detail: ev.detail, outcome: ev.outcome ?? null },
+              refs,
+              botActor,
+            );
             break;
           case 'diary':
-            await this.record.event('diary.entry', { category: ev.category, text: ev.text }, refs, botActor);
+            await this.record.event(
+              'diary.entry',
+              { category: ev.category, text: ev.text },
+              refs,
+              botActor,
+            );
             break;
           case 'sitrep':
-            await this.record.event('sitrep', { level: 'bot', text: ev.text, status: ev.status ?? null }, refs, botActor);
+            await this.record.event(
+              'sitrep',
+              { level: 'bot', text: ev.text, status: ev.status ?? null },
+              refs,
+              botActor,
+            );
             break;
           case 'artifact':
-            await this.record.event('artifact', { kind: ev.kind, ref: ev.ref, summary: ev.summary }, refs, botActor);
+            await this.record.event(
+              'artifact',
+              { kind: ev.kind, ref: ev.ref, summary: ev.summary },
+              refs,
+              botActor,
+            );
             break;
           case 'cost':
             spent += ev.units;
@@ -213,7 +280,15 @@ export class TaskRunner {
       if (run.stopReason !== null) {
         return this.finish('stopped', run.stopReason, task.body, refs, botActor, run.runId, spent);
       }
-      return this.finish('failed', 'The bot stopped without reporting done, blocked or failed.', task.body, refs, botActor, run.runId, spent);
+      return this.finish(
+        'failed',
+        'The bot stopped without reporting done, blocked or failed.',
+        task.body,
+        refs,
+        botActor,
+        run.runId,
+        spent,
+      );
     } catch (err) {
       const reason = `The bot's runtime crashed: ${this.message(err)}`;
       this.logger.error(this.redaction.clean(reason), 'TaskRunner');
@@ -257,14 +332,26 @@ export class TaskRunner {
       bodyContains: { kind: 'handover', taskId: task.entityId },
     });
     if (existing) {
-      await this.record.revise('document', existing.entityId, (d) => ({ ...d, title, markdown, botId: refs.botId ?? null }), {
-        actor,
-        reason: 'New handover at end of run',
-      });
+      await this.record.revise(
+        'document',
+        existing.entityId,
+        (d) => ({ ...d, title, markdown, botId: refs.botId ?? null }),
+        {
+          actor,
+          reason: 'New handover at end of run',
+        },
+      );
     } else {
       await this.record.create(
         'document',
-        { kind: 'handover', unitId: task.body.unitId, title, markdown, taskId: task.entityId, botId: refs.botId ?? null },
+        {
+          kind: 'handover',
+          unitId: task.body.unitId,
+          title,
+          markdown,
+          taskId: task.entityId,
+          botId: refs.botId ?? null,
+        },
         { actor, reason: `Handover for task #${task.body.number}` },
       );
     }
@@ -281,12 +368,25 @@ export class TaskRunner {
     botCrashed = false,
   ): Promise<RunOutcome> {
     const taskStatus: TaskStatus =
-      outcome === 'done' ? 'done' : outcome === 'blocked' ? 'blocked' : outcome === 'stopped' ? 'stood-down' : 'failed';
+      outcome === 'done'
+        ? 'done'
+        : outcome === 'blocked'
+          ? 'blocked'
+          : outcome === 'stopped'
+            ? 'stood-down'
+            : 'failed';
     const botStatus: BotStatus = botCrashed ? 'failed' : outcome === 'blocked' ? 'blocked' : 'idle';
     const keepTask = outcome === 'blocked' || botCrashed;
     await this.record.transaction(async (w) => {
       await this.setStatus(w, refs.taskId!, taskStatus, reason, refs, actor, reason, spent);
-      await this.setBot(w, refs.botId!, botStatus, keepTask ? refs.taskId! : null, `Task #${task.number}: ${taskStatus}`, actor);
+      await this.setBot(
+        w,
+        refs.botId!,
+        botStatus,
+        keepTask ? refs.taskId! : null,
+        `Task #${task.number}: ${taskStatus}`,
+        actor,
+      );
       await w.event('run.finished', { runId, outcome }, refs, actor);
     });
     return outcome;
@@ -315,11 +415,23 @@ export class TaskRunner {
       { actor, reason },
     );
     if (current.body.status !== to) {
-      await w.event('task.status', { from: current.body.status, to, reason: statusReason }, refs, actor);
+      await w.event(
+        'task.status',
+        { from: current.body.status, to, reason: statusReason },
+        refs,
+        actor,
+      );
     }
   }
 
-  private async setBot(w: RecordWriter, botId: string, status: BotStatus, currentTaskId: string | null, reason: string, actor: string) {
+  private async setBot(
+    w: RecordWriter,
+    botId: string,
+    status: BotStatus,
+    currentTaskId: string | null,
+    reason: string,
+    actor: string,
+  ) {
     await w.revise(
       'bot',
       botId,

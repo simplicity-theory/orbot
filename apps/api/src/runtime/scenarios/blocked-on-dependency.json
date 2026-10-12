@@ -3,11 +3,25 @@
   "description": "Starts work, discovers a missing dependency, hands over and blocks.",
   "seed": 2202,
   "script": [
-    { "do": "step", "action": "read-brief", "detail": "Read the brief for “{task}”.", "outcome": "understood" },
+    {
+      "do": "step",
+      "action": "read-brief",
+      "detail": "Read the brief for “{task}”.",
+      "outcome": "understood"
+    },
     { "do": "sitrep", "text": "{callsign} on task #{number}: starting.", "status": "working" },
     { "do": "wait", "ms": 800 },
-    { "do": "step", "action": "survey", "detail": "Looked for the upstream API client this task depends on.", "outcome": "not found" },
-    { "do": "diary", "category": "surprise", "text": "The upstream API client this task needs has not been published yet." },
+    {
+      "do": "step",
+      "action": "survey",
+      "detail": "Looked for the upstream API client this task depends on.",
+      "outcome": "not found"
+    },
+    {
+      "do": "diary",
+      "category": "surprise",
+      "text": "The upstream API client this task needs has not been published yet."
+    },
     { "do": "cost", "units": 1 },
     {
       "do": "handover",

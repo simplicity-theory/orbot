@@ -23,9 +23,17 @@ describe('Phase 1: one bot, one task, fully on the record', () => {
 
     // 1. Connect a repository and a credential through the Supply Depot.
     const repoPath = await makeRepo();
-    const repo = (await t.agent.post('/api/supply/repositories').send({ name: 'test-repo', location: repoPath }).expect(201)).body;
+    const repo = (
+      await t.agent
+        .post('/api/supply/repositories')
+        .send({ name: 'test-repo', location: repoPath })
+        .expect(201)
+    ).body;
     repoLocalPath = repo.spec.localPath;
-    await t.agent.post('/api/supply/credentials').send({ name: 'test-push-token', value: SECRET }).expect(201);
+    await t.agent
+      .post('/api/supply/credentials')
+      .send({ name: 'test-push-token', value: SECRET })
+      .expect(201);
 
     // 2. One unit, one bot.
     const { unit, bot } = await makeUnitWithBot(t.app);
@@ -77,12 +85,19 @@ describe('Phase 1: one bot, one task, fully on the record', () => {
 
   it('every event the bot produced is in the record', async () => {
     const events = detail.events;
-    const ofKind = <K extends RecordEvent['kind']>(k: K) => events.filter((e) => e.kind === k) as RecordEvent<K>[];
-    const handovers = await t.app.get(RecordService).listActive('document', { bodyContains: { kind: 'handover', taskId } });
+    const ofKind = <K extends RecordEvent['kind']>(k: K) =>
+      events.filter((e) => e.kind === k) as RecordEvent<K>[];
+    const handovers = await t.app
+      .get(RecordService)
+      .listActive('document', { bodyContains: { kind: 'handover', taskId } });
 
     expect(spy.yielded.length).toBeGreaterThan(10);
     for (const ev of spy.yielded) {
-      const found = matchInRecord(ev, ofKind, handovers.map((h) => h.body.markdown));
+      const found = matchInRecord(
+        ev,
+        ofKind,
+        handovers.map((h) => h.body.markdown),
+      );
       expect(found, `no record entry for ${JSON.stringify(ev)}`).toBe(true);
     }
     // One record entry per yielded event of each kind, no more, no less.
@@ -102,7 +117,10 @@ describe('Phase 1: one bot, one task, fully on the record', () => {
     expect(kinds).toContain('workspace.prepared');
     expect(kinds.at(-1)).toBe('run.finished');
     const used = detail.events.find((e) => e.kind === 'credential.used')!;
-    expect(used.body).toEqual({ secretName: 'test-push-token', purpose: `push ${detail.task.workspace!.branch}` });
+    expect(used.body).toEqual({
+      secretName: 'test-push-token',
+      purpose: `push ${detail.task.workspace!.branch}`,
+    });
     expect(JSON.stringify(detail)).not.toContain(SECRET);
   });
 
@@ -119,13 +137,21 @@ describe('Phase 1: one bot, one task, fully on the record', () => {
 
   it('the handover is a document in the record and searchable', async () => {
     expect(detail.handover?.markdown).toContain('## Next steps');
-    const hits = (await t.agent.get('/api/record/search').query({ q: 'cold cache' }).expect(200)).body as { entityId: string | null }[];
+    const hits = (await t.agent.get('/api/record/search').query({ q: 'cold cache' }).expect(200))
+      .body as { entityId: string | null }[];
     expect(hits.some((h) => h.entityId === detail.handover!.id)).toBe(true);
   });
 
   it('the task view shows exactly what the database holds for this task', async () => {
     const n = await asRole(t.config.recordDb.owner, async (c) =>
-      Number((await c.query<{ n: string }>('SELECT count(*) AS n FROM record_event WHERE task_id = $1', [taskId])).rows[0]!.n),
+      Number(
+        (
+          await c.query<{ n: string }>(
+            'SELECT count(*) AS n FROM record_event WHERE task_id = $1',
+            [taskId],
+          )
+        ).rows[0]!.n,
+      ),
     );
     expect(detail.events).toHaveLength(n);
   });
@@ -138,9 +164,13 @@ function matchInRecord(
 ): boolean {
   switch (ev.type) {
     case 'step':
-      return ofKind('bot.step').some((e) => e.body.action === ev.action && e.body.detail === ev.detail);
+      return ofKind('bot.step').some(
+        (e) => e.body.action === ev.action && e.body.detail === ev.detail,
+      );
     case 'diary':
-      return ofKind('diary.entry').some((e) => e.body.text === ev.text && e.body.category === ev.category);
+      return ofKind('diary.entry').some(
+        (e) => e.body.text === ev.text && e.body.category === ev.category,
+      );
     case 'sitrep':
       return ofKind('sitrep').some((e) => e.body.text === ev.text);
     case 'artifact':
@@ -150,10 +180,16 @@ function matchInRecord(
     case 'handover':
       return handoverMarkdown.some((m) => m.includes(ev.note.state));
     case 'done':
-      return ofKind('task.status').some((e) => e.body.to === 'done' && e.body.reason === ev.summary);
+      return ofKind('task.status').some(
+        (e) => e.body.to === 'done' && e.body.reason === ev.summary,
+      );
     case 'blocked':
-      return ofKind('task.status').some((e) => e.body.to === 'blocked' && e.body.reason === ev.reason);
+      return ofKind('task.status').some(
+        (e) => e.body.to === 'blocked' && e.body.reason === ev.reason,
+      );
     case 'failed':
-      return ofKind('task.status').some((e) => e.body.to === 'failed' && e.body.reason === ev.reason);
+      return ofKind('task.status').some(
+        (e) => e.body.to === 'failed' && e.body.reason === ev.reason,
+      );
   }
 }

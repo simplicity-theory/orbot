@@ -1,4 +1,12 @@
-import { BadRequestException, Controller, Get, Param, ParseIntPipe, ParseUUIDPipe, Query } from '@nestjs/common';
+import {
+  BadRequestException,
+  Controller,
+  Get,
+  Param,
+  ParseIntPipe,
+  ParseUUIDPipe,
+  Query,
+} from '@nestjs/common';
 import { EventQuery, SearchQuery } from '@orbot/shared';
 import { z } from 'zod';
 import { ZodPipe } from '../common/zod.pipe.js';
@@ -8,7 +16,9 @@ const Uuid = new ParseUUIDPipe();
 const csv = z
   .union([z.string(), z.array(z.string())])
   .optional()
-  .transform((v) => (v === undefined ? undefined : (Array.isArray(v) ? v : v.split(',')).filter(Boolean)));
+  .transform((v) =>
+    v === undefined ? undefined : (Array.isArray(v) ? v : v.split(',')).filter(Boolean),
+  );
 
 const SearchParams = SearchQuery.extend({ types: csv });
 const EventParams = EventQuery.extend({ kinds: csv.pipe(EventQuery.shape.kinds) });
@@ -40,13 +50,20 @@ export class RecordController {
   }
 
   @Get(':entityId/as-of')
-  async asOf(@Param('entityId', Uuid) id: string, @Query(new ZodPipe(AsOfParams)) q: z.infer<typeof AsOfParams>) {
+  async asOf(
+    @Param('entityId', Uuid) id: string,
+    @Query(new ZodPipe(AsOfParams)) q: z.infer<typeof AsOfParams>,
+  ) {
     const v = await this.record.asOf(id, q.at);
     return { at: q.at, version: v };
   }
 
   @Get(':entityId/diff')
-  diff(@Param('entityId', Uuid) id: string, @Query('from', ParseIntPipe) from: number, @Query('to', ParseIntPipe) to: number) {
+  diff(
+    @Param('entityId', Uuid) id: string,
+    @Query('from', ParseIntPipe) from: number,
+    @Query('to', ParseIntPipe) to: number,
+  ) {
     if (from === to) throw new BadRequestException('Pick two different versions to compare.');
     return this.record.diff(id, from, to);
   }

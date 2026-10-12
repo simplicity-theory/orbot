@@ -3,8 +3,7 @@ import { Subject } from 'rxjs';
 import type { RecordEvent, RecordVersion } from '@orbot/shared';
 
 export type RecordNotification =
-  | { type: 'version'; version: RecordVersion }
-  | { type: 'event'; event: RecordEvent };
+  { type: 'version'; version: RecordVersion } | { type: 'event'; event: RecordEvent };
 
 /** Fan-out of committed record writes (to the WebSocket gateway and in-process listeners). */
 @Injectable()

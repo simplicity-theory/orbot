@@ -1,13 +1,30 @@
 import { RecordService } from '../src/record/record.service.js';
 import { asRole, startTestApp, type TestApp } from './helpers.js';
 
-const TABLES = ['record_version', 'record_supersession', 'record_event', 'schema_migration'] as const;
+const TABLES = [
+  'record_version',
+  'record_supersession',
+  'record_event',
+  'schema_migration',
+] as const;
 
 const STATEMENTS: Record<(typeof TABLES)[number], { update: string; delete: string }> = {
-  record_version: { update: `UPDATE record_version SET reason = 'tampered'`, delete: 'DELETE FROM record_version' },
-  record_supersession: { update: `UPDATE record_supersession SET reason = 'tampered'`, delete: 'DELETE FROM record_supersession' },
-  record_event: { update: `UPDATE record_event SET actor = 'tampered'`, delete: 'DELETE FROM record_event' },
-  schema_migration: { update: `UPDATE schema_migration SET name = 'tampered'`, delete: 'DELETE FROM schema_migration' },
+  record_version: {
+    update: `UPDATE record_version SET reason = 'tampered'`,
+    delete: 'DELETE FROM record_version',
+  },
+  record_supersession: {
+    update: `UPDATE record_supersession SET reason = 'tampered'`,
+    delete: 'DELETE FROM record_supersession',
+  },
+  record_event: {
+    update: `UPDATE record_event SET actor = 'tampered'`,
+    delete: 'DELETE FROM record_event',
+  },
+  schema_migration: {
+    update: `UPDATE schema_migration SET name = 'tampered'`,
+    delete: 'DELETE FROM schema_migration',
+  },
 };
 
 async function errorCode(p: Promise<unknown>): Promise<string> {
@@ -32,8 +49,16 @@ describe('the record is append-only', () => {
       { actor: 'system:test', reason: 'create' },
     );
     docId = doc.entityId;
-    await record.revise('document', docId, (d) => ({ ...d, markdown: 'v2' }), { actor: 'system:test', reason: 'rewrite' });
-    await record.event('diary.entry', { category: 'note', text: 'something happened' }, {}, 'system:test');
+    await record.revise('document', docId, (d) => ({ ...d, markdown: 'v2' }), {
+      actor: 'system:test',
+      reason: 'rewrite',
+    });
+    await record.event(
+      'diary.entry',
+      { category: 'note', text: 'something happened' },
+      {},
+      'system:test',
+    );
   });
   afterAll(() => t.close());
 
@@ -67,7 +92,11 @@ describe('the record is append-only', () => {
   it('kept the original version intact after a rewrite', async () => {
     const history = await t.app.get(RecordService).history(docId);
     expect(history.map((v) => (v.body as { markdown: string }).markdown)).toEqual(['v1', 'v2']);
-    expect(history[0]!.superseded).toMatchObject({ supersededByVersion: 2, supersededBy: 'system:test', reason: 'rewrite' });
+    expect(history[0]!.superseded).toMatchObject({
+      supersededByVersion: 2,
+      supersededBy: 'system:test',
+      reason: 'rewrite',
+    });
     expect(history[1]!.superseded).toBeNull();
   });
 
@@ -98,7 +127,9 @@ describe('the record is append-only', () => {
   });
 
   it('the API role cannot reach the secrets database', async () => {
-    const code = await errorCode(asRole({ ...t.config.recordDb.app, database: t.config.secretsDb.database }, async () => 0));
+    const code = await errorCode(
+      asRole({ ...t.config.recordDb.app, database: t.config.secretsDb.database }, async () => 0),
+    );
     expect(code).toBe('42501');
   });
 

@@ -14,7 +14,14 @@ export class DocumentsService {
   create(input: z.output<typeof CreateDocumentRequest>, ctx: WriteContext) {
     return this.record.create(
       'document',
-      { kind: input.kind, unitId: input.unitId, title: input.title, markdown: input.markdown, taskId: null, botId: null },
+      {
+        kind: input.kind,
+        unitId: input.unitId,
+        title: input.title,
+        markdown: input.markdown,
+        taskId: null,
+        botId: null,
+      },
       ctx,
     );
   }

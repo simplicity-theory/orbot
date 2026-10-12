@@ -40,7 +40,11 @@ export interface RunContext {
    * Use a credential by name. The value is passed only to `fn` and never
    * returned; the use is recorded by name. Throws if policy denies it.
    */
-  withCredential<T>(secretName: string, purpose: string, fn: (value: string) => Promise<T>): Promise<T>;
+  withCredential<T>(
+    secretName: string,
+    purpose: string,
+    fn: (value: string) => Promise<T>,
+  ): Promise<T>;
 }
 
 export interface HandoverNote {
@@ -65,7 +69,8 @@ export type BotEvent =
 export type BotEventType = BotEvent['type'];
 
 export function renderHandoverMarkdown(title: string, n: HandoverNote): string {
-  const list = (items: string[]) => (items.length ? items.map((i) => `- ${i}`).join('\n') : '- None');
+  const list = (items: string[]) =>
+    items.length ? items.map((i) => `- ${i}`).join('\n') : '- None';
   return [
     `# Handover: ${title}`,
     '',

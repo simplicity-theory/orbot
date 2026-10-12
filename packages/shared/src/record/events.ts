@@ -41,12 +41,17 @@ export const RecordEventBodies = {
   'secret.stored': z.object({ secretName: z.string() }),
   'secret.revoked': z.object({ secretName: z.string() }),
   'run.started': z.object({ runId: z.string(), runtime: z.string() }),
-  'run.finished': z.object({ runId: z.string(), outcome: z.enum(['done', 'failed', 'blocked', 'stopped']) }),
+  'run.finished': z.object({
+    runId: z.string(),
+    outcome: z.enum(['done', 'failed', 'blocked', 'stopped']),
+  }),
 } as const;
 
 export type RecordEventKind = keyof typeof RecordEventBodies;
 export const RECORD_EVENT_KINDS = Object.keys(RecordEventBodies) as RecordEventKind[];
-export const RecordEventKindSchema = z.enum(RECORD_EVENT_KINDS as [RecordEventKind, ...RecordEventKind[]]);
+export const RecordEventKindSchema = z.enum(
+  RECORD_EVENT_KINDS as [RecordEventKind, ...RecordEventKind[]],
+);
 
 export type RecordEventBody<K extends RecordEventKind> = z.infer<(typeof RecordEventBodies)[K]>;
 

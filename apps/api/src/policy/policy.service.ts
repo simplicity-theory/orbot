@@ -31,7 +31,11 @@ export class PolicyService {
           await this.record.event(
             'policy.check',
             { action: req.action, allowed: d.allowed, reason: `${rule.name}: ${d.reason}` },
-            { unitId: req.unitId, taskId: req.taskId, botId: req.principal.kind === 'bot' ? req.principal.id : null },
+            {
+              unitId: req.unitId,
+              taskId: req.taskId,
+              botId: req.principal.kind === 'bot' ? req.principal.id : null,
+            },
             actorRef(req.principal),
           );
         }

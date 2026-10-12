@@ -24,7 +24,9 @@ export async function migrate(conn: DbConnection, set: MigrationSet): Promise<st
         applied_at timestamptz NOT NULL DEFAULT now()
       )`);
     const done = new Set(
-      (await client.query<{ name: string }>('SELECT name FROM schema_migration')).rows.map((r) => r.name),
+      (await client.query<{ name: string }>('SELECT name FROM schema_migration')).rows.map(
+        (r) => r.name,
+      ),
     );
     const files = readdirSync(join(MIGRATIONS_ROOT, set))
       .filter((f) => f.endsWith('.sql'))

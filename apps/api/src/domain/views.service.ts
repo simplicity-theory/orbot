@@ -43,7 +43,8 @@ export class ViewsService {
         const ut = tasks.filter((t) => t.body.unitId === u.entityId).map(toView);
         const um = missions.filter((m) => m.body.unitId === u.entityId).map(toView);
         const botsByStatus: Partial<Record<BotStatus, number>> = {};
-        for (const b of ub.filter((b) => !b.isOverseer)) botsByStatus[b.status] = (botsByStatus[b.status] ?? 0) + 1;
+        for (const b of ub.filter((b) => !b.isOverseer))
+          botsByStatus[b.status] = (botsByStatus[b.status] ?? 0) + 1;
         const attention = attentionFor(u.entityId, ub, ut, um);
         return {
           unit: toView(u),
@@ -78,7 +79,10 @@ export class ViewsService {
       unit: toView(u),
       status: unitStatus(bv, tv),
       overseer: bv.find((b) => b.id === u.body.overseerBotId) ?? null,
-      bots: bv.map((b) => ({ ...b, currentTask: tv.find((t) => t.id === b.currentTaskId) ?? null })),
+      bots: bv.map((b) => ({
+        ...b,
+        currentTask: tv.find((t) => t.id === b.currentTaskId) ?? null,
+      })),
       missions: mv,
       tasks: tv,
       documents: toViews(documents.filter((d) => d.body.kind !== 'handover')).concat(
@@ -137,21 +141,30 @@ function byCallsign(a: BotView, b: BotView) {
 }
 
 function unitStatus(bots: BotView[], tasks: TaskView[]): Status {
-  if (tasks.some((t) => t.status === 'failed') || bots.some((b) => b.status === 'failed')) return 'failed';
-  if (bots.some((b) => b.status === 'blocked') || tasks.some((t) => t.status === 'blocked')) return 'blocked';
+  if (tasks.some((t) => t.status === 'failed') || bots.some((b) => b.status === 'failed'))
+    return 'failed';
+  if (bots.some((b) => b.status === 'blocked') || tasks.some((t) => t.status === 'blocked'))
+    return 'blocked';
   if (tasks.some((t) => t.status === 'awaiting-approval')) return 'awaiting-approval';
   if (bots.some((b) => b.status === 'working')) return 'working';
   if (bots.length && bots.every((b) => b.status === 'stood-down')) return 'stood-down';
   return 'idle';
 }
 
-function attentionFor(unitId: string, bots: BotView[], tasks: TaskView[], missions: MissionView[]): AttentionItem[] {
+function attentionFor(
+  unitId: string,
+  bots: BotView[],
+  tasks: TaskView[],
+  missions: MissionView[],
+): AttentionItem[] {
   const items: AttentionItem[] = [];
   for (const b of bots.filter((b) => b.status === 'blocked')) {
     const t = tasks.find((x) => x.id === b.currentTaskId);
     items.push({
       kind: 'blocked-bot',
-      label: t ? `${b.callsign} blocked on #${t.number}: ${t.statusReason ?? 'no reason given'}` : `${b.callsign} is blocked`,
+      label: t
+        ? `${b.callsign} blocked on #${t.number}: ${t.statusReason ?? 'no reason given'}`
+        : `${b.callsign} is blocked`,
       link: t ? taskLink(unitId, b.id, t.id) : botLink(unitId, b.id),
       entityId: b.id,
     });
@@ -165,7 +178,12 @@ function attentionFor(unitId: string, bots: BotView[], tasks: TaskView[], missio
     });
   }
   for (const m of missions.filter((m) => m.status === 'awaiting-approval')) {
-    items.push({ kind: 'awaiting-approval', label: `Backbrief awaiting approval: ${m.goal}`, link: unitLink(unitId), entityId: m.id });
+    items.push({
+      kind: 'awaiting-approval',
+      label: `Backbrief awaiting approval: ${m.goal}`,
+      link: unitLink(unitId),
+      entityId: m.id,
+    });
   }
   for (const t of tasks.filter((t) => t.status === 'awaiting-approval')) {
     items.push({

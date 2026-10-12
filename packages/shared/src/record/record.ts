@@ -69,7 +69,11 @@ export interface SearchHit {
   version: number | null;
   archived: boolean;
   unitId: string | null;
+  /** For events: the task and bot they belong to (for linking). */
+  taskId: string | null;
+  botId: string | null;
   title: string;
+  /** Plain text; matches are wrapped in ⟦ ⟧ (never HTML). */
   snippet: string;
   createdAt: string;
   rank: number;
