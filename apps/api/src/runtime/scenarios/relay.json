@@ -1,0 +1,74 @@
+{
+  "id": "relay",
+  "description": "Two-bot relay. The first bot does part 1, hands over and stands down. Whoever picks the task up next must finish it from the unit's documents alone: the handover says what is next, the Field Manual says how this unit works.",
+  "seed": 4404,
+  "script": [
+    {
+      "do": "step",
+      "action": "read-brief",
+      "detail": "Read the brief for “{task}”.",
+      "outcome": "understood"
+    },
+    {
+      "do": "sitrep",
+      "text": "{callsign} on task #{number}: starting part 1.",
+      "status": "working"
+    },
+    { "do": "wait", "ms": 600 },
+    {
+      "do": "write-file",
+      "path": "orbot/task-{number}/part-1.md",
+      "content": "# Task #{number}, part 1\n\nDone by {callsign}."
+    },
+    { "do": "commit", "message": "[ENG] Task #{number}: part 1 by {callsign}" },
+    {
+      "do": "diary",
+      "category": "decision",
+      "text": "Split task #{number} in two: part 1 lays the groundwork, part 2 completes it."
+    },
+    { "do": "cost", "units": 2 },
+    {
+      "do": "handover",
+      "state": "Part 1 of task #{number} is committed on {branch}. Part 2 has not been started.",
+      "nextSteps": ["Write `orbot/task-{number}/part-2.md`: Part 2 completes what part 1 started."],
+      "triedAndFailed": [],
+      "openProblems": [],
+      "flagsForSuccessor": ["Prefix commit messages with `[ENG]` (Engineers convention)."]
+    },
+    {
+      "do": "stand-down",
+      "reason": "Part 1 done and handed over; standing down so another bot can finish."
+    }
+  ],
+  "resume": [
+    {
+      "do": "require-handover",
+      "missing": "No handover for task #{number}: cannot tell what was already done or what comes next."
+    },
+    {
+      "do": "require-field-manual",
+      "pattern": "Prefix commit messages with `([^`]+)`",
+      "query": "commit messages prefix",
+      "as": "prefix",
+      "missing": "The Field Manual has no commit-message convention; will not guess how this unit works."
+    },
+    {
+      "do": "sitrep",
+      "text": "{callsign} on task #{number}: picked up from the handover; finishing part 2.",
+      "status": "working"
+    },
+    { "do": "wait", "ms": 600 },
+    { "do": "follow-handover" },
+    { "do": "commit", "message": "{prefix} Task #{number}: part 2 by {callsign}" },
+    { "do": "cost", "units": 1 },
+    {
+      "do": "handover",
+      "state": "Task #{number} complete on {branch}: parts 1 and 2 committed.",
+      "nextSteps": [],
+      "triedAndFailed": [],
+      "openProblems": [],
+      "flagsForSuccessor": []
+    },
+    { "do": "done", "summary": "Task #{number} finished by {callsign} from the unit's documents." }
+  ]
+}

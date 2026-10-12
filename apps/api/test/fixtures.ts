@@ -1,8 +1,9 @@
+import { randomUUID } from 'node:crypto';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { INestApplication } from '@nestjs/common';
-import type { BotEvent, BotRuntime, RunContext, TaskBrief } from '@orbot/shared';
+import type { BotEvent, RunContext, TaskBrief } from '@orbot/shared';
 import { git } from '../src/common/git.js';
 import { ForceService } from '../src/domain/force.service.js';
 import { RuntimeRegistry } from '../src/runtime/runtime.registry.js';
@@ -18,50 +19,75 @@ export async function makeRepo(): Promise<string> {
   return dir;
 }
 
-/** One unit with an Overseer and one bot, created through the same services the app uses. */
-export async function makeUnitWithBot(app: INestApplication, name = 'Engineers') {
+export interface UnitFixtureOptions {
+  name?: string;
+  /** Give the unit an Overseer (default true). */
+  overseer?: boolean;
+  gate?: 'approve-everything' | 'backbriefs-and-deploys' | 'escalations-only';
+  bots?: number;
+  supplyIds?: string[];
+}
+
+/** One unit with an Overseer and bots, created through the same services the app uses. */
+export async function makeUnitWithBot(
+  app: INestApplication,
+  nameOrOpts: string | UnitFixtureOptions = {},
+) {
+  const opts = typeof nameOrOpts === 'string' ? { name: nameOrOpts } : nameOrOpts;
+  const name = opts.name ?? 'Engineers';
   const force = app.get(ForceService);
   const ctx = { actor: 'system:test', reason: 'test fixture' };
+  const overseerId = opts.overseer === false ? null : randomUUID();
   const unit = await force.createUnit(
     {
       name,
-      slug: name.toLowerCase(),
+      slug: name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
       role: 'Developers',
       standingMission: 'Build features and fix bugs to spec.',
       callsignPrefix: 'E',
-      overseerBotId: null,
-      approvalGate: 'backbriefs-and-deploys',
+      overseerBotId: overseerId,
+      approvalGate: opts.gate ?? 'backbriefs-and-deploys',
       rulesOfEngagement: { mayDoAlone: [], mustEscalate: [] },
       standingOrders: [],
-      supplyIds: [],
+      supplyIds: opts.supplyIds ?? [],
       order: 1,
     },
     ctx,
   );
-  const bot = await force.createBot(
-    {
-      unitId: unit.entityId,
-      callsign: 'E-1',
-      role: 'Developer',
-      isOverseer: false,
-      status: 'idle',
-      currentTaskId: null,
-      queue: [],
-      runtime: 'simulated',
-    },
-    ctx,
-  );
-  return { unit, bot };
+  const base = {
+    unitId: unit.entityId,
+    status: 'idle' as const,
+    currentTaskId: null,
+    queue: [],
+    runtime: 'simulated',
+  };
+  const overseer = overseerId
+    ? await force.createBot(
+        { ...base, callsign: 'E-0', role: 'Overseer', isOverseer: true },
+        ctx,
+        overseerId,
+      )
+    : null;
+  const bots = [];
+  for (let i = 1; i <= (opts.bots ?? 1); i++) {
+    bots.push(
+      await force.createBot(
+        { ...base, callsign: `E-${i}`, role: 'Developer', isOverseer: false },
+        ctx,
+      ),
+    );
+  }
+  return { unit, bot: bots[0]!, bots, overseer };
 }
 
-/** Wraps the simulated runtime and keeps every event it yields, so tests can account for each one. */
-export class SpyRuntime implements BotRuntime {
-  readonly kind = 'simulated';
-  readonly yielded: BotEvent[] = [];
-  private readonly inner = new SimulatedRuntime();
+export { settled } from '../src/testing/settle.js';
 
-  async *run(brief: TaskBrief, ctx: RunContext): AsyncIterable<BotEvent> {
-    for await (const ev of this.inner.run(brief, ctx)) {
+/** Wraps the simulated runtime and keeps every event it yields, so tests can account for each one. */
+export class SpyRuntime extends SimulatedRuntime {
+  readonly yielded: BotEvent[] = [];
+
+  override async *run(brief: TaskBrief, ctx: RunContext): AsyncIterable<BotEvent> {
+    for await (const ev of super.run(brief, ctx)) {
       this.yielded.push(ev);
       yield ev;
     }

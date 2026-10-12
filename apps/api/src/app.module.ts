@@ -30,6 +30,19 @@ import { WorkspaceManager } from './runtime/workspace-manager.js';
 import { createSecretsPool, SECRETS_POOL, SecretsService } from './secrets/secrets.service.js';
 import { SupplyController } from './supply/supply.controller.js';
 import { SupplyService } from './supply/supply.service.js';
+import { Background } from './common/background.js';
+import { FieldManualService } from './documents/field-manual.service.js';
+import {
+  createDocumentStore,
+  UNIT_DOCUMENT_STORE,
+  UnitDocsService,
+} from './documents/unit-docs.service.js';
+import { BriefingService } from './overseer/briefing.service.js';
+import { ColdStartService } from './overseer/coldstart.service.js';
+import { CurationService } from './overseer/curation.service.js';
+import { OverseerController } from './overseer/overseer.controller.js';
+import { OverseerService } from './overseer/overseer.service.js';
+import { Overseers } from './overseer/overseers.js';
 
 export interface AppModuleOptions {
   config: AppConfig;
@@ -49,6 +62,7 @@ export class AppModule {
         DomainController,
         RecordController,
         SupplyController,
+        OverseerController,
       ],
       providers: [
         { provide: LOG_DESTINATION, useValue: opts.logDestination ?? null },
@@ -84,13 +98,29 @@ export class AppModule {
         DocumentsService,
         SupplyService,
         ViewsService,
+        Background,
+        FieldManualService,
+        { provide: UNIT_DOCUMENT_STORE, inject: [APP_CONFIG], useFactory: createDocumentStore },
+        UnitDocsService,
+        Overseers,
+        BriefingService,
+        CurationService,
+        ColdStartService,
+        OverseerService,
         EventsGateway,
         { provide: APP_GUARD, useClass: AuthGuard },
         { provide: APP_INTERCEPTOR, useClass: RedactionInterceptor },
         { provide: APP_FILTER, useClass: ErrorFilter },
         PoolCloser,
       ],
-      exports: [RecordService, SecretsService, TaskRunner, RuntimeRegistry, RedactingLogger],
+      exports: [
+        RecordService,
+        SecretsService,
+        TaskRunner,
+        RuntimeRegistry,
+        RedactingLogger,
+        Background,
+      ],
     };
   }
 }

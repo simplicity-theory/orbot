@@ -20,6 +20,10 @@ export function titleOf<T extends EntityType>(type: T, body: EntityBodyMap[T]): 
       return (b as EntityBodyMap['supply']).name;
     case 'document':
       return (b as EntityBodyMap['document']).title;
+    case 'backbrief':
+      return `Backbrief: ${(b as EntityBodyMap['backbrief']).summary}`;
+    case 'fm-entry':
+      return (b as EntityBodyMap['fm-entry']).title;
     default:
       return type;
   }

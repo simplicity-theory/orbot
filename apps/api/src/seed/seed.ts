@@ -6,10 +6,12 @@ import type { INestApplication } from '@nestjs/common';
 import type { UnitBody } from '@orbot/shared';
 import { APP_CONFIG, type AppConfig } from '../config/config.js';
 import { git } from '../common/git.js';
-import { DocumentsService } from '../domain/documents.service.js';
+import { FieldManualService } from '../documents/field-manual.service.js';
 import { ForceService } from '../domain/force.service.js';
 import { WorkService } from '../domain/work.service.js';
-import { TaskRunner } from '../execution/task-runner.js';
+import { ColdStartService } from '../overseer/coldstart.service.js';
+import { OverseerService } from '../overseer/overseer.service.js';
+import { settled } from '../testing/settle.js';
 import { RecordService } from '../record/record.service.js';
 import { SupplyService } from '../supply/supply.service.js';
 
@@ -19,7 +21,13 @@ interface UnitSeed {
   body: Omit<UnitBody, 'overseerBotId' | 'supplyIds'>;
   overseerRole: string;
   botRoles: string[];
-  fieldManual: { v1: string; v2: string; v2Reason: string };
+  fieldManual: {
+    entries: { title: string; body: string }[];
+    /** A later, better wording of one entry (gives it history). */
+    refine: { title: string; body: string; reason: string };
+    /** A lesson added later. */
+    add: { title: string; body: string; reason: string };
+  };
 }
 
 const UNITS: UnitSeed[] = [
@@ -52,9 +60,20 @@ const UNITS: UnitSeed[] = [
     overseerRole: 'Overseer — lead engineer',
     botRoles: ['Backend developer', 'Backend developer', 'Frontend developer'],
     fieldManual: {
-      v1: '# Engineers Field Manual\n\n## Branching\nWork on `orbot/task-<n>` branches cut from main.\n\n## Tests\nRun the unit suite before handing over.\n',
-      v2: '# Engineers Field Manual\n\n## Branching\nWork on `orbot/task-<n>` branches cut from main.\n\n## Tests\nRun the unit suite before handing over.\nWarm the test cache first: the suite is slow on a cold cache.\n\n## Fixtures\nShared fixtures live in `test/fixtures`; never edit one without checking who else uses it.\n',
-      v2Reason: 'Promoted two lessons from task handovers',
+      entries: [
+        { title: 'Branching', body: 'Work on `orbot/task-<n>` branches cut from main.' },
+        { title: 'Tests', body: 'Run the unit suite before handing over.' },
+      ],
+      refine: {
+        title: 'Tests',
+        body: 'Run the unit suite before handing over. Warm the test cache first: the suite is slow on a cold cache.',
+        reason: 'Promoted a lesson from a task handover',
+      },
+      add: {
+        title: 'Fixtures',
+        body: 'Shared fixtures live in `test/fixtures`; never edit one without checking who else uses it.',
+        reason: 'Promoted a lesson from a task handover',
+      },
     },
   },
   {
@@ -77,9 +96,17 @@ const UNITS: UnitSeed[] = [
     overseerRole: 'Overseer — platform lead',
     botRoles: ['Pipeline engineer', 'Release engineer', 'Infrastructure engineer'],
     fieldManual: {
-      v1: '# Logistics Field Manual\n\n## Deploys\nStaging first, always.\n',
-      v2: '# Logistics Field Manual\n\n## Deploys\nStaging first, always. Production deploys need the Commander’s approval.\n\n## Rollback\nKeep the previous release tagged so rollback is one command.\n',
-      v2Reason: 'Added rollback procedure after After Action review',
+      entries: [{ title: 'Deploys', body: 'Staging first, always.' }],
+      refine: {
+        title: 'Deploys',
+        body: 'Staging first, always. Production deploys need the Commander’s approval.',
+        reason: 'Production deploys are an approval gate',
+      },
+      add: {
+        title: 'Rollback',
+        body: 'Keep the previous release tagged so rollback is one command.',
+        reason: 'Added rollback procedure after After Action review',
+      },
     },
   },
   {
@@ -89,7 +116,8 @@ const UNITS: UnitSeed[] = [
       role: 'QA',
       standingMission: 'Nothing moves forward untested.',
       callsignPrefix: 'I',
-      approvalGate: 'backbriefs-and-deploys',
+      // Shows the approval-gate setting: Inspection's plans don't wait for the Commander.
+      approvalGate: 'escalations-only',
       rulesOfEngagement: {
         mayDoAlone: ['Run any test suite', 'Send work back to Engineers with a reason'],
         mustEscalate: ['Waiving a failing test'],
@@ -102,9 +130,17 @@ const UNITS: UnitSeed[] = [
     overseerRole: 'Overseer — test lead',
     botRoles: ['Test engineer', 'Test engineer', 'Exploratory tester'],
     fieldManual: {
-      v1: '# Inspection Field Manual\n\n## Test plans\nEvery mission gets a written test plan.\n',
-      v2: '# Inspection Field Manual\n\n## Test plans\nEvery mission gets a written test plan before Engineers hand over.\n\n## Send-backs\nState the failing check and how to reproduce it.\n',
-      v2Reason: 'Clarified timing of test plans and send-back format',
+      entries: [{ title: 'Test plans', body: 'Every mission gets a written test plan.' }],
+      refine: {
+        title: 'Test plans',
+        body: 'Every mission gets a written test plan before Engineers hand over.',
+        reason: 'Clarified timing of test plans',
+      },
+      add: {
+        title: 'Send-backs',
+        body: 'State the failing check and how to reproduce it.',
+        reason: 'Clarified send-back format',
+      },
     },
   },
   {
@@ -128,9 +164,17 @@ const UNITS: UnitSeed[] = [
     overseerRole: 'Overseer — security lead',
     botRoles: ['Security reviewer', 'Dependency auditor', 'Penetration tester'],
     fieldManual: {
-      v1: '# Guard Field Manual\n\n## Scans\nRun the dependency audit on every branch.\n',
-      v2: '# Guard Field Manual\n\n## Scans\nRun the dependency audit and the static scan on every branch.\n\n## Secrets\nCredentials are referenced by name only. Report any value you see in a log immediately.\n',
-      v2Reason: 'Added static scan and secrets-handling rule',
+      entries: [{ title: 'Scans', body: 'Run the dependency audit on every branch.' }],
+      refine: {
+        title: 'Scans',
+        body: 'Run the dependency audit and the static scan on every branch.',
+        reason: 'Added the static scan',
+      },
+      add: {
+        title: 'Secrets',
+        body: 'Credentials are referenced by name only. Report any value you see in a log immediately.',
+        reason: 'Added secrets-handling rule',
+      },
     },
   },
 ];
@@ -151,18 +195,19 @@ export async function seedDemoForce(app: INestApplication): Promise<SeedResult> 
   const config = app.get<AppConfig>(APP_CONFIG);
   const force = app.get(ForceService);
   const work = app.get(WorkService);
-  const docs = app.get(DocumentsService);
   const supply = app.get(SupplyService);
-  const runner = app.get(TaskRunner);
+  const fieldManual = app.get(FieldManualService);
+  const overseer = app.get(OverseerService);
+  const coldStart = app.get(ColdStartService);
 
-  // Supply: a small demo repository and a credential for it.
+  // Supply: a small demo repository and a credential for it, issued to Engineers and Inspection.
   const sourcePath = await createDemoRepo(join(config.workspacesDir, 'source', 'demo-app'));
   const repo = await supply.connectRepository(
     { name: 'demo-app', location: sourcePath },
     { ...SEED, reason: 'Demo repository connected' },
   );
   const tokenName = 'demo-app-push-token';
-  await supply.storeCredential(
+  const token = await supply.storeCredential(
     { name: tokenName, value: `demo-${randomBytes(18).toString('base64url')}` },
     { ...SEED, reason: 'Demo credential stored' },
   );
@@ -174,64 +219,81 @@ export async function seedDemoForce(app: INestApplication): Promise<SeedResult> 
     const unitId = randomUUID();
     const overseerId = randomUUID();
     unitIds[u.body.slug] = unitId;
+    const supplied = ['engineers', 'inspection'].includes(u.body.slug)
+      ? [repo.entityId, token.entityId]
+      : [];
     await force.createUnit(
-      {
-        ...u.body,
-        overseerBotId: overseerId,
-        supplyIds: u.body.slug === 'engineers' ? [repo.entityId] : [],
-      },
+      { ...u.body, overseerBotId: overseerId, supplyIds: supplied },
       SEED,
       unitId,
     );
+    const base = {
+      unitId,
+      status: 'idle' as const,
+      currentTaskId: null,
+      queue: [],
+      runtime: 'simulated',
+    };
     await force.createBot(
-      {
-        unitId,
-        callsign: `${u.body.callsignPrefix}-0`,
-        role: u.overseerRole,
-        isOverseer: true,
-        status: 'idle',
-        currentTaskId: null,
-        queue: [],
-        runtime: 'simulated',
-      },
+      { ...base, callsign: `${u.body.callsignPrefix}-0`, role: u.overseerRole, isOverseer: true },
       SEED,
       overseerId,
     );
     botIds[u.body.slug] = [];
     for (const [i, role] of u.botRoles.entries()) {
       const b = await force.createBot(
-        {
-          unitId,
-          callsign: `${u.body.callsignPrefix}-${i + 1}`,
-          role,
-          isOverseer: false,
-          status: 'idle',
-          currentTaskId: null,
-          queue: [],
-          runtime: 'simulated',
-        },
+        { ...base, callsign: `${u.body.callsignPrefix}-${i + 1}`, role, isOverseer: false },
         SEED,
       );
       botIds[u.body.slug]!.push(b.entityId);
       botCount++;
     }
-    const fm = await docs.create(
-      {
-        kind: 'field-manual',
+
+    // Field Manual: initial entries, then a refinement and a later lesson, so it has history.
+    const source = {
+      kind: 'commander' as const,
+      id: null,
+      version: null,
+      label: 'Seeded with the demo force',
+    };
+    const overseerCtx = (reason: string) => ({ actor: `bot:${overseerId}`, reason });
+    const ids = await record.transaction(async (w) => {
+      const created = [];
+      for (const e of u.fieldManual.entries) {
+        created.push(
+          await fieldManual.promote(w, unitId, { ...e, tags: [], pinned: false }, source, {
+            ...SEED,
+            reason: 'Initial Field Manual',
+          }),
+        );
+      }
+      await fieldManual.rerender(w, unitId, { ...SEED, reason: 'Initial Field Manual' });
+      return created;
+    });
+    const refine = ids.find((e) => e.body.title === u.fieldManual.refine.title)!;
+    await record.transaction(async (w) => {
+      await fieldManual.edit(
+        w,
+        refine.entityId,
+        { body: u.fieldManual.refine.body },
+        source,
+        overseerCtx(u.fieldManual.refine.reason),
+      );
+      await fieldManual.rerender(w, unitId, overseerCtx(u.fieldManual.refine.reason));
+    });
+    await record.transaction(async (w) => {
+      await fieldManual.promote(
+        w,
         unitId,
-        title: `${u.body.name} Field Manual`,
-        markdown: u.fieldManual.v1,
-      },
-      SEED,
-    );
-    await docs.revise(
-      fm.entityId,
-      { markdown: u.fieldManual.v2, reason: u.fieldManual.v2Reason, expectedVersion: 1 },
-      `bot:${overseerId}`,
-    );
+        { title: u.fieldManual.add.title, body: u.fieldManual.add.body, tags: [], pinned: false },
+        source,
+        overseerCtx(u.fieldManual.add.reason),
+      );
+      await fieldManual.rerender(w, unitId, overseerCtx(u.fieldManual.add.reason));
+    });
   }
 
-  // One operation in flight.
+  // One operation in flight. Its missions go to the units' Overseers, who draft backbriefs.
   const op = await work.createOperation(
     {
       name: 'Gatekeeper',
@@ -241,98 +303,78 @@ export async function seedDemoForce(app: INestApplication): Promise<SeedResult> 
     },
     { ...SEED, reason: 'Commander stated intent' },
   );
-  const mission = (slug: string, goal: string, dod: string[], status: 'planning' | 'working') =>
-    work.createMission(
-      { operationId: op.entityId, unitId: unitIds[slug]!, goal, definitionOfDone: dod, status },
-      SEED,
-    );
-  const engMission = await mission(
-    'engineers',
-    'Add rate limiting to the login endpoint',
-    ['Limiter in place', 'Configurable per environment', 'Tests green'],
-    'working',
-  );
-  const insMission = await mission(
-    'inspection',
-    'Prove rate limiting holds under load',
-    ['Test plan written', 'Load test passes'],
-    'planning',
-  );
-  await mission(
-    'guard',
-    'Review rate limiting for bypasses',
-    ['No high-severity findings'],
-    'planning',
-  );
-  await mission(
-    'logistics',
-    'Deploy rate limiting to production',
-    ['Staging deploy green', 'Production deploy approved and done'],
-    'planning',
-  );
-
-  const e = botIds['engineers']!;
-  const task = (title: string, botId: string, scenario: string | null, description: string) =>
-    work.createTask(
+  const mission = (slug: string, goal: string, dod: string[]) =>
+    record.create(
+      'mission',
       {
-        unitId: unitIds['engineers']!,
-        botId,
-        missionId: engMission.entityId,
-        title,
-        description,
-        repoSupplyId: repo.entityId,
-        credentialNames: [tokenName],
-        scenario,
-        budgetLimitUnits: 20,
+        operationId: op.entityId,
+        unitId: unitIds[slug]!,
+        goal,
+        definitionOfDone: dod,
+        status: 'planning',
       },
-      { ...SEED, reason: 'Overseer issued task' },
+      { ...SEED, reason: 'Mission issued' },
     );
-  const t1 = await task(
+
+  // Engineers: the plan comes back for approval; it is approved with scenarios that exercise the failure paths.
+  const eng = await mission('engineers', 'Add rate limiting to the login endpoint', [
     'Add rate limiter middleware',
-    e[0]!,
-    'happy-path',
-    'Token-bucket limiter on POST /login keyed by IP and username.',
-  );
-  const t2 = await task(
     'Wire limiter settings into environment config',
-    e[1]!,
-    'blocked-on-dependency',
-    'Read limits from env; defaults for dev.',
-  );
-  const t3 = await task(
     'Update login tests for rate limiting',
-    e[2]!,
-    'tests-fail',
-    'Cover limit reached, reset window and allow-list.',
+  ]);
+  await settled(app);
+  const [engBrief] = await record.listActive('backbrief', {
+    bodyContains: { missionId: eng.entityId },
+  });
+  await overseer.amend(
+    engBrief!.entityId,
+    {
+      proposedTasks: engBrief!.body.proposedTasks.map((t, i) => ({
+        ...t,
+        scenario: ['happy-path', 'blocked-on-dependency', 'tests-fail'][i] ?? 'happy-path',
+      })),
+      note: 'Demo: exercise the blocked and failed paths too.',
+      expectedVersion: engBrief!.version,
+    },
+    'system:seed',
   );
-  await task(
-    'Document rate limits in the README',
-    e[0]!,
-    'happy-path',
-    'Short section for operators.',
-  );
+  await settled(app);
+
+  // Inspection runs on "escalations only": its plan is approved automatically and executed.
+  await mission('inspection', 'Prove rate limiting holds under load', [
+    'Write the rate-limiting test plan',
+  ]);
+  await settled(app);
+
+  // A second Engineers mission, left awaiting the Commander's approval.
+  await mission('engineers', 'Harden session handling', [
+    'Rotate session ids on login',
+    'Expire idle sessions after 30 minutes',
+  ]);
+  await settled(app);
+
+  // A queued task issued directly to E-1, to start by hand from the UI.
   await work.createTask(
     {
-      unitId: unitIds['inspection']!,
-      botId: botIds['inspection']![0]!,
-      missionId: insMission.entityId,
-      title: 'Write the rate-limiting test plan',
-      description: 'Cover burst, sustained and distributed attacks.',
+      unitId: unitIds['engineers']!,
+      botId: botIds['engineers']![0]!,
+      missionId: eng.entityId,
+      title: 'Document rate limits in the README',
+      description: 'Short section for operators.',
       repoSupplyId: repo.entityId,
-      credentialNames: [],
+      credentialNames: [tokenName],
       scenario: 'happy-path',
       budgetLimitUnits: 10,
+      continuesTaskId: null,
     },
-    { ...SEED, reason: 'Overseer issued task' },
+    { ...SEED, reason: 'Issued directly by the Commander' },
   );
 
-  // Play out three tasks so the ORBAT has a done task, a blocked bot and a failed task.
-  for (const t of [t1, t2, t3]) {
-    const h = await runner.start(t.entityId, 'system:seed');
-    await h.finished;
-  }
+  await coldStart.check(unitIds['engineers']!);
+  await settled(app);
 
-  return { seeded: true, units: UNITS.length, bots: botCount + UNITS.length, tasks: 5 };
+  const tasks = await record.listActive('task');
+  return { seeded: true, units: UNITS.length, bots: botCount + UNITS.length, tasks: tasks.length };
 }
 
 async function createDemoRepo(path: string): Promise<string> {

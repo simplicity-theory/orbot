@@ -1,18 +1,42 @@
-import { writeFile, mkdir } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, relative, resolve } from 'node:path';
-import type { BotEvent, BotRuntime, RunContext, TaskBrief } from '@orbot/shared';
+import {
+  parseHandoverMarkdown,
+  type BackbriefDraft,
+  type BackbriefInput,
+  type BotEvent,
+  type BotRuntime,
+  type ColdStartAssessment,
+  type ColdStartInput,
+  type CurationAction,
+  type CurationInput,
+  type HandoverNote,
+  type RunContext,
+  type TaskBrief,
+} from '@orbot/shared';
 import { git } from '../common/git.js';
 import { loadScenarios, mulberry32, type Scenario, type ScenarioStep } from './scenario.js';
+import { SimulatedOverseer } from './simulated-overseer.js';
 
 export const DEFAULT_SCENARIO = 'happy-path';
+
+interface RunState {
+  vars: Record<string, string>;
+  handover: HandoverNote | null;
+}
+
+/** Steps after which the run is over. */
+type Stop = boolean;
 
 /**
  * Scripted, deterministic fake bots. No AI calls. Proves the command system
  * works (briefing, workspaces, record, policy, credentials), not code quality.
+ * Also plays the Overseer's part (planning, curation, cold-start checks) by rule.
  */
 export class SimulatedRuntime implements BotRuntime {
   readonly kind = 'simulated';
   private readonly scenarios: Map<string, Scenario>;
+  private readonly overseer = new SimulatedOverseer();
 
   constructor(scenarios?: Map<string, Scenario>) {
     this.scenarios = scenarios ?? loadScenarios();
@@ -20,6 +44,18 @@ export class SimulatedRuntime implements BotRuntime {
 
   scenarioIds(): string[] {
     return [...this.scenarios.keys()].sort();
+  }
+
+  draftBackbrief(input: BackbriefInput): Promise<BackbriefDraft> {
+    return Promise.resolve(this.overseer.draftBackbrief(input));
+  }
+
+  curate(input: CurationInput): Promise<CurationAction[]> {
+    return Promise.resolve(this.overseer.curate(input));
+  }
+
+  assessColdStart(input: ColdStartInput): Promise<ColdStartAssessment> {
+    return Promise.resolve(this.overseer.assessColdStart(input));
   }
 
   async *run(brief: TaskBrief, ctx: RunContext): AsyncIterable<BotEvent> {
@@ -30,23 +66,37 @@ export class SimulatedRuntime implements BotRuntime {
       return;
     }
     const rand = mulberry32(scenario.seed);
-    const vars: Record<string, string> = {
-      task: brief.task.title,
-      number: String(brief.task.number),
-      callsign: brief.bot.callsign,
-      branch: brief.workspace.branch,
-      unit: brief.unit.name,
+    const state: RunState = {
+      vars: {
+        task: brief.task.title,
+        number: String(brief.task.number),
+        callsign: brief.bot.callsign,
+        branch: brief.workspace.branch,
+        unit: brief.unit.name,
+      },
+      handover: null,
     };
     const text = (t: string | string[]) => {
       const s = Array.isArray(t) ? t[Math.floor(rand() * t.length)]! : t;
-      return s.replace(/\{(\w+)\}/g, (m, k: string) => vars[k] ?? m);
+      return s.replace(/\{(\w+)\}/g, (m, k: string) => state.vars[k] ?? m);
     };
-    const credentialName = brief.task.credentialNames[0];
 
-    for (const step of scenario.script) {
+    // The branch is the only thing a bot inherits physically. What was done, and
+    // how this unit works, must come from the brief: the unit's documents.
+    const resuming = !!scenario.resume && (await hasWorkOnBranch(brief));
+    const script = resuming ? scenario.resume! : scenario.script;
+    if (resuming) {
+      yield {
+        type: 'step',
+        action: 'resume',
+        detail: `Branch ${brief.workspace.branch} already has work on it; picking up from the brief.`,
+      };
+    }
+
+    for (const step of script) {
       if (ctx.signal.aborted) return;
-      yield* this.perform(step, brief, ctx, text, credentialName);
-      if (step.do === 'block' || step.do === 'fail' || step.do === 'done') return;
+      const stop = yield* this.perform(step, brief, ctx, text, state);
+      if (stop) return;
     }
   }
 
@@ -55,8 +105,9 @@ export class SimulatedRuntime implements BotRuntime {
     brief: TaskBrief,
     ctx: RunContext,
     text: (t: string | string[]) => string,
-    credentialName: string | undefined,
-  ): AsyncIterable<BotEvent> {
+    state: RunState,
+  ): AsyncGenerator<BotEvent, Stop> {
+    const credentialName = brief.task.credentialNames[0];
     switch (step.do) {
       case 'step':
         yield {
@@ -65,42 +116,25 @@ export class SimulatedRuntime implements BotRuntime {
           detail: text(step.detail),
           ...(step.outcome ? { outcome: text(step.outcome) } : {}),
         };
-        return;
+        return false;
       case 'wait':
         await sleep(step.ms * ctx.timeScale, ctx.signal);
-        return;
+        return false;
       case 'diary':
         yield { type: 'diary', category: step.category, text: text(step.text) };
-        return;
+        return false;
       case 'sitrep':
         yield {
           type: 'sitrep',
           text: text(step.text),
           ...(step.status ? { status: step.status } : {}),
         };
-        return;
-      case 'write-file': {
-        const rel = text(step.path);
-        const target = resolve(brief.workspace.path, rel);
-        if (relative(brief.workspace.path, target).startsWith('..')) {
-          yield { type: 'failed', reason: `Refused to write outside the workspace: ${rel}` };
-          return;
-        }
-        await mkdir(dirname(target), { recursive: true });
-        await writeFile(target, text(step.content) + '\n', 'utf8');
-        yield { type: 'step', action: 'write-file', detail: `Wrote ${rel}`, outcome: 'ok' };
-        yield { type: 'artifact', kind: 'file', ref: rel, summary: `Edited ${rel}` };
-        return;
-      }
-      case 'commit': {
-        const message = text(step.message);
-        await git(brief.workspace.path, ['add', '-A']);
-        await git(brief.workspace.path, ['commit', '--quiet', '-m', message]);
-        const sha = await git(brief.workspace.path, ['rev-parse', 'HEAD']);
-        yield { type: 'step', action: 'commit', detail: message, outcome: sha };
-        yield { type: 'artifact', kind: 'commit', ref: sha, summary: message };
-        return;
-      }
+        return false;
+      case 'write-file':
+        return yield* writeInWorkspace(brief, text(step.path), text(step.content));
+      case 'commit':
+        yield* commit(brief, text(step.message));
+        return false;
       case 'use-credential': {
         if (!credentialName) {
           yield {
@@ -109,7 +143,7 @@ export class SimulatedRuntime implements BotRuntime {
             detail: 'No credential issued for this task; skipped.',
             outcome: 'skipped',
           };
-          return;
+          return false;
         }
         const purpose = text(step.purpose);
         // A real bot would hand the value to a tool (git push, API call). The
@@ -123,17 +157,20 @@ export class SimulatedRuntime implements BotRuntime {
           detail: `Used ${credentialName} to ${purpose}`,
           outcome: 'ok',
         };
-        return;
+        return false;
       }
       case 'cost':
         yield { type: 'cost', units: step.units };
-        return;
+        return false;
       case 'block':
         yield { type: 'blocked', reason: text(step.reason) };
-        return;
+        return true;
       case 'fail':
         yield { type: 'failed', reason: text(step.reason) };
-        return;
+        return true;
+      case 'stand-down':
+        yield { type: 'stood-down', reason: text(step.reason) };
+        return true;
       case 'handover':
         yield {
           type: 'handover',
@@ -145,12 +182,73 @@ export class SimulatedRuntime implements BotRuntime {
             flagsForSuccessor: step.flagsForSuccessor.map(text),
           },
         };
-        return;
+        return false;
       case 'done':
         yield { type: 'done', summary: text(step.summary) };
-        return;
+        return true;
+      case 'require-handover': {
+        const note = brief.lastHandover ? parseHandoverMarkdown(brief.lastHandover.markdown) : null;
+        if (!note || note.nextSteps.length === 0) {
+          yield { type: 'blocked', reason: text(step.missing) };
+          return true;
+        }
+        state.handover = note;
+        yield {
+          type: 'step',
+          action: 'read-handover',
+          detail: `Read "${brief.lastHandover!.title}" (v${brief.lastHandover!.version}): ${note.nextSteps.length} next step(s).`,
+          outcome: 'understood',
+        };
+        return false;
+      }
+      case 'require-field-manual': {
+        const re = new RegExp(step.pattern);
+        let found = brief.fieldManual
+          .map((e) => re.exec(`${e.title}\n${e.body}`))
+          .find((m): m is RegExpExecArray => !!m);
+        let where = 'the Field Manual in the brief';
+        if (!found) {
+          // Not in the brief: search the unit's record on demand.
+          for (const hit of await ctx.searchRecord(step.query)) {
+            const m = re.exec(hit.snippet.replace(/[⟦⟧]/g, ''));
+            if (m) {
+              found = m;
+              where = `a record search for "${step.query}"`;
+              break;
+            }
+          }
+        }
+        if (!found) {
+          yield { type: 'blocked', reason: text(step.missing) };
+          return true;
+        }
+        state.vars[step.as] = found[1] ?? found[0];
+        yield {
+          type: 'step',
+          action: 'read-field-manual',
+          detail: `Found the unit convention in ${where}: ${found[0]}`,
+          outcome: 'understood',
+        };
+        return false;
+      }
+      case 'follow-handover': {
+        for (const next of state.handover?.nextSteps ?? []) {
+          const m = /^Write `?([^`:\s]+)`?(?::\s*(.*))?$/.exec(next);
+          if (!m) {
+            yield { type: 'step', action: 'note', detail: `Handover step noted: ${next}` };
+            continue;
+          }
+          const stop = yield* writeInWorkspace(
+            brief,
+            m[1]!,
+            text(m[2] ?? `Written by {callsign}.`),
+          );
+          if (stop) return true;
+        }
+        return false;
+      }
       case 'leak-credential': {
-        if (!credentialName) return;
+        if (!credentialName) return false;
         const leaked = await ctx.withCredential(
           credentialName,
           'debugging (rogue)',
@@ -169,15 +267,49 @@ export class SimulatedRuntime implements BotRuntime {
             flagsForSuccessor: [Buffer.from(leaked).toString('base64')],
           },
         };
-        return;
+        return false;
       }
       case 'crash-with-credential': {
-        if (!credentialName) return;
+        if (!credentialName) return false;
         const v = await ctx.withCredential(credentialName, 'crash test', async (x) => x);
         throw new Error(`connection refused for token ${v}`);
       }
     }
   }
+}
+
+async function* writeInWorkspace(
+  brief: TaskBrief,
+  rel: string,
+  content: string,
+): AsyncGenerator<BotEvent, Stop> {
+  const target = resolve(brief.workspace.path, rel);
+  if (relative(brief.workspace.path, target).startsWith('..')) {
+    yield { type: 'failed', reason: `Refused to write outside the workspace: ${rel}` };
+    return true;
+  }
+  await mkdir(dirname(target), { recursive: true });
+  await writeFile(target, content + '\n', 'utf8');
+  yield { type: 'step', action: 'write-file', detail: `Wrote ${rel}`, outcome: 'ok' };
+  yield { type: 'artifact', kind: 'file', ref: rel, summary: `Edited ${rel}` };
+  return false;
+}
+
+async function* commit(brief: TaskBrief, message: string): AsyncGenerator<BotEvent, void> {
+  await git(brief.workspace.path, ['add', '-A']);
+  await git(brief.workspace.path, ['commit', '--quiet', '-m', message]);
+  const sha = await git(brief.workspace.path, ['rev-parse', 'HEAD']);
+  yield { type: 'step', action: 'commit', detail: message, outcome: sha };
+  yield { type: 'artifact', kind: 'commit', ref: sha, summary: message };
+}
+
+async function hasWorkOnBranch(brief: TaskBrief): Promise<boolean> {
+  const log = await git(brief.workspace.path, [
+    'log',
+    '--format=%H',
+    `${brief.workspace.baseCommit}..HEAD`,
+  ]);
+  return log.length > 0;
 }
 
 function sleep(ms: number, signal: AbortSignal): Promise<void> {

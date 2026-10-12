@@ -6,7 +6,7 @@ import {
   type TaskBody,
 } from '@orbot/shared';
 import type { z } from 'zod';
-import { RecordService, type WriteContext } from '../record/record.service.js';
+import { RecordService, type RecordWriter, type WriteContext } from '../record/record.service.js';
 
 /** Operations, missions and tasks. Every piece of work belongs to exactly one unit or bot. */
 @Injectable()
@@ -48,6 +48,12 @@ export class WorkService {
         throw new BadRequestException('That mission is owned by a different unit.');
       }
     }
+    if (input.continuesTaskId) {
+      const prev = await this.record.requireActive('task', input.continuesTaskId);
+      if (prev.body.unitId !== input.unitId) {
+        throw new BadRequestException('A task can only continue work from its own unit.');
+      }
+    }
     if (input.repoSupplyId) {
       const s = await this.record.requireActive('supply', input.repoSupplyId);
       if (s.body.spec.kind !== 'repository' || !s.body.connected) {
@@ -57,6 +63,17 @@ export class WorkService {
       }
     }
     const number = await this.record.nextTaskNumber();
+    return this.record.transaction((w) => this.writeTask(w, number, input, ctx, id));
+  }
+
+  /** Create a task (and queue it on its bot) inside an existing transaction. */
+  async writeTask(
+    w: RecordWriter,
+    number: number,
+    input: z.output<typeof CreateTaskRequest> & { autoStart?: boolean },
+    ctx: WriteContext,
+    id?: string,
+  ) {
     const body: TaskBody = {
       number,
       title: input.title,
@@ -71,28 +88,28 @@ export class WorkService {
       credentialNames: input.credentialNames,
       scenario: input.scenario,
       statusReason: null,
+      continuesTaskId: input.continuesTaskId ?? null,
+      autoStart: input.autoStart ?? false,
     };
-    return this.record.transaction(async (w) => {
-      const task = await w.create('task', body, ctx, id);
-      await w.event(
-        'task.assigned',
-        { taskNumber: number, title: input.title },
-        {
-          unitId: input.unitId,
-          botId: input.botId,
-          taskId: task.entityId,
-          missionId: input.missionId,
-        },
-        ctx.actor,
-      );
-      if (input.botId) {
-        await w.revise('bot', input.botId, (b) => ({ ...b, queue: [...b.queue, task.entityId] }), {
-          actor: ctx.actor,
-          reason: `Task #${number} queued`,
-        });
-      }
-      return task;
-    });
+    const task = await w.create('task', body, ctx, id);
+    await w.event(
+      'task.assigned',
+      { taskNumber: number, title: input.title },
+      {
+        unitId: input.unitId,
+        botId: input.botId,
+        taskId: task.entityId,
+        missionId: input.missionId,
+      },
+      ctx.actor,
+    );
+    if (input.botId) {
+      await w.revise('bot', input.botId, (b) => ({ ...b, queue: [...b.queue, task.entityId] }), {
+        actor: ctx.actor,
+        reason: `Task #${number} queued`,
+      });
+    }
+    return task;
   }
 
   getTask(id: string) {

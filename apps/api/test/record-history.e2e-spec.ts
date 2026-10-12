@@ -12,7 +12,7 @@ describe('record history, as-of, diff and search', () => {
       await t.agent
         .post('/api/documents')
         .send({
-          kind: 'field-manual',
+          kind: 'note',
           unitId: null,
           title: 'Engineers Field Manual',
           markdown: '# Branching\nUse feature branches.\n',

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { DocumentKind, Id } from '../domain/entities.js';
+import { DocumentKind, Id, ProposedTask } from '../domain/entities.js';
 
 /** Request bodies shared by the API (validation) and the web app (typing). */
 
@@ -13,6 +13,8 @@ export const CreateTaskRequest = z.object({
   credentialNames: z.array(z.string()).default([]),
   scenario: z.string().nullable().default(null),
   budgetLimitUnits: z.number().nonnegative().nullable().default(null),
+  /** Pick up from another task: its handover is part of this task's brief. */
+  continuesTaskId: Id.nullable().default(null),
 });
 export type CreateTaskRequest = z.input<typeof CreateTaskRequest>;
 
@@ -51,3 +53,76 @@ export const ReviseDocumentRequest = z.object({
   expectedVersion: z.number().int().positive(),
 });
 export type ReviseDocumentRequest = z.input<typeof ReviseDocumentRequest>;
+
+export const CreateMissionRequest = z.object({
+  unitId: Id,
+  goal: z.string().trim().min(1).max(500),
+  definitionOfDone: z.array(z.string().trim().min(1).max(500)).min(1).max(30),
+});
+export type CreateMissionRequest = z.input<typeof CreateMissionRequest>;
+
+export const ApproveBackbriefRequest = z.object({
+  note: z.string().trim().max(2000).nullable().default(null),
+  expectedVersion: z.number().int().positive(),
+});
+export type ApproveBackbriefRequest = z.input<typeof ApproveBackbriefRequest>;
+
+export const AmendBackbriefRequest = z.object({
+  proposedTasks: z.array(ProposedTask).min(1).max(50),
+  note: z.string().trim().min(1).max(2000),
+  expectedVersion: z.number().int().positive(),
+});
+export type AmendBackbriefRequest = z.input<typeof AmendBackbriefRequest>;
+
+export const RejectBackbriefRequest = z.object({
+  note: z.string().trim().min(1, { message: 'Tell the Overseer what to change.' }).max(2000),
+  expectedVersion: z.number().int().positive(),
+});
+export type RejectBackbriefRequest = z.input<typeof RejectBackbriefRequest>;
+
+export const ReassignTaskRequest = z.object({
+  botId: Id,
+  reason: z.string().trim().min(1).max(500),
+});
+export type ReassignTaskRequest = z.input<typeof ReassignTaskRequest>;
+
+export const AddBotRequest = z.object({
+  role: z.string().trim().min(1).max(200),
+  /** Replace this bot: it is stood down and its work moves to the new bot. */
+  replacesBotId: Id.nullable().default(null),
+  reason: z.string().trim().min(1).max(500),
+});
+export type AddBotRequest = z.input<typeof AddBotRequest>;
+
+export const CreateFmEntryRequest = z.object({
+  title: z.string().trim().min(1).max(200),
+  body: z.string().max(20_000),
+  tags: z.array(z.string()).default([]),
+  pinned: z.boolean().default(false),
+  reason: z.string().trim().min(1).max(500),
+});
+export type CreateFmEntryRequest = z.input<typeof CreateFmEntryRequest>;
+
+export const ReviseFmEntryRequest = z.object({
+  title: z.string().trim().min(1).max(200).optional(),
+  body: z.string().max(20_000).optional(),
+  pinned: z.boolean().optional(),
+  reason: z.string().trim().min(1).max(500),
+  expectedVersion: z.number().int().positive(),
+});
+export type ReviseFmEntryRequest = z.input<typeof ReviseFmEntryRequest>;
+
+export const RetireFmEntryRequest = z.object({
+  reason: z.string().trim().min(1).max(500),
+  expectedVersion: z.number().int().positive(),
+});
+export type RetireFmEntryRequest = z.input<typeof RetireFmEntryRequest>;
+
+export const StandingOrdersRequest = z.object({
+  orders: z.array(
+    z.object({ id: z.string().optional(), text: z.string().trim().min(1).max(1000) }),
+  ),
+  reason: z.string().trim().min(1).max(500),
+  expectedVersion: z.number().int().positive(),
+});
+export type StandingOrdersRequest = z.input<typeof StandingOrdersRequest>;

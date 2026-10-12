@@ -1,5 +1,7 @@
 import type {
+  BackbriefBody,
   BotBody,
+  FmEntryBody,
   DocumentBody,
   MissionBody,
   OperationBody,
@@ -27,6 +29,21 @@ export type OperationView = Versioned<OperationBody>;
 export type DocumentView = Versioned<DocumentBody>;
 /** Supply as the UI sees it. Credential supply carries only the secret's name. */
 export type SupplyView = Versioned<SupplyBody>;
+export type FmEntryView = Versioned<FmEntryBody>;
+
+export interface BackbriefView extends Versioned<BackbriefBody> {
+  mission: MissionView;
+  unitName: string;
+  /** Callsigns of the bots the plan mentions, for display. */
+  callsigns: Record<string, string>;
+}
+
+export interface MissionProgress {
+  mission: MissionView;
+  done: number;
+  total: number;
+  backbrief: BackbriefView | null;
+}
 
 export type AttentionKind = 'blocked-bot' | 'failed-task' | 'awaiting-approval' | 'escalation';
 
@@ -46,6 +63,8 @@ export interface OrbatUnit {
   currentMission: MissionView | null;
   status: Status;
   attention: AttentionItem[];
+  /** Backbriefs waiting on the Commander, approvable inline from the ORBAT. */
+  backbriefs: BackbriefView[];
 }
 
 export interface OrbatView {
@@ -63,11 +82,34 @@ export interface UnitDetailView {
   status: Status;
   overseer: BotView | null;
   bots: BotWithTask[];
-  missions: MissionView[];
+  missions: MissionProgress[];
   tasks: TaskView[];
+  /** Tasks waiting for a bot, in dispatch order. */
+  queue: TaskView[];
   documents: DocumentView[];
+  handovers: DocumentView[];
+  fieldManual: FmEntryView[];
+  retiredEntries: FmEntryView[];
+  warDiary: RecordEvent[];
   supply: SupplyView[];
   attention: AttentionItem[];
+  backbriefs: BackbriefView[];
+  coldStart: RecordEvent<'coldstart.check'> | null;
+  /** Where the unit's documents are mirrored as Markdown, if it has a repository. */
+  docsMirror: { repository: string; branch: string; path: string } | null;
+}
+
+export interface ApprovalsView {
+  backbriefs: BackbriefView[];
+  attention: (AttentionItem & { unitName: string })[];
+}
+
+export interface PaletteItem {
+  kind: 'unit' | 'bot' | 'task' | 'operation' | 'document' | 'mission';
+  id: string;
+  label: string;
+  sublabel: string;
+  link: string;
 }
 
 export interface BotDetailView {
@@ -77,6 +119,8 @@ export interface BotDetailView {
   queue: TaskView[];
   history: TaskView[];
   recent: RecordEvent[];
+  /** What the bot was handed at the start of its latest run. */
+  lastBrief: RecordEvent<'task.briefed'> | null;
 }
 
 export interface TaskDetailView {

@@ -1,18 +1,30 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type {
+  ApprovalsView,
   AttentionItem,
+  BackbriefBody,
+  BackbriefView,
+  BotBody,
   BotDetailView,
   BotStatus,
   BotView,
+  MissionBody,
+  MissionProgress,
   MissionView,
   OrbatUnit,
   OrbatView,
+  PaletteItem,
+  RecordEvent,
+  RecordVersion,
   Status,
   TaskDetailView,
   TaskView,
+  UnitBody,
   UnitDetailView,
 } from '@orbot/shared';
 import { APP_CONFIG, type AppConfig } from '../config/config.js';
+import { FieldManualService } from '../documents/field-manual.service.js';
+import { UnitDocsService } from '../documents/unit-docs.service.js';
 import { RecordService } from '../record/record.service.js';
 import { toView, toViews } from './view.js';
 
@@ -27,33 +39,39 @@ export class ViewsService {
   constructor(
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     private readonly record: RecordService,
+    private readonly fieldManual: FieldManualService,
+    private readonly docs: UnitDocsService,
   ) {}
 
   async orbat(): Promise<OrbatView> {
-    const [units, bots, tasks, missions] = await Promise.all([
+    const [units, bots, tasks, missions, backbriefs] = await Promise.all([
       this.record.listActive('unit'),
       this.record.listActive('bot'),
       this.record.listActive('task'),
       this.record.listActive('mission'),
+      this.record.listActive('backbrief', { bodyContains: { status: 'awaiting-approval' } }),
     ]);
+    const bbViews = backbriefViews(backbriefs, missions, units, bots);
     const out: OrbatUnit[] = units
       .sort((a, b) => a.body.order - b.body.order)
       .map((u) => {
         const ub = bots.filter((b) => b.body.unitId === u.entityId).map(toView);
         const ut = tasks.filter((t) => t.body.unitId === u.entityId).map(toView);
         const um = missions.filter((m) => m.body.unitId === u.entityId).map(toView);
+        const ubb = bbViews.filter((b) => b.unitId === u.entityId);
         const botsByStatus: Partial<Record<BotStatus, number>> = {};
-        for (const b of ub.filter((b) => !b.isOverseer))
+        for (const b of ub.filter((b) => !b.isOverseer && b.status !== 'stood-down')) {
           botsByStatus[b.status] = (botsByStatus[b.status] ?? 0) + 1;
-        const attention = attentionFor(u.entityId, ub, ut, um);
+        }
         return {
           unit: toView(u),
           overseer: ub.find((b) => b.id === u.body.overseerBotId) ?? null,
-          botCount: ub.filter((b) => !b.isOverseer).length,
+          botCount: ub.filter((b) => !b.isOverseer && b.status !== 'stood-down').length,
           botsByStatus,
           currentMission: um.find((m) => m.status !== 'done') ?? null,
-          status: unitStatus(ub, ut),
-          attention,
+          status: unitStatus(ub, ut, ubb),
+          attention: attentionFor(u.entityId, ub, ut, ubb),
+          backbriefs: ubb,
         };
       });
     return {
@@ -63,42 +81,100 @@ export class ViewsService {
     };
   }
 
+  /** The single inbox: backbriefs to decide, plus everything else waiting on the Commander. */
+  async approvals(): Promise<ApprovalsView> {
+    const orbat = await this.orbat();
+    return {
+      backbriefs: orbat.units.flatMap((u) => u.backbriefs),
+      attention: orbat.units.flatMap((u) =>
+        u.attention.map((a) => ({ ...a, unitName: u.unit.name })),
+      ),
+    };
+  }
+
   async unit(id: string): Promise<UnitDetailView> {
     const u = await this.record.requireActive('unit', id);
-    const [bots, tasks, missions, documents, supply] = await Promise.all([
+    const [
+      bots,
+      tasks,
+      missions,
+      documents,
+      supply,
+      backbriefs,
+      entries,
+      retired,
+      warDiary,
+      coldStart,
+      docsMirror,
+    ] = await Promise.all([
       this.record.listActive('bot', { unitId: id }),
       this.record.listActive('task', { unitId: id }),
       this.record.listActive('mission', { unitId: id }),
       this.record.listActive('document', { unitId: id }),
       this.record.listActive('supply'),
+      this.record.listActive('backbrief', { unitId: id }),
+      this.fieldManual.entries(id),
+      this.fieldManual.entries(id, { retired: true }),
+      this.record.listEvents({ unitId: id, kinds: ['diary.entry'], limit: 500 }, { latest: true }),
+      this.record.listEvents(
+        { unitId: id, kinds: ['coldstart.check'], limit: 1 },
+        { latest: true },
+      ),
+      this.docs.describe(id),
     ]);
     const bv = toViews(bots).sort(byCallsign);
     const tv = toViews(tasks).sort((a, b) => b.number - a.number);
-    const mv = toViews(missions);
+    const bbViews = backbriefViews(backbriefs, missions, [u], bots);
+    const awaiting = bbViews.filter((b) => b.status === 'awaiting-approval');
+    const progress: MissionProgress[] = toViews(missions)
+      .map((m) => {
+        const mt = tv.filter((t) => t.missionId === m.id);
+        return {
+          mission: m,
+          done: mt.filter((t) => t.status === 'done').length,
+          total: mt.length,
+          backbrief: bbViews.find((b) => b.missionId === m.id) ?? null,
+        };
+      })
+      .sort((a, b) => Number(a.mission.status === 'done') - Number(b.mission.status === 'done'));
+    const queue = bv
+      .filter((b) => !b.isOverseer)
+      .flatMap((b) =>
+        b.queue.map((q) => tv.find((t) => t.id === q)).filter((t): t is TaskView => !!t),
+      );
     return {
       unit: toView(u),
-      status: unitStatus(bv, tv),
+      status: unitStatus(bv, tv, awaiting),
       overseer: bv.find((b) => b.id === u.body.overseerBotId) ?? null,
       bots: bv.map((b) => ({
         ...b,
         currentTask: tv.find((t) => t.id === b.currentTaskId) ?? null,
       })),
-      missions: mv,
+      missions: progress,
       tasks: tv,
-      documents: toViews(documents.filter((d) => d.body.kind !== 'handover')).concat(
-        toViews(documents.filter((d) => d.body.kind === 'handover')),
+      queue,
+      documents: toViews(documents.filter((d) => d.body.kind !== 'handover')),
+      handovers: toViews(documents.filter((d) => d.body.kind === 'handover')).sort((a, b) =>
+        b.updatedAt.localeCompare(a.updatedAt),
       ),
+      fieldManual: toViews(entries),
+      retiredEntries: toViews(retired),
+      warDiary: [...warDiary].reverse(),
       supply: toViews(supply.filter((s) => u.body.supplyIds.includes(s.entityId))),
-      attention: attentionFor(id, bv, tv, mv),
+      attention: attentionFor(id, bv, tv, awaiting),
+      backbriefs: awaiting,
+      coldStart: (coldStart[0] as RecordEvent<'coldstart.check'> | undefined) ?? null,
+      docsMirror,
     };
   }
 
   async bot(id: string): Promise<BotDetailView> {
     const b = await this.record.requireActive('bot', id);
-    const [unit, tasks, recent] = await Promise.all([
+    const [unit, tasks, recent, briefs] = await Promise.all([
       this.record.requireActive('unit', b.body.unitId),
       this.record.listActive('task', { bodyContains: { botId: id } }),
-      this.record.listEvents({ botId: id, limit: 1000 }),
+      this.record.listEvents({ botId: id, limit: 50 }, { latest: true }),
+      this.record.listEvents({ botId: id, kinds: ['task.briefed'], limit: 1 }, { latest: true }),
     ]);
     const tv = toViews(tasks);
     return {
@@ -109,7 +185,8 @@ export class ViewsService {
       history: tv
         .filter((t) => t.id !== b.body.currentTaskId && !b.body.queue.includes(t.id))
         .sort((x, y) => y.number - x.number),
-      recent: recent.slice(-50).reverse(),
+      recent: [...recent].reverse(),
+      lastBrief: (briefs[0] as RecordEvent<'task.briefed'> | undefined) ?? null,
     };
   }
 
@@ -133,6 +210,99 @@ export class ViewsService {
       handover: handovers[0] ? toView(handovers[0]) : null,
     };
   }
+
+  async backbrief(id: string): Promise<BackbriefView> {
+    const bb = await this.record.requireActive('backbrief', id);
+    const [missions, units, bots] = await Promise.all([
+      this.record.listActive('mission', { unitId: bb.body.unitId }),
+      this.record.listActive('unit'),
+      this.record.listActive('bot', { unitId: bb.body.unitId }),
+    ]);
+    return backbriefViews([bb], missions, units, bots)[0]!;
+  }
+
+  /** Everything the command palette can jump to. */
+  async palette(): Promise<PaletteItem[]> {
+    const [units, bots, tasks, ops, docs, missions] = await Promise.all([
+      this.record.listActive('unit'),
+      this.record.listActive('bot'),
+      this.record.listActive('task'),
+      this.record.listActive('operation'),
+      this.record.listActive('document'),
+      this.record.listActive('mission'),
+    ]);
+    const unitName = new Map(units.map((u) => [u.entityId, u.body.name]));
+    const items: PaletteItem[] = [
+      ...units.map((u) => ({
+        kind: 'unit' as const,
+        id: u.entityId,
+        label: u.body.name,
+        sublabel: `Unit · ${u.body.role}`,
+        link: unitLink(u.entityId),
+      })),
+      ...bots.map((b) => ({
+        kind: 'bot' as const,
+        id: b.entityId,
+        label: `Bot ${b.body.callsign}`,
+        sublabel: `${unitName.get(b.body.unitId) ?? ''} · ${b.body.role}`,
+        link: botLink(b.body.unitId, b.entityId),
+      })),
+      ...tasks
+        .sort((a, b) => b.body.number - a.body.number)
+        .map((t) => ({
+          kind: 'task' as const,
+          id: t.entityId,
+          label: `Task #${t.body.number}: ${t.body.title}`,
+          sublabel: `${unitName.get(t.body.unitId) ?? ''} · ${t.body.status}`,
+          link: taskLink(t.body.unitId, t.body.botId, t.entityId),
+        })),
+      ...missions.map((m) => ({
+        kind: 'mission' as const,
+        id: m.entityId,
+        label: m.body.goal,
+        sublabel: `Mission · ${unitName.get(m.body.unitId) ?? ''}`,
+        link: unitLink(m.body.unitId),
+      })),
+      ...ops.map((o) => ({
+        kind: 'operation' as const,
+        id: o.entityId,
+        label: `Operation ${o.body.name}`,
+        sublabel: `Operation · ${o.body.phase}`,
+        link: `/archive/${o.entityId}`,
+      })),
+      ...docs.map((d) => ({
+        kind: 'document' as const,
+        id: d.entityId,
+        label: d.body.title,
+        sublabel: `Document · ${d.body.unitId ? (unitName.get(d.body.unitId) ?? '') : 'HQ'}`,
+        link: d.body.unitId
+          ? `/units/${d.body.unitId}/documents/${d.entityId}`
+          : `/archive/${d.entityId}`,
+      })),
+    ];
+    return items;
+  }
+}
+
+function backbriefViews(
+  backbriefs: RecordVersion<BackbriefBody>[],
+  missions: RecordVersion<MissionBody>[],
+  units: RecordVersion<UnitBody>[],
+  bots: RecordVersion<BotBody>[],
+): BackbriefView[] {
+  const callsigns = Object.fromEntries(bots.map((b) => [b.entityId, b.body.callsign]));
+  return backbriefs.flatMap((bb) => {
+    const m = missions.find((x) => x.entityId === bb.body.missionId);
+    if (!m) return [];
+    return [
+      {
+        ...toView(bb),
+        mission: toView(m) as MissionView,
+        unitName: units.find((u) => u.entityId === bb.body.unitId)?.body.name ?? '',
+        callsigns,
+      },
+    ];
+  });
 }
 
 function byCallsign(a: BotView, b: BotView) {
@@ -140,14 +310,16 @@ function byCallsign(a: BotView, b: BotView) {
   return a.callsign.localeCompare(b.callsign, undefined, { numeric: true });
 }
 
-function unitStatus(bots: BotView[], tasks: TaskView[]): Status {
-  if (tasks.some((t) => t.status === 'failed') || bots.some((b) => b.status === 'failed'))
+function unitStatus(bots: BotView[], tasks: TaskView[], awaiting: BackbriefView[]): Status {
+  const active = bots.filter((b) => b.status !== 'stood-down');
+  if (tasks.some((t) => t.status === 'failed') || active.some((b) => b.status === 'failed'))
     return 'failed';
-  if (bots.some((b) => b.status === 'blocked') || tasks.some((t) => t.status === 'blocked'))
+  if (active.some((b) => b.status === 'blocked') || tasks.some((t) => t.status === 'blocked'))
     return 'blocked';
-  if (tasks.some((t) => t.status === 'awaiting-approval')) return 'awaiting-approval';
-  if (bots.some((b) => b.status === 'working')) return 'working';
-  if (bots.length && bots.every((b) => b.status === 'stood-down')) return 'stood-down';
+  if (awaiting.length || tasks.some((t) => t.status === 'awaiting-approval'))
+    return 'awaiting-approval';
+  if (active.some((b) => b.status === 'working')) return 'working';
+  if (bots.length && !active.length) return 'stood-down';
   return 'idle';
 }
 
@@ -155,9 +327,17 @@ function attentionFor(
   unitId: string,
   bots: BotView[],
   tasks: TaskView[],
-  missions: MissionView[],
+  backbriefs: BackbriefView[],
 ): AttentionItem[] {
   const items: AttentionItem[] = [];
+  for (const bb of backbriefs) {
+    items.push({
+      kind: 'awaiting-approval',
+      label: `Backbrief awaiting approval: ${bb.mission.goal}`,
+      link: `/approvals#backbrief-${bb.id}`,
+      entityId: bb.id,
+    });
+  }
   for (const b of bots.filter((b) => b.status === 'blocked')) {
     const t = tasks.find((x) => x.id === b.currentTaskId);
     items.push({
@@ -175,14 +355,6 @@ function attentionFor(
       label: `Task #${t.number} failed: ${t.statusReason ?? t.title}`,
       link: taskLink(unitId, t.botId, t.id),
       entityId: t.id,
-    });
-  }
-  for (const m of missions.filter((m) => m.status === 'awaiting-approval')) {
-    items.push({
-      kind: 'awaiting-approval',
-      label: `Backbrief awaiting approval: ${m.goal}`,
-      link: unitLink(unitId),
-      entityId: m.id,
     });
   }
   for (const t of tasks.filter((t) => t.status === 'awaiting-approval')) {

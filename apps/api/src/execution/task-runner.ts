@@ -14,6 +14,7 @@ import {
   type TaskStatus,
 } from '@orbot/shared';
 import { APP_CONFIG, type AppConfig } from '../config/config.js';
+import { BriefingService } from '../overseer/briefing.service.js';
 import { PolicyService } from '../policy/policy.service.js';
 import { RecordService, type RecordWriter } from '../record/record.service.js';
 import { RedactionService } from '../redaction/redaction.service.js';
@@ -56,10 +57,15 @@ export class TaskRunner {
     private readonly secrets: SecretsService,
     private readonly redaction: RedactionService,
     private readonly logger: RedactingLogger,
+    private readonly briefing: BriefingService,
   ) {}
 
   isRunning(taskId: string): boolean {
     return this.active.has(taskId);
+  }
+
+  runningCount(): number {
+    return this.active.size;
   }
 
   /** Start a task in the background. Resolves once the run has started. */
@@ -149,27 +155,21 @@ export class TaskRunner {
         });
       });
 
-      const brief: TaskBrief = {
+      const brief: TaskBrief = await this.briefing.build(
         runId,
-        taskId,
-        task: { ...t, workspace, status: 'working' },
-        bot: { id: bot.entityId, callsign: bot.body.callsign, role: bot.body.role },
-        unit: {
-          id: unit.entityId,
-          name: unit.body.name,
-          standingOrders: unit.body.standingOrders.map((s) => s.text),
-        },
+        task,
+        { id: bot.entityId, callsign: bot.body.callsign, role: bot.body.role },
+        unit,
         workspace,
-        lastHandover: null,
-        fieldManual: [],
-        recentDiary: [],
-      };
+        botActor,
+      );
 
       const ctx: RunContext = {
         signal: run.abort.signal,
         timeScale: this.config.simSpeed,
         withCredential: (name, purpose, fn) =>
           this.useCredential(name, purpose, fn, t, botPrincipal, refs),
+        searchRecord: (q) => this.briefing.search(t.unitId, q),
       };
 
       const finished = this.drive(runtime.run(brief, ctx), run, task, botPrincipal, refs).finally(
@@ -275,6 +275,8 @@ export class TaskRunner {
             return this.finish('failed', ev.reason, task.body, refs, botActor, run.runId, spent);
           case 'done':
             return this.finish('done', ev.summary, task.body, refs, botActor, run.runId, spent);
+          case 'stood-down':
+            return this.finish('stopped', ev.reason, task.body, refs, botActor, run.runId, spent);
         }
       }
       if (run.stopReason !== null) {

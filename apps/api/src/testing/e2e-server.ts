@@ -19,6 +19,7 @@ const config = loadConfig({
   ORBOT_COMMANDER_PASSPHRASE: 'test-commander-passphrase',
   ORBOT_SESSION_SECRET: 'test-session-secret-test-session-secret',
   ORBOT_SIM_SPEED: '0',
+  ORBOT_COLDSTART_INTERVAL_MINUTES: '0',
   ORBOT_LOG_LEVEL: 'warn',
   ORBOT_API_PORT: process.env['ORBOT_E2E_API_PORT'] ?? '3100',
   ORBOT_WEB_ORIGIN: 'http://localhost:4300',

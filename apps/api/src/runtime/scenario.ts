@@ -34,6 +34,23 @@ export const ScenarioStep = z.discriminatedUnion('do', [
   z.object({ do: z.literal('leak-credential') }),
   /** Throws inside the runtime with the credential's value in the error message. */
   z.object({ do: z.literal('crash-with-credential') }),
+  /** Stop part-way so another bot can pick the task up (after writing a handover). */
+  z.object({ do: z.literal('stand-down'), reason: Text }),
+  /** Block unless the brief carries a handover with next steps for this task. */
+  z.object({ do: z.literal('require-handover'), missing: Text }),
+  /**
+   * Block unless the Field Manual (brief first, then a record search) contains `pattern`.
+   * The pattern's first capture group becomes the variable `as`.
+   */
+  z.object({
+    do: z.literal('require-field-manual'),
+    pattern: z.string(),
+    query: z.string(),
+    as: z.string(),
+    missing: Text,
+  }),
+  /** Carry out the handover's next steps of the form ``Write `path`: content``. */
+  z.object({ do: z.literal('follow-handover') }),
 ]);
 export type ScenarioStep = z.infer<typeof ScenarioStep>;
 
@@ -42,6 +59,11 @@ export const Scenario = z.object({
   description: z.string(),
   seed: z.number().int(),
   script: z.array(ScenarioStep).min(1),
+  /**
+   * Played instead of `script` when the task's branch already has work on it
+   * (someone started it before). Knowledge must come from the brief, not memory.
+   */
+  resume: z.array(ScenarioStep).optional(),
 });
 export type Scenario = z.infer<typeof Scenario>;
 

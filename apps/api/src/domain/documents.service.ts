@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { CreateDocumentRequest, ReviseDocumentRequest } from '@orbot/shared';
 import type { z } from 'zod';
 import { RecordService, type WriteContext } from '../record/record.service.js';
@@ -27,7 +27,14 @@ export class DocumentsService {
   }
 
   /** A rewrite creates a new version; the old one is archived with who, when and why. */
-  revise(id: string, input: z.output<typeof ReviseDocumentRequest>, actor: string) {
+  async revise(id: string, input: z.output<typeof ReviseDocumentRequest>, actor: string) {
+    const current = await this.record.requireActive('document', id);
+    if (current.body.kind === 'field-manual') {
+      throw new BadRequestException({
+        message: 'The Field Manual is made of entries, each with its own sources and history.',
+        action: 'Add, edit or retire an entry instead of rewriting the whole document.',
+      });
+    }
     return this.record.revise(
       'document',
       id,

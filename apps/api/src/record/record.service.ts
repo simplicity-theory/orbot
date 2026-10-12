@@ -169,6 +169,15 @@ export class RecordWriter {
     return created;
   }
 
+  /** Read current state inside this transaction (sees this transaction's own writes). */
+  getActive<T extends EntityType>(type: T, id: string) {
+    return getActive(this.tx, type, id);
+  }
+
+  listActive<T extends EntityType>(type: T, filter: ActiveFilter<T> = {}) {
+    return listActive(this.tx, type, filter);
+  }
+
   /** Append an immutable event. */
   async event<K extends RecordEventKind>(
     kind: K,
@@ -269,6 +278,29 @@ async function getActive<T extends EntityType>(
   return row ? toVersion<EntityBodyMap[T]>(row) : null;
 }
 
+export interface ActiveFilter<T extends EntityType> {
+  unitId?: string;
+  bodyContains?: Partial<EntityBodyMap[T]>;
+}
+
+async function listActive<T extends EntityType>(
+  ex: Executor,
+  type: T,
+  filter: ActiveFilter<T>,
+): Promise<RecordVersion<EntityBodyMap[T]>[]> {
+  const where: SQL[] = [eq(recordActive.entityType, type)];
+  if (filter.unitId) where.push(eq(recordActive.unitId, filter.unitId));
+  if (filter.bodyContains) {
+    where.push(sql`${recordActive.body} @> ${JSON.stringify(filter.bodyContains)}::jsonb`);
+  }
+  const rows = await ex
+    .select(activeCols)
+    .from(recordActive)
+    .where(and(...where))
+    .orderBy(asc(recordActive.title));
+  return rows.map((r) => toVersion<EntityBodyMap[T]>(r));
+}
+
 /**
  * The permanent record. Writes are inserts only: new versions, supersession
  * stamps and events. Every write passes through the redaction layer first.
@@ -345,21 +377,8 @@ export class RecordService {
   }
 
   /** Active versions of a type, optionally filtered by unit and/or JSON containment on the body. */
-  async listActive<T extends EntityType>(
-    type: T,
-    filter: { unitId?: string; bodyContains?: Partial<EntityBodyMap[T]> } = {},
-  ): Promise<RecordVersion<EntityBodyMap[T]>[]> {
-    const where: SQL[] = [eq(recordActive.entityType, type)];
-    if (filter.unitId) where.push(eq(recordActive.unitId, filter.unitId));
-    if (filter.bodyContains) {
-      where.push(sql`${recordActive.body} @> ${JSON.stringify(filter.bodyContains)}::jsonb`);
-    }
-    const rows = await this.db
-      .select(activeCols)
-      .from(recordActive)
-      .where(and(...where))
-      .orderBy(asc(recordActive.title));
-    return rows.map((r) => toVersion<EntityBodyMap[T]>(r));
+  listActive<T extends EntityType>(type: T, filter: ActiveFilter<T> = {}) {
+    return listActive(this.db, type, filter);
   }
 
   /** Every version of an entity, oldest first, each with its supersession stamp. */
@@ -417,21 +436,32 @@ export class RecordService {
     };
   }
 
-  async listEvents(q: EventQuery): Promise<RecordEvent[]> {
+  /**
+   * Events in record order. `latest` returns the most recent `limit` (still oldest first);
+   * `from`/`to` bound the timestamp (inclusive/exclusive).
+   */
+  async listEvents(
+    q: EventQuery,
+    opts: { latest?: boolean; from?: string; to?: string; missionId?: string } = {},
+  ): Promise<RecordEvent[]> {
     const where: SQL[] = [];
     if (q.unitId) where.push(eq(recordEvent.unitId, q.unitId));
     if (q.botId) where.push(eq(recordEvent.botId, q.botId));
     if (q.taskId) where.push(eq(recordEvent.taskId, q.taskId));
     if (q.operationId) where.push(eq(recordEvent.operationId, q.operationId));
+    if (opts.missionId) where.push(eq(recordEvent.missionId, opts.missionId));
     if (q.kinds?.length) where.push(inArray(recordEvent.kind, q.kinds));
     if (q.afterSeq !== undefined) where.push(gt(recordEvent.seq, q.afterSeq));
+    if (opts.from) where.push(sql`${recordEvent.createdAt} >= ${opts.from}`);
+    if (opts.to) where.push(sql`${recordEvent.createdAt} < ${opts.to}`);
     const rows = await this.db
       .select(eventCols)
       .from(recordEvent)
       .where(where.length ? and(...where) : undefined)
-      .orderBy(asc(recordEvent.seq))
+      .orderBy(opts.latest ? desc(recordEvent.seq) : asc(recordEvent.seq))
       .limit(q.limit);
-    return rows.map(toEvent);
+    const events = rows.map(toEvent);
+    return opts.latest ? events.reverse() : events;
   }
 
   /** Every version of every entity that refers to `id` in its body (e.g. a task's handover). */
@@ -450,11 +480,14 @@ export class RecordService {
    */
   async search(q: SearchQuery): Promise<SearchHit[]> {
     const query = sql`websearch_to_tsquery('english', ${q.q})`;
+    // A retired entity (its current body says `retired: true`) belongs to the archive tier.
+    const retired = sql`coalesce((v.body->>'retired')::boolean, false)`;
+    const superseded = sql`EXISTS (SELECT 1 FROM record_supersession s WHERE s.entity_id = v.entity_id AND s.version = v.version)`;
     const versionSource =
       q.scope === 'active'
-        ? sql`record_active`
+        ? sql`(SELECT v.* FROM record_active v WHERE NOT ${retired})`
         : q.scope === 'archive'
-          ? sql`record_archive`
+          ? sql`(SELECT v.* FROM record_version v WHERE ${superseded} OR ${retired})`
           : sql`record_version`;
 
     const vWhere: SQL[] = [sql`v.search @@ ${query}`];
@@ -482,9 +515,7 @@ export class RecordService {
 
     const versionsSql = sql`
       SELECT 'version' AS source, v.entity_type AS type, v.id::text AS id, v.entity_id::text AS entity_id,
-             v.version, EXISTS (
-               SELECT 1 FROM record_supersession s WHERE s.entity_id = v.entity_id AND s.version = v.version
-             ) AS archived,
+             v.version, (${superseded} OR ${retired}) AS archived,
              v.unit_id::text AS unit_id,
              CASE WHEN v.entity_type = 'task' THEN v.entity_id::text ELSE v.body->>'taskId' END AS task_id,
              CASE WHEN v.entity_type = 'bot' THEN v.entity_id::text ELSE v.body->>'botId' END AS bot_id,

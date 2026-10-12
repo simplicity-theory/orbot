@@ -32,6 +32,37 @@ export const RecordEventBodies = {
     where: z.string(),
     count: z.number().int(),
   }),
+  'task.briefed': z.object({
+    runId: z.string(),
+    handoverId: z.string().nullable(),
+    handoverVersion: z.number().int().nullable(),
+    fieldManualEntryIds: z.array(z.string()),
+    diaryEventIds: z.array(z.string()),
+  }),
+  'task.reassigned': z.object({
+    fromBotId: z.string().nullable(),
+    toBotId: z.string(),
+    reason: z.string(),
+  }),
+  curation: z.object({
+    action: z.enum(['promote', 'merge', 'retire', 'edit']),
+    entryId: z.string(),
+    title: z.string(),
+    sources: z.array(z.string()),
+    reason: z.string(),
+  }),
+  'coldstart.check': z.object({
+    taskId: z.string().nullable(),
+    taskNumber: z.number().int().nullable(),
+    score: z.number().min(0).max(100),
+    gaps: z.array(z.string()),
+    fixes: z.array(z.string()),
+  }),
+  'docs.synced': z.object({
+    commit: z.string().nullable(),
+    files: z.array(z.string()),
+    imported: z.array(z.string()),
+  }),
   'chat.message': z.object({
     /** `hq` or a unit id. */
     channel: z.string(),

@@ -104,14 +104,18 @@ describe('Phase 1: one bot, one task, fully on the record', () => {
     const count = (type: BotEvent['type']) => spy.yielded.filter((e) => e.type === type).length;
     expect(ofKind('bot.step')).toHaveLength(count('step'));
     expect(ofKind('diary.entry')).toHaveLength(count('diary'));
-    expect(ofKind('sitrep')).toHaveLength(count('sitrep'));
+    // Bot-level sitreps only: the Overseer adds its own unit-level sitrep about the task.
+    expect(ofKind('sitrep').filter((e) => e.body.level === 'bot')).toHaveLength(count('sitrep'));
     expect(ofKind('artifact')).toHaveLength(count('artifact'));
     expect(ofKind('cost')).toHaveLength(count('cost'));
     expect(handovers).toHaveLength(count('handover'));
   });
 
   it('records the run lifecycle, the workspace and the credential use (by name only)', () => {
-    const kinds = detail.events.map((e) => e.kind);
+    // The bot's own trail (the Overseer's unit-level sitrep may follow it).
+    const kinds = detail.events
+      .filter((e) => !(e.kind === 'sitrep' && (e.body as { level: string }).level === 'unit'))
+      .map((e) => e.kind);
     expect(kinds[0]).toBe('task.assigned');
     expect(kinds).toContain('run.started');
     expect(kinds).toContain('workspace.prepared');
@@ -190,6 +194,10 @@ function matchInRecord(
     case 'failed':
       return ofKind('task.status').some(
         (e) => e.body.to === 'failed' && e.body.reason === ev.reason,
+      );
+    case 'stood-down':
+      return ofKind('task.status').some(
+        (e) => e.body.to === 'stood-down' && e.body.reason === ev.reason,
       );
   }
 }

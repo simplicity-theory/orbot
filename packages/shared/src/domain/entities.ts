@@ -14,6 +14,8 @@ export const ENTITY_TYPES = [
   'task',
   'supply',
   'document',
+  'backbrief',
+  'fm-entry',
 ] as const;
 export const EntityType = z.enum(ENTITY_TYPES);
 export type EntityType = z.infer<typeof EntityType>;
@@ -107,7 +109,8 @@ export const MissionStatus = z.enum([
 export type MissionStatus = z.infer<typeof MissionStatus>;
 
 export const MissionBody = z.object({
-  operationId: Id,
+  /** Null for missions given straight to a unit (before HQ routes them, Phase 4). */
+  operationId: Id.nullable(),
   unitId: Id,
   goal: z.string().min(1),
   definitionOfDone: z.array(z.string().min(1)),
@@ -147,6 +150,10 @@ export const TaskBody = z.object({
   /** SimulatedRuntime scenario id; ignored by other runtimes. */
   scenario: z.string().nullable(),
   statusReason: z.string().nullable(),
+  /** The task this one picks up from (its handover is part of the brief). */
+  continuesTaskId: Id.nullable().default(null),
+  /** Started by the Overseer's dispatcher when its bot is free (tasks from approved backbriefs). */
+  autoStart: z.boolean().default(false),
 });
 export type TaskBody = z.infer<typeof TaskBody>;
 
@@ -204,6 +211,75 @@ export const DocumentBody = z.object({
 });
 export type DocumentBody = z.infer<typeof DocumentBody>;
 
+// ---------- Backbrief ----------
+
+export const ProposedTask = z.object({
+  title: z.string().trim().min(1).max(200),
+  description: z.string().max(10_000),
+  botId: Id.nullable(),
+  /** SimulatedRuntime scenario; ignored by other runtimes. */
+  scenario: z.string().nullable(),
+});
+export type ProposedTask = z.infer<typeof ProposedTask>;
+
+export const BackbriefStatus = z.enum(['awaiting-approval', 'approved', 'rejected']);
+export type BackbriefStatus = z.infer<typeof BackbriefStatus>;
+
+export const BackbriefDecision = z.object({
+  outcome: z.enum(['approved', 'amended', 'rejected', 'auto-approved']),
+  by: z.string(),
+  note: z.string().nullable(),
+  at: z.iso.datetime({ offset: true }),
+});
+export type BackbriefDecision = z.infer<typeof BackbriefDecision>;
+
+/** A unit's plan for a mission, briefed back to the Commander for approval. */
+export const BackbriefBody = z.object({
+  missionId: Id,
+  unitId: Id,
+  overseerBotId: Id,
+  summary: z.string().min(1),
+  proposedTasks: z.array(ProposedTask).min(1),
+  risks: z.array(z.string()),
+  status: BackbriefStatus,
+  decision: BackbriefDecision.nullable(),
+  /** 1 for the first plan; +1 every time the Commander sends it back. */
+  round: z.number().int().positive(),
+  /** Notes the Commander attached when rejecting earlier rounds. */
+  commanderNotes: z.array(z.string()),
+  /** Tasks created when it was approved. */
+  taskIds: z.array(Id),
+});
+export type BackbriefBody = z.infer<typeof BackbriefBody>;
+
+// ---------- Field Manual entry ----------
+
+export const SourceRef = z.object({
+  kind: z.enum(['handover', 'diary', 'commander', 'coldstart', 'git']),
+  /** Document id (handover), event id (diary), or null. */
+  id: z.string().nullable(),
+  version: z.number().int().nullable(),
+  label: z.string(),
+});
+export type SourceRef = z.infer<typeof SourceRef>;
+
+/**
+ * One lasting lesson in a unit's Field Manual. Each entry is versioned on its own,
+ * so where it came from (provenance), merges and retirement all have history.
+ */
+export const FmEntryBody = z.object({
+  unitId: Id,
+  title: z.string().trim().min(1).max(200),
+  body: z.string().max(20_000),
+  tags: z.array(z.string()),
+  /** Always included in briefs, whatever the task. */
+  pinned: z.boolean(),
+  retired: z.boolean(),
+  retiredReason: z.string().nullable(),
+  sources: z.array(SourceRef),
+});
+export type FmEntryBody = z.infer<typeof FmEntryBody>;
+
 // ---------- Registry ----------
 
 export const ENTITY_BODY_SCHEMAS = {
@@ -214,6 +290,8 @@ export const ENTITY_BODY_SCHEMAS = {
   task: TaskBody,
   supply: SupplyBody,
   document: DocumentBody,
+  backbrief: BackbriefBody,
+  'fm-entry': FmEntryBody,
 } as const satisfies Record<EntityType, z.ZodType>;
 
 export interface EntityBodyMap {
@@ -224,4 +302,6 @@ export interface EntityBodyMap {
   task: TaskBody;
   supply: SupplyBody;
   document: DocumentBody;
+  backbrief: BackbriefBody;
+  'fm-entry': FmEntryBody;
 }
