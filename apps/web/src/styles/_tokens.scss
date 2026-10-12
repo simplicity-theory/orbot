@@ -1,0 +1,168 @@
+// Design tokens. The only place raw colours, sizes and durations may appear.
+// Components reference these custom properties exclusively (checked by scripts/check-tokens.mjs).
+
+:root {
+  // ---- Type ----
+  --font-sans: 'Inter', 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  --font-size-2xs: 0.6875rem;
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.8125rem;
+  --font-size-md: 0.875rem;
+  --font-size-lg: 1rem;
+  --font-size-xl: 1.25rem;
+  --font-size-2xl: 1.5rem;
+  --font-size-3xl: 2rem;
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --line-height-tight: 1.25;
+  --line-height: 1.5;
+  --letter-spacing-caps: 0.06em;
+
+  // ---- Space (4px grid) ----
+  --space-0: 0;
+  --space-px: 1px;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+
+  // ---- Shape ----
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --radius-pill: 999px;
+  --border-width: 1px;
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 2px;
+
+  // ---- Layout ----
+  --rail-width: 13.5rem;
+  --rail-width-collapsed: 3.5rem;
+  --header-height: 3.25rem;
+  --content-max-width: 80rem;
+  --detail-max-width: 60rem;
+  --icon-size-sm: 0.875rem;
+  --icon-size: 1rem;
+  --icon-size-lg: 1.25rem;
+  --icon-size-xl: 2rem;
+  --tooltip-max-width: 20rem;
+  --measure: 36rem;
+  --timeline-label-width: 7rem;
+  --viewport-height: 100vh;
+  --underline-offset: 0.2em;
+  --card-min-width: 18rem;
+  --row-height-dense: 2.25rem;
+  --row-height: 2.75rem;
+  --touch-target: 2.75rem;
+  --layer-rail: 20;
+  --layer-header: 30;
+  --layer-overlay: 1000;
+
+  // ---- Motion ----
+  --duration-fast: 120ms;
+  --duration: 200ms;
+  --duration-slow: 320ms;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --skeleton-duration: 1.4s;
+
+  color-scheme: dark;
+}
+
+// ---- Dark (default) ----
+:root,
+[data-theme='dark'] {
+  --color-bg: #0e1115;
+  --color-surface-1: #151920;
+  --color-surface-2: #1b2028;
+  --color-surface-3: #232933;
+  --color-border: #2a313b;
+  --color-border-strong: #3a4350;
+  --color-text: #e7eaef;
+  --color-text-muted: #a7b0bd;
+  --color-text-subtle: #8c95a3;
+  --color-accent: #6db8db;
+  --color-accent-hover: #8bc8e5;
+  --color-on-accent: #08161d;
+  --color-focus: #9fd3ee;
+  --color-link: #8cc6e3;
+  --color-overlay-scrim: rgb(5 7 10 / 0.6);
+
+  --tone-neutral: #a7b0bd;
+  --tone-info: #93aee0;
+  --tone-active: #6db8db;
+  --tone-warning: #e3b450;
+  --tone-danger: #f2847a;
+  --tone-success: #67c486;
+  --tone-muted: #8c95a3;
+
+  --diff-added-bg: rgb(103 196 134 / 0.14);
+  --diff-removed-bg: rgb(242 132 122 / 0.14);
+
+  --shadow-1: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-2: 0 6px 24px rgb(0 0 0 / 0.45);
+  --skeleton-base: #1d222a;
+  --skeleton-shine: #262c36;
+
+  color-scheme: dark;
+}
+
+// ---- Light ----
+[data-theme='light'] {
+  --color-bg: #f4f5f7;
+  --color-surface-1: #ffffff;
+  --color-surface-2: #f3f4f7;
+  --color-surface-3: #e8ebef;
+  --color-border: #d8dce2;
+  --color-border-strong: #b9c0ca;
+  --color-text: #151920;
+  --color-text-muted: #444d5a;
+  --color-text-subtle: #58616e;
+  --color-accent: #195f80;
+  --color-accent-hover: #144d68;
+  --color-on-accent: #ffffff;
+  --color-focus: #195f80;
+  --color-link: #17587a;
+  --color-overlay-scrim: rgb(20 25 32 / 0.35);
+
+  --tone-neutral: #4b5462;
+  --tone-info: #34528f;
+  --tone-active: #195f80;
+  --tone-warning: #7a4e00;
+  --tone-danger: #a8231b;
+  --tone-success: #1a6438;
+  --tone-muted: #58616e;
+
+  --diff-added-bg: rgb(31 115 64 / 0.1);
+  --diff-removed-bg: rgb(179 38 30 / 0.09);
+
+  --shadow-1: 0 1px 2px rgb(16 24 40 / 0.08);
+  --shadow-2: 0 8px 24px rgb(16 24 40 / 0.14);
+  --skeleton-base: #e8ebef;
+  --skeleton-shine: #f3f4f7;
+
+  color-scheme: light;
+}
+
+@supports (height: 100dvh) {
+  :root {
+    --viewport-height: 100dvh;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-fast: 0ms;
+    --duration: 0ms;
+    --duration-slow: 0ms;
+    --skeleton-duration: 0s;
+  }
+}

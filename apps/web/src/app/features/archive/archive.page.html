@@ -1,0 +1,117 @@
+<div class="page">
+  <header class="page-header">
+    <div>
+      <h1><orb-term key="archive">Archive</orb-term></h1>
+      <p class="page-header__lede">
+        The permanent record. Search everything ever written: documents, tasks, diaries, sitreps and
+        every prior version.
+      </p>
+    </div>
+  </header>
+
+  <form class="search panel" role="search" (ngSubmit)="search()">
+    <label for="q" class="visually-hidden">Search the record</label>
+    <input
+      id="q"
+      name="q"
+      class="input"
+      type="search"
+      placeholder="Search the record…"
+      [(ngModel)]="draft"
+    />
+    <label for="scope" class="visually-hidden">Which tier</label>
+    <select
+      id="scope"
+      name="scope"
+      class="input"
+      [ngModel]="scope()"
+      (ngModelChange)="search({ scope: $event })"
+    >
+      <option value="active">Current versions</option>
+      <option value="archive">Archived versions</option>
+      <option value="all">Everything</option>
+    </select>
+    <button class="btn btn--primary" type="submit">Search</button>
+  </form>
+
+  <fieldset class="filters">
+    <legend class="visually-hidden">Filter by type</legend>
+    @for (t of filters; track t) {
+      <label class="chip filter" [class.on]="selectedTypes().includes(t)">
+        <input type="checkbox" [checked]="selectedTypes().includes(t)" (change)="toggleType(t)" />
+        {{ labels[t] ?? t }}
+      </label>
+    }
+  </fieldset>
+
+  @if (!q()) {
+    <orb-empty-state icon="archive" title="Search the permanent record">
+      Nothing is ever deleted. A rewrite creates a new version and archives the old one with who,
+      when and why. Search current versions by default, or switch to archived versions to find what
+      something used to say.
+    </orb-empty-state>
+  } @else if (results.error(); as err) {
+    <orb-load-error [error]="err" (retry)="results.reload()" />
+  } @else if (results.isLoading() && !results.hasValue()) {
+    <orb-skeleton [lines]="6" />
+  } @else if (groups().length === 0) {
+    <orb-empty-state icon="search" title="No matches">
+      Nothing in
+      {{
+        scope() === 'archive'
+          ? 'archived versions'
+          : scope() === 'all'
+            ? 'the record'
+            : 'current versions'
+      }}
+      matches “{{ q() }}”. Try other words, or search everything.
+      <div actions>
+        @if (scope() !== 'all') {
+          <button type="button" class="btn" (click)="search({ scope: 'all' })">
+            Search everything
+          </button>
+        }
+      </div>
+    </orb-empty-state>
+  } @else {
+    <p class="meta" role="status">{{ results.value()?.length }} results for “{{ q() }}”</p>
+    @for (g of groups(); track g.type) {
+      <section class="panel" [attr.aria-label]="g.label">
+        <h2 class="panel__title">
+          {{ g.label }} <span class="meta">{{ g.items.length }}</span>
+        </h2>
+        <ul class="list-reset hits">
+          @for (h of g.items; track h.id) {
+            <li>
+              <div class="hit-head">
+                @if (link(h); as l) {
+                  <a [routerLink]="l.path" [queryParams]="l.query">{{ h.title }}</a>
+                } @else {
+                  <span>{{ h.title }}</span>
+                }
+                @if (h.version) {
+                  <span class="chip">v{{ h.version }}</span>
+                }
+                @if (h.archived) {
+                  <span class="chip archived">Archived</span>
+                }
+                <time class="meta" [attr.datetime]="h.createdAt" [attr.title]="full(h.createdAt)">{{
+                  h.createdAt | relativeTime
+                }}</time>
+              </div>
+              <p class="snippet">
+                @for (part of highlight(h.snippet); track $index) {
+                  @if (part.hit) {
+                    <mark>{{ part.text }}</mark>
+                  } @else {
+                    <span>{{ part.text }}</span>
+                  }
+                }
+              </p>
+            </li>
+          }
+        </ul>
+      </section>
+    }
+  }
+</div>

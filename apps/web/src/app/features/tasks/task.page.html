@@ -1,0 +1,132 @@
+@if (view.error(); as err) {
+  <div class="page"><orb-load-error [error]="err" (retry)="view.reload()" /></div>
+} @else if (view.hasValue()) {
+  @let v = view.value();
+  @let t = v.task;
+  <div class="page page--detail">
+    <header class="page-header">
+      <div>
+        <p class="page-header__eyebrow">Task #{{ t.number }} · {{ v.unit.name }}</p>
+        <h1>{{ t.title }}</h1>
+        @if (t.description) {
+          <p class="page-header__lede">{{ t.description }}</p>
+        }
+      </div>
+      <div class="header-actions">
+        <orb-status [status]="t.status" />
+        @if (canStart()) {
+          <button type="button" class="btn btn--primary" [disabled]="starting()" (click)="start()">
+            {{ starting() ? 'Starting…' : t.status === 'queued' ? 'Start task' : 'Resume task' }}
+          </button>
+        }
+      </div>
+    </header>
+
+    @if (t.statusReason && (t.status === 'blocked' || t.status === 'failed')) {
+      <p class="panel reason" role="status" [attr.data-status]="t.status">
+        <orb-icon [name]="t.status === 'failed' ? 'triangle-alert' : 'octagon-pause'" />
+        {{ t.statusReason }}
+      </p>
+    }
+
+    <section class="panel">
+      <dl class="dl">
+        <dt>Bot</dt>
+        <dd>
+          @if (v.bot; as b) {
+            <a class="mono" [routerLink]="['/units', v.unit.id, 'bots', b.id]">{{ b.callsign }}</a>
+            · {{ b.role }}
+          } @else {
+            <span class="meta">Unassigned</span>
+          }
+        </dd>
+        <dt><orb-term key="mission">Mission</orb-term></dt>
+        <dd>{{ v.mission?.goal ?? '—' }}</dd>
+        <dt>Workspace</dt>
+        <dd>
+          @if (t.workspace; as w) {
+            <span class="mono"><orb-icon class="sm" name="git-branch" /> {{ w.branch }}</span>
+            <span class="meta"> from {{ w.baseCommit.slice(0, 8) }}</span>
+          } @else {
+            <span class="meta">Not prepared yet</span>
+          }
+        </dd>
+        <dt>Credentials</dt>
+        <dd>
+          @for (c of t.credentialNames; track c) {
+            <span class="chip"><orb-icon class="sm" name="key" /> {{ c }}</span>
+          } @empty {
+            <span class="meta">None issued</span>
+          }
+        </dd>
+        <dt>Budget</dt>
+        <dd>
+          {{ t.budget.spentUnits }}
+          @if (t.budget.limitUnits !== null) {
+            of {{ t.budget.limitUnits }}
+          }
+          units
+        </dd>
+        <dt>Last change</dt>
+        <dd>
+          <time [attr.datetime]="t.updatedAt" [attr.title]="full(t.updatedAt)">{{
+            t.updatedAt | relativeTime
+          }}</time>
+          by <span class="mono">{{ t.updatedBy }}</span>
+        </dd>
+      </dl>
+    </section>
+
+    <section class="panel" aria-labelledby="record-h">
+      <h2 id="record-h" class="panel__title">
+        Working record
+        <span class="meta">{{ v.events.length }} entries</span>
+      </h2>
+      <orb-record-timeline [events]="v.events" />
+    </section>
+
+    <section class="panel" aria-labelledby="handover-h">
+      <h2 id="handover-h" class="panel__title">
+        <orb-term key="handover">Handover</orb-term>
+        @if (v.handover; as h) {
+          <a [routerLink]="['/archive', h.id]"
+            ><orb-icon class="sm" name="history" /> History (v{{ h.version }})</a
+          >
+        }
+      </h2>
+      @if (v.handover; as h) {
+        <pre class="prose">{{ h.markdown }}</pre>
+      } @else {
+        <p class="meta">The bot writes a handover at the end of every task.</p>
+      }
+    </section>
+
+    <section class="panel" aria-labelledby="versions-h">
+      <h2 id="versions-h" class="panel__title">
+        Status history
+        <a [routerLink]="['/archive', t.id]"
+          ><orb-icon class="sm" name="history" /> All {{ v.versions.length }} versions</a
+        >
+      </h2>
+      <ol class="list-reset steps">
+        @for (s of statusHistory(); track s.version) {
+          <li>
+            <orb-status [status]="s.status" />
+            <span>{{ s.reason }}</span>
+            <span class="meta"
+              >v{{ s.version }} · <span class="mono">{{ s.actor }}</span> ·
+              <time [attr.datetime]="s.at" [attr.title]="full(s.at)">{{
+                s.at | relativeTime
+              }}</time></span
+            >
+          </li>
+        }
+      </ol>
+    </section>
+  </div>
+} @else {
+  <div class="page page--detail" aria-busy="true">
+    <orb-skeleton [lines]="2" />
+    <orb-skeleton variant="block" [lines]="2" />
+  </div>
+}

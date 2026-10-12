@@ -1,0 +1,158 @@
+@if (history.error(); as err) {
+  <div class="page"><orb-load-error [error]="err" (retry)="history.reload()" /></div>
+} @else if (history.hasValue() && selected(); as sel) {
+  @let all = history.value();
+  <div class="page">
+    <header class="page-header">
+      <div>
+        <p class="page-header__eyebrow">History · {{ sel.entityType }}</p>
+        <h1>{{ title() }}</h1>
+        <p class="page-header__lede">
+          {{ all.length }} version{{ all.length === 1 ? '' : 's' }}. Nothing is ever deleted.
+        </p>
+      </div>
+      <form class="as-of" (submit)="$event.preventDefault(); viewAsOf()">
+        <label for="as-of">View as it stood on</label>
+        <input
+          id="as-of"
+          class="input"
+          type="datetime-local"
+          [value]="asOfInput()"
+          (input)="asOfInput.set($any($event.target).value)"
+        />
+        <button class="btn" type="submit">Go</button>
+      </form>
+    </header>
+    @if (asOfMessage(); as m) {
+      <p class="meta" role="status">{{ m }}</p>
+    }
+
+    <div class="layout">
+      <nav class="timeline panel" aria-label="Versions">
+        <h2 class="panel__title">Versions</h2>
+        <ol class="list-reset">
+          @for (ver of all.slice().reverse(); track ver.version) {
+            <li>
+              <a
+                [routerLink]="[]"
+                [queryParams]="{ v: ver.version, against: null }"
+                queryParamsHandling="merge"
+                [attr.aria-current]="ver.version === sel.version ? 'true' : null"
+              >
+                <span class="v">v{{ ver.version }}</span>
+                @if (!ver.superseded) {
+                  <span class="chip current">Current</span>
+                } @else {
+                  <span class="chip superseded">Superseded</span>
+                }
+                <span class="reason">{{ ver.reason }}</span>
+                <span class="meta">
+                  <span class="mono">{{ ver.actor }}</span> ·
+                  <time [attr.datetime]="ver.createdAt" [attr.title]="full(ver.createdAt)">{{
+                    ver.createdAt | relativeTime
+                  }}</time>
+                </span>
+              </a>
+            </li>
+          }
+        </ol>
+      </nav>
+
+      <section class="view" aria-labelledby="view-h">
+        <h2 id="view-h" class="visually-hidden">Version {{ sel.version }}</h2>
+        @if (sel.superseded; as s) {
+          <div class="banner" role="note">
+            <orb-icon name="history" />
+            <p>
+              <strong>Version {{ sel.version }} is archived.</strong>
+              Superseded {{ full(s.supersededAt) }} by
+              <span class="mono">{{ s.supersededBy }}</span> — “{{ s.reason }}”.
+              <a
+                [routerLink]="[]"
+                [queryParams]="{ v: s.supersededByVersion, against: null }"
+                queryParamsHandling="merge"
+              >
+                View version {{ s.supersededByVersion }} <orb-icon class="sm" name="arrow-right" />
+              </a>
+            </p>
+          </div>
+        }
+
+        <div class="tabs-bar">
+          <div class="tabs" role="tablist" aria-label="Version view" (keydown)="onTabKey($event)">
+            <button
+              type="button"
+              role="tab"
+              id="tab-content"
+              aria-controls="panel-content"
+              [attr.aria-selected]="activeTab() === 'content'"
+              [attr.tabindex]="activeTab() === 'content' ? 0 : -1"
+              (click)="showTab('content')"
+            >
+              Content
+            </button>
+            <button
+              type="button"
+              role="tab"
+              id="tab-changes"
+              aria-controls="panel-changes"
+              [attr.aria-selected]="activeTab() === 'changes'"
+              [attr.tabindex]="activeTab() === 'changes' ? 0 : -1"
+              [disabled]="!compareTo()"
+              (click)="showTab('changes')"
+            >
+              Changes
+            </button>
+          </div>
+          @if (compareTo()) {
+            <label class="compare">
+              compared with
+              <select
+                class="input"
+                [value]="compareTo()"
+                (change)="compareWith($any($event.target).value)"
+              >
+                @for (o of all; track o.version) {
+                  @if (o.version !== sel.version) {
+                    <option [value]="o.version" [selected]="o.version === compareTo()">
+                      v{{ o.version }}
+                    </option>
+                  }
+                }
+              </select>
+            </label>
+          }
+        </div>
+        @if (activeTab() === 'content') {
+          <div id="panel-content" role="tabpanel" aria-labelledby="tab-content" class="panel">
+            <p class="meta">
+              v{{ sel.version }} · written {{ full(sel.createdAt) }} by
+              <span class="mono">{{ sel.actor }}</span> — {{ sel.reason }}
+            </p>
+            <pre class="prose body">{{ bodyText(sel) }}</pre>
+          </div>
+        } @else {
+          <div id="panel-changes" role="tabpanel" aria-labelledby="tab-changes" class="panel">
+            @if (diff.error(); as err) {
+              <orb-load-error [error]="err" (retry)="diff.reload()" />
+            } @else if (diff.hasValue()) {
+              @let d = diff.value();
+              <orb-diff-view
+                [lines]="d.lines"
+                [leftLabel]="'Version ' + d.from"
+                [rightLabel]="'Version ' + d.to"
+              />
+            } @else {
+              <orb-skeleton [lines]="8" />
+            }
+          </div>
+        }
+      </section>
+    </div>
+  </div>
+} @else {
+  <div class="page" aria-busy="true">
+    <orb-skeleton [lines]="2" />
+    <orb-skeleton variant="block" [lines]="3" />
+  </div>
+}

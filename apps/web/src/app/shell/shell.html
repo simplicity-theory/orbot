@@ -1,0 +1,105 @@
+<a class="skip-link" href="#main" (click)="focusMain($event)">Skip to content</a>
+
+<header class="header">
+  <div class="brand">
+    <button
+      type="button"
+      class="btn btn--ghost btn--icon menu-btn"
+      aria-label="Open navigation"
+      [attr.aria-expanded]="drawerOpen()"
+      aria-controls="rail"
+      (click)="drawerOpen.set(!drawerOpen())"
+    >
+      <orb-icon name="menu" />
+    </button>
+    <a routerLink="/" class="wordmark" [attr.aria-label]="meta.productName() + ' home'">
+      <span class="mark" aria-hidden="true"></span>
+      <span class="name">{{ meta.productName() }}</span>
+    </a>
+  </div>
+
+  <div class="crumbs"><orb-breadcrumbs /></div>
+
+  <div class="actions">
+    <span
+      class="live"
+      [class.on]="live.connected()"
+      [attr.title]="live.connected() ? 'Live updates on' : 'Live updates paused — reconnecting'"
+    >
+      <span class="dot" aria-hidden="true"></span>
+      <span class="visually-hidden">{{
+        live.connected() ? 'Live updates on' : 'Live updates paused'
+      }}</span>
+    </span>
+    <a
+      class="needs-you"
+      routerLink="/approvals"
+      [class.has-items]="needsYou.count() > 0"
+      [attr.aria-label]="needsYou.count() + ' items need you'"
+    >
+      <orb-icon name="inbox" />
+      <span class="label">Needs you</span>
+      <span class="count">{{ needsYou.count() }}</span>
+    </a>
+    <button
+      type="button"
+      class="btn btn--ghost btn--icon"
+      [attr.aria-label]="
+        theme.theme() === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'
+      "
+      (click)="theme.toggle()"
+    >
+      <orb-icon [name]="theme.theme() === 'dark' ? 'sun' : 'moon'" />
+    </button>
+    <button
+      type="button"
+      class="btn btn--ghost btn--icon"
+      aria-label="Sign out"
+      (click)="signOut()"
+    >
+      <orb-icon name="log-out" />
+    </button>
+  </div>
+</header>
+
+<nav id="rail" class="rail" aria-label="Main">
+  <ul class="list-reset">
+    @for (item of nav; track item.link) {
+      <li>
+        <a
+          [routerLink]="item.link"
+          routerLinkActive="active"
+          [routerLinkActiveOptions]="{ exact: !!item.exact }"
+          ariaCurrentWhenActive="page"
+          [attr.title]="collapsed() ? item.label : null"
+        >
+          <orb-icon [name]="item.icon" />
+          <span class="label">{{ item.label }}</span>
+          @if (badgeFor(item) > 0) {
+            <span class="badge" [attr.aria-label]="badgeFor(item) + ' waiting'">{{
+              badgeFor(item)
+            }}</span>
+          }
+        </a>
+      </li>
+    }
+  </ul>
+  <button
+    type="button"
+    class="btn btn--ghost collapse-btn"
+    [attr.aria-label]="collapsed() ? 'Expand navigation' : 'Collapse navigation'"
+    [attr.aria-expanded]="!collapsed()"
+    (click)="toggleRail()"
+  >
+    <orb-icon [name]="collapsed() ? 'chevron-right' : 'chevron-left'" />
+    <span class="label">Collapse</span>
+  </button>
+</nav>
+
+@if (drawerOpen()) {
+  <div class="scrim" aria-hidden="true" (click)="drawerOpen.set(false)"></div>
+}
+
+<main id="main" tabindex="-1">
+  <router-outlet />
+</main>
