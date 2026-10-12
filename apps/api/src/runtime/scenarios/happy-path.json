@@ -1,0 +1,50 @@
+{
+  "id": "happy-path",
+  "description": "Reads the brief, makes a change on its branch, uses its credential by name, reports, hands over and finishes.",
+  "seed": 1101,
+  "script": [
+    { "do": "step", "action": "read-brief", "detail": "Read the brief for “{task}”.", "outcome": "understood" },
+    { "do": "sitrep", "text": "{callsign} on task #{number}: starting. Workspace {branch} ready.", "status": "working" },
+    { "do": "wait", "ms": 700 },
+    {
+      "do": "step",
+      "action": "survey",
+      "detail": ["Surveyed the repository layout and existing tests.", "Read the modules touched by this task and their tests."],
+      "outcome": "no surprises"
+    },
+    {
+      "do": "diary",
+      "category": "decision",
+      "text": [
+        "Chose to keep the change behind the existing service boundary rather than add a new module.",
+        "Decided to extend the current handler instead of introducing a new abstraction."
+      ]
+    },
+    { "do": "wait", "ms": 900 },
+    {
+      "do": "write-file",
+      "path": "orbot/task-{number}.md",
+      "content": "# Task #{number}: {task}\n\nWork carried out by {callsign} ({unit}) on branch `{branch}`.\n"
+    },
+    { "do": "commit", "message": "Task #{number}: {task}" },
+    { "do": "cost", "units": 3 },
+    {
+      "do": "diary",
+      "category": "surprise",
+      "text": ["The test suite takes longer than expected on a cold cache.", "Found a stale fixture that two tests depend on."]
+    },
+    { "do": "wait", "ms": 600 },
+    { "do": "use-credential", "purpose": "push {branch}" },
+    { "do": "sitrep", "text": "{callsign} on task #{number}: change committed and pushed on {branch}.", "status": "working" },
+    { "do": "cost", "units": 1 },
+    {
+      "do": "handover",
+      "state": "Task #{number} complete on {branch}; change committed and pushed.",
+      "nextSteps": ["Inspection to review {branch}."],
+      "triedAndFailed": [],
+      "openProblems": [],
+      "flagsForSuccessor": ["Test suite is slow on a cold cache; warm it before timing anything."]
+    },
+    { "do": "done", "summary": "Task #{number} done on {branch}." }
+  ]
+}
