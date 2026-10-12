@@ -22,11 +22,16 @@ import { toView } from '../domain/view.js';
 import { ViewsService } from '../domain/views.service.js';
 import { RecordService } from '../record/record.service.js';
 import { SupplyService } from '../supply/supply.service.js';
+import { RuntimeRegistry } from '../runtime/runtime.registry.js';
 import { ColdStartService } from './coldstart.service.js';
 import { OverseerService } from './overseer.service.js';
 
 const Uuid = new ParseUUIDPipe();
 const AllotSupply = z.object({ supplyId: z.uuid() });
+const SetRuntime = z.object({
+  runtime: z.string().min(1),
+  reason: z.string().trim().min(1).max(500),
+});
 const commanderSource = (actor: string): SourceRef => ({
   kind: 'commander',
   id: null,
@@ -45,6 +50,7 @@ export class OverseerController {
     private readonly docs: UnitDocsService,
     private readonly coldStart: ColdStartService,
     private readonly supply: SupplyService,
+    private readonly runtimes: RuntimeRegistry,
   ) {}
 
   @Post('missions')
@@ -248,6 +254,22 @@ export class OverseerController {
       return e!;
     });
     return toView(entry);
+  }
+
+  /** Switch which runtime drives a bot (e.g. from simulated to Claude). */
+  @Put('bots/:id/runtime')
+  async setRuntime(
+    @Param('id', Uuid) id: string,
+    @Body(new ZodPipe(SetRuntime)) body: z.infer<typeof SetRuntime>,
+    @Actor() actor: string,
+  ) {
+    this.runtimes.get(body.runtime);
+    return toView(
+      await this.record.revise('bot', id, (b) => ({ ...b, runtime: body.runtime }), {
+        actor,
+        reason: body.reason,
+      }),
+    );
   }
 
   @Get('palette')

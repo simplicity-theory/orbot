@@ -41,6 +41,8 @@ const Env = z.object({
   ORBOT_SIM_SPEED: z.coerce.number().min(0).default(1),
   ORBOT_WORKSPACES_DIR: z.string().default('./workspaces'),
   ORBOT_CLAUDE_MODEL: z.string().default('claude-opus-5-5'),
+  /** Enables the Claude runtime. Kept out of every record by the redactor. */
+  ANTHROPIC_API_KEY: z.string().default(''),
   /** How often each Overseer runs its cold-start check (0 = only on demand). */
   ORBOT_COLDSTART_INTERVAL_MINUTES: z.coerce.number().min(0).default(360),
   ORBOT_LOG_LEVEL: z
@@ -69,6 +71,7 @@ export interface AppConfig {
   simSpeed: number;
   workspacesDir: string;
   claudeModel: string;
+  anthropicApiKey: string;
   coldStartIntervalMs: number;
   logLevel: z.infer<typeof Env>['ORBOT_LOG_LEVEL'];
 }
@@ -109,6 +112,7 @@ export function loadConfig(overrides: Record<string, string | undefined> = {}): 
     simSpeed: e.ORBOT_SIM_SPEED,
     workspacesDir: resolve(REPO_ROOT, e.ORBOT_WORKSPACES_DIR),
     claudeModel: e.ORBOT_CLAUDE_MODEL,
+    anthropicApiKey: e.ANTHROPIC_API_KEY,
     coldStartIntervalMs: e.ORBOT_COLDSTART_INTERVAL_MINUTES * 60_000,
     logLevel: e.ORBOT_LOG_LEVEL,
   };
@@ -123,5 +127,6 @@ export function configSecrets(c: AppConfig): string[] {
     c.secretsKey.toString('base64'),
     c.commanderPassphrase,
     c.sessionSecret,
+    ...(c.anthropicApiKey ? [c.anthropicApiKey] : []),
   ];
 }

@@ -141,7 +141,11 @@ export interface TaskDetailView {
 
 export interface MetaView {
   productName: string;
+  /** Default runtime for new bots. */
   runtime: string;
+  /** Runtimes installed (Claude appears when an API key is configured). */
+  runtimes: string[];
+  claudeModel: string;
 }
 
 export interface ChatView {

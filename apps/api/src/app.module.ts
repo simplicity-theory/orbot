@@ -25,6 +25,8 @@ import { LOG_DESTINATION, RedactingLogger } from './redaction/redacting-logger.j
 import { RedactionInterceptor } from './redaction/redaction.interceptor.js';
 import { RedactionService } from './redaction/redaction.service.js';
 import { RuntimeRegistry } from './runtime/runtime.registry.js';
+import Anthropic from '@anthropic-ai/sdk';
+import { ClaudeRuntime } from './runtime/claude.runtime.js';
 import { SimulatedRuntime } from './runtime/simulated.runtime.js';
 import { WorkspaceManager } from './runtime/workspace-manager.js';
 import { createSecretsPool, SECRETS_POOL, SecretsService } from './secrets/secrets.service.js';
@@ -95,9 +97,18 @@ export class AppModule {
         PolicyService,
         {
           provide: RuntimeRegistry,
-          useFactory: () => {
+          inject: [APP_CONFIG],
+          useFactory: (c: AppConfig) => {
             const r = new RuntimeRegistry();
             r.register(new SimulatedRuntime());
+            // The Claude runtime is available when an API key is configured.
+            if (c.anthropicApiKey) {
+              r.register(
+                new ClaudeRuntime(new Anthropic({ apiKey: c.anthropicApiKey }), {
+                  model: c.claudeModel,
+                }),
+              );
+            }
             return r;
           },
         },
