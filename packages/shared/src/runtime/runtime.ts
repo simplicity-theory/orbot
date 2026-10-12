@@ -250,6 +250,9 @@ export interface InterpretUnit {
   standingOrders: { id: string; text: string }[];
   supplyIds: string[];
   computeBudget: number;
+  /** Whether a stand-down order is in force on the unit. */
+  halted: boolean;
+  bots: { id: string; callsign: string; status: string; halted: boolean }[];
   tasks: {
     id: string;
     number: number;
@@ -270,6 +273,8 @@ export interface InterpretInput {
   units: InterpretUnit[];
   depot: { id: string; name: string; kind: string; connected: boolean; tier: string | null }[];
   operations: { id: string; name: string; phase: string }[];
+  /** Whether "everything, stand down" is in force. */
+  allHalted: boolean;
 }
 
 export interface OperationPlanInput {

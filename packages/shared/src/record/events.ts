@@ -54,6 +54,21 @@ export const RecordEventBodies = {
     documentId: z.string(),
     lessons: z.array(z.object({ unitId: z.string().nullable(), text: z.string() })),
   }),
+  /** A stand-down order given (or lifted) for one bot, one unit or everything. */
+  'stand-down': z.object({
+    scope: z.enum(['all', 'unit', 'bot']),
+    targetId: z.string().nullable(),
+    reason: z.string(),
+    /** Tasks that were running and paused with a handover. */
+    pausedTaskIds: z.array(z.string()),
+  }),
+  'stand-down.lifted': z.object({
+    scope: z.enum(['all', 'unit', 'bot']),
+    targetId: z.string().nullable(),
+    reason: z.string(),
+    /** Tasks put back in the queue. */
+    resumedTaskIds: z.array(z.string()),
+  }),
   cost: z.object({ units: z.number().nonnegative(), total: z.number().nonnegative() }),
   'credential.used': z.object({ secretName: z.string(), purpose: z.string() }),
   'policy.check': z.object({

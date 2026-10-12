@@ -13,6 +13,7 @@ import { reloadOnLive, touchedIds } from '../../core/live';
 import { PageTitle } from '../../core/title';
 import { LoadError } from '../../ui/load-error';
 import { Skeleton } from '../../ui/skeleton';
+import { StandDownButton } from '../../ui/stand-down';
 import { StatusBadge } from '../../ui/status-badge';
 import { Term } from '../../ui/term';
 import { RecordTimeline } from '../tasks/record-timeline';
@@ -25,6 +26,7 @@ import { AddBotDialog, type AddBotData } from '../units/add-bot.dialog';
   imports: [
     RouterLink,
     StatusBadge,
+    StandDownButton,
     Skeleton,
     LoadError,
     Term,
@@ -65,6 +67,7 @@ import { AddBotDialog, type AddBotData } from '../units/add-bot.dialog';
           <div class="header-actions">
             <orb-status [status]="v.bot.status" />
             @if (!v.bot.isOverseer && v.bot.status !== 'stood-down') {
+              <orb-stand-down scope="bot" [targetId]="v.bot.id" [name]="v.bot.callsign" />
               <button
                 type="button"
                 class="btn"

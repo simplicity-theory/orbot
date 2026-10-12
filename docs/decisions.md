@@ -113,3 +113,15 @@ Judgement calls made where the design was ambiguous or a choice had to be made. 
 **D51. Bots can be switched between runtimes** (`PUT /bots/:id/runtime`, a select on the bot page with Undo). The choice is a versioned field on the bot.
 
 **D52. Launching an operation from chat has no inverse.** Withdrawing a whole operation is done by standing its units down (Phase 5), not by Undo.
+
+## Phase 5
+
+**D53. Stand down is an order on a target, not a status.** A `halt` field (`reason`, `by`, `at`) on a bot or a unit, or on settings for "everything". Each is a versioned change with who and why; lifting it is another version. Bot and task statuses stay what they are: a halted bot is idle, and its paused task is `stood-down` with the reason "Stood down by order: …". Lifting an order resumes exactly those tasks. (The older "stood-down" bot status still means retired by replacement.)
+
+**D54. Work pauses with a handover even if the bot doesn't write one.** `TaskRunner.stop` aborts the run. If the bot left no handover this run, ORBOT writes one from the run's own record: the last steps, the branch to pick up from, and a flag to check uncommitted changes. The paused task's next brief carries it, as for any successor.
+
+**D55. Three layers keep halted work halted.** The Overseer's dispatcher skips halted units and bots. `TaskRunner.start` asks the policy hook (`task.start`), and the `Stand down` policy rule refuses it, with the refusal on the record. The same rule refuses every bot event mid-run, so a run caught between the order and the abort finishes as stood down, not blocked.
+
+**D56. Stand down by chat is reversible.** `stand-down` and `lift-stand-down` are each other's inverse in the orders log. "Stand down" with no particular work named halts the addressed unit; "everyone/everything" halts all units; a callsign halts that bot. "Stand down the mobile layout" is still a frago on that work. HQ planning and Overseer backbriefs continue during a stand-down: it stops work, not thinking.
+
+**D57. The banner is the single place to see every order in force.** It shows on every screen, with a Resume button per order. The header has "Stand down all units" (it asks for a reason). Unit and bot pages have their own Stand down / Resume. Each action gives an Undo toast.

@@ -1,0 +1,39 @@
+{
+  "id": "long-haul",
+  "description": "A long piece of work: holds for up to a minute (real time) before writing anything, so it can be stood down mid-task. Picked up again from its handover, it finishes straight away.",
+  "seed": 5701,
+  "script": [
+    {
+      "do": "step",
+      "action": "read-brief",
+      "detail": "Read the brief for “{task}”.",
+      "outcome": "understood"
+    },
+    {
+      "do": "sitrep",
+      "text": "{callsign} on task #{number}: long job, under way on {branch}.",
+      "status": "working"
+    },
+    {
+      "do": "step",
+      "action": "survey",
+      "detail": "Mapped every module the change touches.",
+      "outcome": "large but straightforward"
+    },
+    { "do": "hold", "ms": 60000 },
+    {
+      "do": "write-file",
+      "path": "orbot/task-{number}.md",
+      "content": "# Task #{number}: {task}\n\nCarried out by {callsign} ({unit}) on `{branch}`.\n"
+    },
+    { "do": "commit", "message": "Task #{number}: {task}" },
+    { "do": "cost", "units": 2 },
+    {
+      "do": "handover",
+      "state": "Task #{number} complete on {branch}.",
+      "nextSteps": [],
+      "flagsForSuccessor": []
+    },
+    { "do": "done", "summary": "Long job finished." }
+  ]
+}

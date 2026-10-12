@@ -11,6 +11,15 @@ const unit = (over: Partial<InterpretUnit> = {}): InterpretUnit => ({
   ],
   supplyIds: [],
   computeBudget: 0,
+  halted: false,
+  bots: [
+    {
+      id: '00000000-0000-4000-8000-0000000000d1',
+      callsign: 'G-1',
+      status: 'working',
+      halted: false,
+    },
+  ],
   tasks: [
     {
       id: '00000000-0000-4000-8000-0000000000b1',
@@ -47,6 +56,7 @@ const input = (message: string, over: Partial<InterpretInput> = {}): InterpretIn
     },
   ],
   operations: [],
+  allHalted: false,
   ...over,
 });
 const i = new SimulatedInterpreter();
@@ -115,6 +125,54 @@ describe('SimulatedInterpreter', () => {
   it('recognises production deploy rights', () => {
     expect(i.interpret(input('Grant Guard production deploy rights.')).actions[0]).toMatchObject({
       kind: 'grant-deploy-rights',
+    });
+  });
+
+  describe('stand down', () => {
+    const G = '00000000-0000-4000-8000-0000000000a1';
+    const BOT = '00000000-0000-4000-8000-0000000000d1';
+
+    it('stands the addressed unit down, with the reason given', () => {
+      expect(i.interpret(input('Stand down until the audit is over.')).actions).toEqual([
+        { kind: 'stand-down', unitId: G, scope: 'unit', targetId: G, reason: 'The audit is over' },
+      ]);
+    });
+
+    it('stands everything down from any channel', () => {
+      const r = i.interpret(input('Everyone, stand down.', { channelUnitId: null }));
+      expect(r.actions[0]).toMatchObject({ kind: 'stand-down', scope: 'all', targetId: null });
+    });
+
+    it('stands one bot down by callsign', () => {
+      expect(i.interpret(input('G-1, stand down.')).actions[0]).toMatchObject({
+        kind: 'stand-down',
+        scope: 'bot',
+        targetId: BOT,
+      });
+    });
+
+    it('treats “stand down <work>” as a frago, not a halt', () => {
+      expect(i.interpret(input('Stand down the mobile layout.')).actions[0]).toMatchObject({
+        kind: 'frago',
+        change: 'stand-down',
+      });
+    });
+
+    it('lifts the order it is under, and says when there is none', () => {
+      const halted = input('Resume work.', { units: [unit({ halted: true })] });
+      expect(i.interpret(halted).actions[0]).toMatchObject({
+        kind: 'lift-stand-down',
+        scope: 'unit',
+      });
+      expect(i.interpret(input('As you were.')).unclear[0]).toContain('not stood down');
+      const all = input('Back to work, everyone.', { channelUnitId: null, allHalted: true });
+      expect(i.interpret(all).actions[0]).toMatchObject({ kind: 'lift-stand-down', scope: 'all' });
+    });
+
+    it('holds a hedged stand-down as a musing', () => {
+      const r = i.interpret(input('I might stand everyone down.'));
+      expect(r.actions).toEqual([]);
+      expect(r.musings[0]).toMatchObject({ kind: 'stand-down', scope: 'all' });
     });
   });
 });

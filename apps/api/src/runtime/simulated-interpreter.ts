@@ -18,8 +18,17 @@ const GRANT =
 const RULE_NEGATIVE = /^(stop|don'?t|do not|never|no longer|quit)\b/i;
 const RULE_POSITIVE = /^(always|from now on|going forward)\b/i;
 const RESUME = /\b(resume|pick (it|that|.+) back up|restart|carry on with|un-?park)\b/i;
+const STAND_DOWN =
+  /\b(stand(?:\s+[\w-]+){0,2}\s+down|stand-down|all stop|down tools|stop (?:all )?work|stop everything|halt)\b/i;
+const LIFT =
+  /\b(resume work|resume|back to work|as you were|stand to|carry on|lift the stand[- ]?down|stand[- ]?down (?:is )?(?:lifted|over))\b/i;
+const EVERYTHING =
+  /\b(everything|everyone|everybody|all units|all bots|all work|all of you|whole force)\b/i;
+const SCOPE_WORDS = new Set(['unit', 'bots', 'team', 'all', 'order', 'tools', 'everyone', 'stop']);
+const REASON = /[,:;—-]?\s*\b(because|while|until|since|so that|so)\b\s+(.+)$/i;
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const FRAGO_DROP =
-  /\b(drop|pause|hold off( on)?|put .+ on hold|park|shelve|deprioriti[sz]e)\b|\bfor now\b/i;
+  /\b(drop|stand down|pause|hold off( on)?|put .+ on hold|park|shelve|deprioriti[sz]e)\b|\bfor now\b/i;
 const FRAGO_AMEND = /\b(instead|also make sure|make sure|change .+ to)\b/i;
 const DEPLOY_DECISION = /\b(approve|reject|refuse|hold)\b.*\b(deploy|deployment|release)\b/i;
 const IMPERATIVE =
@@ -113,6 +122,19 @@ export class SimulatedInterpreter {
         }
         continue;
       }
+      const halt = this.standDown(sentence, input);
+      if (halt) {
+        if ('unclear' in halt) {
+          out.unclear.push(halt.unclear);
+        } else if (hedged) {
+          kinds.add('musing');
+          out.musings.push(halt);
+        } else {
+          kinds.add('order');
+          out.actions.push(halt);
+        }
+        continue;
+      }
       if (!unit) {
         // To HQ, an order that names no unit is a statement of intent: launch an operation.
         if (
@@ -167,6 +189,79 @@ export class SimulatedInterpreter {
     out.kinds = [...kinds];
     out.answer = answers.length ? answers.join(' ') : null;
     return out;
+  }
+
+  /**
+   * "Stand down everything" / "Engineers, stand down" / "E-2, stand down" and "Resume work".
+   * Returns null when the sentence is about particular work ("stand down the mobile
+   * layout"): that is a frago, handled with the unit's other orders.
+   */
+  private standDown(
+    sentence: string,
+    input: InterpretInput,
+  ): Extract<ChatAction, { kind: 'stand-down' | 'lift-stand-down' }> | { unclear: string } | null {
+    const lift = LIFT.test(sentence);
+    if (!lift && !STAND_DOWN.test(sentence)) return null;
+    const why = REASON.exec(sentence);
+    let rest = (why ? sentence.slice(0, why.index) : sentence)
+      .replace(lift ? LIFT : STAND_DOWN, ' ')
+      .replace(EVERYTHING, ' ')
+      .replace(HEDGE, ' ');
+    const all = EVERYTHING.test(sentence);
+    const hit = input.units
+      .flatMap((u) => u.bots.map((b) => ({ u, b })))
+      .find(({ b }) => new RegExp(`\\b${escapeRe(b.callsign)}\\b`, 'i').test(sentence));
+    const named = input.units.find((u) =>
+      new RegExp(`\\b${escapeRe(u.name)}\\b`, 'i').test(sentence),
+    );
+    if (hit) rest = rest.replace(new RegExp(`\\b${escapeRe(hit.b.callsign)}\\b`, 'gi'), ' ');
+    if (named) rest = rest.replace(new RegExp(`\\b${escapeRe(named.name)}\\b`, 'gi'), ' ');
+    if ([...topic(rest)].some((w) => !SCOPE_WORDS.has(w))) return null;
+
+    const reason = why ? sentenceCase(stripEnd(why[2]!)) : 'Commander’s order in chat';
+    const kind = lift ? 'lift-stand-down' : 'stand-down';
+    const unit = named ?? input.units.find((u) => u.id === input.channelUnitId) ?? null;
+    if (all || (!unit && !hit)) {
+      if (!all && !lift) {
+        return {
+          unclear: `${sentence} — stand down which unit? Say “everything” to stop all units.`,
+        };
+      }
+      if (lift && !input.allHalted) {
+        const halted = input.units.filter((u) => u.halted).map((u) => u.name);
+        if (!halted.length) return { unclear: `${sentence} — nothing is stood down.` };
+        return {
+          unclear: `${sentence} — only ${halted.join(', ')} ${halted.length > 1 ? 'are' : 'is'} stood down: name the unit.`,
+        };
+      }
+      if (!lift && input.allHalted)
+        return { unclear: `${sentence} — all units are already stood down.` };
+      return { kind, unitId: null, scope: 'all', targetId: null, reason };
+    }
+    if (hit) {
+      if (lift === !hit.b.halted) {
+        if (lift && (hit.u.halted || input.allHalted))
+          return {
+            unclear: `${sentence} — ${hit.b.callsign} is stood down with ${input.allHalted ? 'all units' : hit.u.name}: lift that order.`,
+          };
+        return {
+          unclear: `${sentence} — ${hit.b.callsign} is ${lift ? 'not' : 'already'} stood down.`,
+        };
+      }
+      return { kind, unitId: hit.u.id, scope: 'bot', targetId: hit.b.id, reason };
+    }
+    const u = unit!;
+    if (lift && !u.halted) {
+      if (input.allHalted)
+        return { unclear: `${sentence} — all units are stood down: say “Everyone, resume work”.` };
+      const bots = u.bots.filter((b) => b.halted);
+      if (bots.length === 1) {
+        return { kind, unitId: u.id, scope: 'bot', targetId: bots[0]!.id, reason };
+      }
+      return { unclear: `${sentence} — ${u.name} is not stood down.` };
+    }
+    if (!lift && u.halted) return { unclear: `${sentence} — ${u.name} is already stood down.` };
+    return { kind, unitId: u.id, scope: 'unit', targetId: u.id, reason };
   }
 
   /** A unit named in the sentence wins; otherwise the unit whose Overseer is addressed. */

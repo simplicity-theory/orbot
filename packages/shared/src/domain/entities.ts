@@ -43,6 +43,18 @@ export type RulesOfEngagement = z.infer<typeof RulesOfEngagement>;
 export const StandingOrder = z.object({ id: z.string().min(1), text: z.string().min(1) });
 export type StandingOrder = z.infer<typeof StandingOrder>;
 
+/**
+ * A stand-down order in force: the bot, unit or (on settings) every unit stops work.
+ * Running tasks pause with a handover; nothing starts until the order is lifted.
+ */
+export const Halt = z.object({
+  reason: z.string().min(1),
+  /** Actor who gave the order. */
+  by: z.string().min(1),
+  at: z.iso.datetime({ offset: true }),
+});
+export type Halt = z.infer<typeof Halt>;
+
 export const UnitBody = z.object({
   name: z.string().min(1),
   slug: z.string().regex(/^[a-z][a-z0-9-]*$/),
@@ -60,6 +72,8 @@ export const UnitBody = z.object({
   order: z.number().int(),
   /** Compute budget granted to the unit, in units (caps are enforced in Phase 5). */
   computeBudget: z.number().nonnegative().default(0),
+  /** Stand-down order on the whole unit (Phase 5). */
+  halt: Halt.nullable().default(null),
 });
 export type UnitBody = z.infer<typeof UnitBody>;
 
@@ -76,6 +90,8 @@ export const BotBody = z.object({
   queue: z.array(Id),
   /** Which BotRuntime adapter drives this bot. */
   runtime: z.string().min(1),
+  /** Stand-down order on this bot (Phase 5). */
+  halt: Halt.nullable().default(null),
 });
 export type BotBody = z.infer<typeof BotBody>;
 
@@ -344,6 +360,8 @@ export const SettingsBody = z.object({
   irreversibleActions: z.array(z.string()),
   /** The phrase the Commander types to confirm an irreversible order. */
   confirmationPhrase: z.string().min(1),
+  /** "Everything, stand down": a stand-down order on every unit (Phase 5). */
+  halt: Halt.nullable().default(null),
 });
 export type SettingsBody = z.infer<typeof SettingsBody>;
 
@@ -353,6 +371,7 @@ export const SETTINGS_ID = '00000000-0000-4000-8000-000000000001';
 export const DEFAULT_SETTINGS: SettingsBody = {
   irreversibleActions: ['grant-deploy-rights'],
   confirmationPhrase: 'confirm',
+  halt: null,
 };
 
 // ---------- Registry ----------

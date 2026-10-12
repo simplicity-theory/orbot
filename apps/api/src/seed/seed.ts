@@ -20,7 +20,7 @@ import { SupplyService } from '../supply/supply.service.js';
 const SEED = { actor: 'system:seed', reason: 'Demo force seeded' };
 
 interface UnitSeed {
-  body: Omit<UnitBody, 'overseerBotId' | 'supplyIds' | 'computeBudget'>;
+  body: Omit<UnitBody, 'overseerBotId' | 'supplyIds' | 'computeBudget' | 'halt'>;
   overseerRole: string;
   botRoles: string[];
   fieldManual: {

@@ -16,6 +16,7 @@ import {
   type BackbriefBody,
   type ProposedTask,
   type RecordEvent,
+  SETTINGS_ID,
   type RecordVersion,
   type TaskStatus,
 } from '@orbot/shared';
@@ -376,8 +377,11 @@ export class OverseerService implements OnApplicationBootstrap, OnModuleDestroy 
   /** Start the next auto-start task for every idle bot in the unit. */
   async dispatch(unitId: string): Promise<void> {
     const cmd = await this.overseers.of(unitId);
+    // A stand-down order on everything or on this unit: nothing starts.
+    if ((await this.record.getActive('settings', SETTINGS_ID))?.body.halt) return;
+    if ((await this.record.getActive('unit', unitId))?.body.halt) return;
     const bots = (await this.record.listActive('bot', { unitId })).filter(
-      (b) => !b.body.isOverseer && b.body.status === 'idle',
+      (b) => !b.body.isOverseer && b.body.status === 'idle' && !b.body.halt,
     );
     for (const bot of bots.sort((a, b) =>
       a.body.callsign.localeCompare(b.body.callsign, undefined, { numeric: true }),

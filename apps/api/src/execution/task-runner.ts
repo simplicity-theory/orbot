@@ -42,6 +42,11 @@ interface ActiveRun {
   /** Fragos delivered but not yet read by the bot. */
   fragos: FragoNote[];
   wake: (() => void) | null;
+  /** What the bot did this run, for the handover written if it is stood down mid-task. */
+  steps: string[];
+  handoverWritten: boolean;
+  branch: string | null;
+  finished: Promise<RunOutcome> | null;
 }
 
 const STARTABLE: readonly TaskStatus[] = ['queued', 'blocked', 'stood-down'];
@@ -169,6 +174,19 @@ export class TaskRunner {
         action: 'Wait for it to finish, or assign this task to another bot.',
       });
     }
+    const allowed = await this.policy.check({
+      principal: { kind: 'bot', id: bot.entityId, displayName: bot.body.callsign },
+      action: 'task.start',
+      unitId: t.unitId,
+      taskId,
+      details: { startedBy: actor },
+    });
+    if (!allowed.allowed) {
+      throw new ConflictException({
+        message: `Task #${t.number} cannot start: ${allowed.reason}`,
+        action: allowed.action ?? 'Clear what is holding it, then start it again.',
+      });
+    }
     const unit = await this.record.requireActive('unit', t.unitId);
     const repo = await this.record.requireActive('supply', t.repoSupplyId);
     for (const name of t.credentialNames) {
@@ -190,6 +208,10 @@ export class TaskRunner {
       botId: bot.entityId,
       fragos: [],
       wake: null,
+      steps: [],
+      handoverWritten: false,
+      branch: null,
+      finished: null,
     };
     this.active.set(taskId, run);
 
@@ -223,6 +245,7 @@ export class TaskRunner {
       });
 
       const workspace = await this.workspaces.prepare(repo.entityId, repo.body, t);
+      run.branch = workspace.branch;
       await this.record.transaction(async (w) => {
         await w.event(
           'workspace.prepared',
@@ -258,6 +281,7 @@ export class TaskRunner {
       const finished = this.drive(runtime.run(brief, ctx), run, task, botPrincipal, refs).finally(
         () => this.active.delete(taskId),
       );
+      run.finished = finished;
       return { runId, taskId, finished };
     } catch (err) {
       this.active.delete(taskId);
@@ -273,13 +297,17 @@ export class TaskRunner {
     }
   }
 
-  /** Halt a running task. Hook for Phase 5 stand-down. */
-  stop(taskId: string, reason: string): boolean {
+  /**
+   * Halt a running task (stand down). The task becomes stood-down with a handover, so
+   * it can be picked up again. Resolves when the run has finished, or null if it wasn't running.
+   */
+  stop(taskId: string, reason: string): Promise<RunOutcome | null> {
     const run = this.active.get(taskId);
-    if (!run) return false;
-    run.stopReason = reason;
+    if (!run) return Promise.resolve(null);
+    run.stopReason ??= reason;
     run.abort.abort();
-    return true;
+    run.wake?.();
+    return run.finished ?? Promise.resolve('stopped');
   }
 
   private async drive(
@@ -302,6 +330,7 @@ export class TaskRunner {
         });
         if (!decision.allowed) {
           run.abort.abort();
+          if (run.stopReason !== null) return this.standDown(run, task, refs, botActor, spent);
           return this.finish(
             'blocked',
             `Held by policy: ${decision.reason}`,
@@ -314,6 +343,7 @@ export class TaskRunner {
         }
         switch (ev.type) {
           case 'step':
+            run.steps.push(`${ev.action}: ${ev.detail}`);
             await this.record.event(
               'bot.step',
               { action: ev.action, detail: ev.detail, outcome: ev.outcome ?? null },
@@ -372,6 +402,7 @@ export class TaskRunner {
             break;
           case 'handover':
             await this.writeHandover(task, ev.note, refs, botActor);
+            run.handoverWritten = true;
             break;
           case 'blocked':
             return this.finish('blocked', ev.reason, task.body, refs, botActor, run.runId, spent);
@@ -383,9 +414,7 @@ export class TaskRunner {
             return this.finish('stopped', ev.reason, task.body, refs, botActor, run.runId, spent);
         }
       }
-      if (run.stopReason !== null) {
-        return this.finish('stopped', run.stopReason, task.body, refs, botActor, run.runId, spent);
-      }
+      if (run.stopReason !== null) return this.standDown(run, task, refs, botActor, spent);
       return this.finish(
         'failed',
         'The bot stopped without reporting done, blocked or failed.',
@@ -400,6 +429,46 @@ export class TaskRunner {
       this.logger.error(this.redaction.clean(reason), 'TaskRunner');
       return this.finish('failed', reason, task.body, refs, botActor, run.runId, spent, true);
     }
+  }
+
+  /**
+   * Stood down mid-task. If the bot didn't leave a handover this run, ORBOT writes one from
+   * the record of the run, so the work can be picked up again by any bot.
+   */
+  private async standDown(
+    run: ActiveRun,
+    task: RecordVersion<TaskBody>,
+    refs: RecordEventRefs,
+    botActor: string,
+    spent: number,
+  ): Promise<RunOutcome> {
+    const reason = run.stopReason!;
+    if (!run.handoverWritten) {
+      const done = run.steps.slice(-5);
+      await this.writeHandover(
+        task,
+        {
+          state: `Stood down mid-task (${reason}).${
+            done.length
+              ? ` Last steps this run: ${done.join('; ')}.`
+              : ' No steps recorded this run.'
+          }`,
+          nextSteps: [
+            run.branch
+              ? `Pick the task up from branch ${run.branch}: check what is committed, then carry on.`
+              : 'Start the task again from its brief.',
+          ],
+          triedAndFailed: [],
+          openProblems: [],
+          flagsForSuccessor: [
+            'Uncommitted changes in the old workspace were not reviewed: check `git status` first.',
+          ],
+        },
+        refs,
+        botActor,
+      );
+    }
+    return this.finish('stopped', reason, task.body, refs, botActor, run.runId, spent);
   }
 
   private async useCredential<T>(

@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { STAGE_ORDER } from '@orbot/shared';
+import { SETTINGS_ID, STAGE_ORDER } from '@orbot/shared';
 import type {
   ApprovalsView,
   AttentionItem,
@@ -55,6 +55,7 @@ export class ViewsService {
       this.record.listActive('backbrief', { bodyContains: { status: 'awaiting-approval' } }),
     ]);
     const bbViews = backbriefViews(backbriefs, missions, units, bots);
+    const allHalted = !!(await this.record.getActive('settings', SETTINGS_ID))?.body.halt;
     const out: OrbatUnit[] = units
       .sort((a, b) => a.body.order - b.body.order)
       .map((u) => {
@@ -72,7 +73,7 @@ export class ViewsService {
           botCount: ub.filter((b) => !b.isOverseer && b.status !== 'stood-down').length,
           botsByStatus,
           currentMission: um.find((m) => m.status !== 'done') ?? null,
-          status: unitStatus(ub, ut, ubb),
+          status: unitStatus(ub, ut, ubb, allHalted || !!u.body.halt),
           attention: attentionFor(u.entityId, ub, ut, ubb),
           backbriefs: ubb,
           bots: ub
@@ -151,7 +152,12 @@ export class ViewsService {
       );
     return {
       unit: toView(u),
-      status: unitStatus(bv, tv, awaiting),
+      status: unitStatus(
+        bv,
+        tv,
+        awaiting,
+        !!u.body.halt || !!(await this.record.getActive('settings', SETTINGS_ID))?.body.halt,
+      ),
       overseer: bv.find((b) => b.id === u.body.overseerBotId) ?? null,
       bots: bv.map((b) => ({
         ...b,
@@ -416,7 +422,12 @@ function byCallsign(a: BotView, b: BotView) {
   return a.callsign.localeCompare(b.callsign, undefined, { numeric: true });
 }
 
-function unitStatus(bots: BotView[], tasks: TaskView[], awaiting: BackbriefView[]): Status {
+function unitStatus(
+  bots: BotView[],
+  tasks: TaskView[],
+  awaiting: BackbriefView[],
+  halted: boolean,
+): Status {
   const active = bots.filter((b) => b.status !== 'stood-down');
   if (tasks.some((t) => t.status === 'failed') || active.some((b) => b.status === 'failed'))
     return 'failed';
@@ -424,6 +435,8 @@ function unitStatus(bots: BotView[], tasks: TaskView[], awaiting: BackbriefView[
     return 'blocked';
   if (awaiting.length || tasks.some((t) => t.status === 'awaiting-approval'))
     return 'awaiting-approval';
+  // Under a stand-down order (the unit's own, or everything).
+  if (halted) return 'stood-down';
   if (active.some((b) => b.status === 'working')) return 'working';
   if (bots.length && !active.length) return 'stood-down';
   return 'idle';

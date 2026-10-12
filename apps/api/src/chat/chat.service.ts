@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import {
   Interpretation,
+  SETTINGS_ID,
   type BotRuntime,
   type ChatAction,
   type ChatSendResult,
@@ -395,6 +396,15 @@ export class ChatService {
           standingOrders: u.body.standingOrders,
           supplyIds: u.body.supplyIds,
           computeBudget: u.body.computeBudget ?? 0,
+          halted: !!u.body.halt,
+          bots: bots
+            .filter((b) => b.body.unitId === u.entityId && !b.body.isOverseer)
+            .map((b) => ({
+              id: b.entityId,
+              callsign: b.body.callsign,
+              status: b.body.status,
+              halted: !!b.body.halt,
+            })),
           tasks: ut.map((t) => ({
             id: t.entityId,
             number: t.body.number,
@@ -431,6 +441,7 @@ export class ChatService {
         name: o.body.name,
         phase: o.body.phase,
       })),
+      allHalted: !!(await this.record.getActive('settings', SETTINGS_ID))?.body.halt,
     };
   }
 
@@ -450,6 +461,15 @@ export class ChatService {
   /** A one-line, human description of an action that has not run yet. */
   private async describe(a: ChatAction): Promise<string> {
     if (a.kind === 'create-operation') return `Launch Operation ${a.name}: “${a.intent}”`;
+    if (a.kind === 'stand-down' || a.kind === 'lift-stand-down') {
+      const who =
+        a.scope === 'all'
+          ? 'all units'
+          : a.scope === 'unit'
+            ? (await this.record.requireActive('unit', a.targetId!)).body.name
+            : (await this.record.requireActive('bot', a.targetId!)).body.callsign;
+      return a.kind === 'stand-down' ? `Stand down ${who}` : `Resume work: ${who}`;
+    }
     const unit = await this.record.requireActive('unit', a.unitId);
     const u = unit.body.name;
     switch (a.kind) {

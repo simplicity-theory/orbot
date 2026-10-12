@@ -68,6 +68,23 @@ export const ChatAction = z.discriminatedUnion('kind', [
   }),
   /** Approve (or reject) a production deploy waiting on the Commander. */
   z.object({ kind: z.literal('approve-deploy'), unitId: Id, taskId: Id, approve: z.boolean() }),
+  /** Stand down one bot, one unit, or everything (`scope: 'all'`). Work pauses with a handover. */
+  z.object({
+    kind: z.literal('stand-down'),
+    unitId: Id.nullable(),
+    scope: z.enum(['all', 'unit', 'bot']),
+    /** Unit or bot id; null for `all`. */
+    targetId: Id.nullable(),
+    reason: z.string().min(1),
+  }),
+  /** Lift a stand-down order: paused work goes back in the queue. */
+  z.object({
+    kind: z.literal('lift-stand-down'),
+    unitId: Id.nullable(),
+    scope: z.enum(['all', 'unit', 'bot']),
+    targetId: Id.nullable(),
+    reason: z.string().min(1),
+  }),
   /** Issue a production environment to a unit: deploy rights. Irreversible by default. */
   z.object({ kind: z.literal('grant-deploy-rights'), unitId: Id, supplyId: Id }),
 ]);

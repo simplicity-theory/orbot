@@ -19,6 +19,8 @@ export interface PolicyDecision {
   reason: string;
   /** When true the action is held and escalated rather than refused outright. */
   escalate?: boolean;
+  /** What would clear it, for the person reading the refusal. */
+  action?: string;
 }
 
 export interface PolicyRule {

@@ -140,6 +140,10 @@ export class SimulatedRuntime implements BotRuntime {
       case 'wait':
         await sleep(step.ms * ctx.timeScale, ctx.signal);
         return false;
+      case 'hold':
+        if (brief.lastHandover) return false;
+        await sleep(step.ms, ctx.signal);
+        return false;
       case 'diary':
         yield { type: 'diary', category: step.category, text: text(step.text) };
         return false;

@@ -138,3 +138,20 @@ export const DeployDecisionRequest = z.object({
   note: z.string().trim().max(1000).nullable().default(null),
 });
 export type DeployDecisionRequest = z.input<typeof DeployDecisionRequest>;
+
+export const StandDownScope = z.enum(['all', 'unit', 'bot']);
+export type StandDownScope = z.infer<typeof StandDownScope>;
+
+/** Stand down (or lift the order for) one bot, one unit, or everything. */
+export const StandDownRequest = z
+  .object({
+    scope: StandDownScope,
+    /** Unit or bot id; omit for `all`. */
+    targetId: Id.nullable().default(null),
+    reason: z.string().trim().min(1).max(500),
+  })
+  .refine((r) => (r.scope === 'all') === (r.targetId === null), {
+    message: 'Give a unit or bot id for a unit or bot stand-down, and none for everything.',
+    path: ['targetId'],
+  });
+export type StandDownRequest = z.input<typeof StandDownRequest>;

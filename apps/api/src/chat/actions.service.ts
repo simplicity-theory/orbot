@@ -3,6 +3,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import type { ChatAction, ChatLink, TaskBody, TaskStatus } from '@orbot/shared';
 import { TaskRunner } from '../execution/task-runner.js';
 import { HqService } from '../overseer/hq.service.js';
+import { StandDownService } from '../overseer/stand-down.service.js';
 import { OverseerService } from '../overseer/overseer.service.js';
 import { RecordService, type WriteContext } from '../record/record.service.js';
 import { SupplyService } from '../supply/supply.service.js';
@@ -33,6 +34,7 @@ export class ActionsService {
     private readonly supply: SupplyService,
     private readonly runner: TaskRunner,
     private readonly hq: HqService,
+    private readonly standDowns: StandDownService,
   ) {}
 
   async run(action: ChatAction, ctx: WriteContext): Promise<ActionResult> {
@@ -42,6 +44,44 @@ export class ActionsService {
         summary: `Operation ${op.body.name} launched: HQ is holding the O Group and will issue missions to the units.`,
         links: [{ label: `Operation ${op.body.name}`, link: `/operations/${op.entityId}` }],
         inverse: null,
+        affects: [],
+      };
+    }
+    if (action.kind === 'stand-down' || action.kind === 'lift-stand-down') {
+      const target = { scope: action.scope, targetId: action.targetId };
+      const inverse: ChatAction = {
+        ...action,
+        kind: action.kind === 'stand-down' ? 'lift-stand-down' : 'stand-down',
+        reason: `Undo: ${action.reason}`,
+      };
+      const link =
+        action.scope === 'all'
+          ? '/'
+          : action.scope === 'unit'
+            ? unitLink(action.targetId!)
+            : `/units/${(await this.record.requireActive('bot', action.targetId!)).body.unitId}/bots/${action.targetId}`;
+      if (action.kind === 'stand-down') {
+        const r = await this.standDowns.standDown(target, action.reason, ctx.actor);
+        return {
+          summary: `${r.label} stood down: ${action.reason}.${
+            r.pausedTaskIds.length
+              ? ` ${r.pausedTaskIds.length} running task(s) paused with a handover.`
+              : ' Nothing was running.'
+          }`,
+          links: [{ label: r.label, link }],
+          inverse,
+          affects: [],
+        };
+      }
+      const r = await this.standDowns.lift(target, action.reason, ctx.actor);
+      return {
+        summary: `${r.label}: stand-down lifted. ${
+          r.resumedTaskIds.length
+            ? `${r.resumedTaskIds.length} paused task(s) back in the queue.`
+            : 'No paused work to pick up.'
+        }`,
+        links: [{ label: r.label, link }],
+        inverse,
         affects: [],
       };
     }

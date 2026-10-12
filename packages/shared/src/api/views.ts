@@ -2,6 +2,7 @@ import type {
   BackbriefBody,
   BotBody,
   FmEntryBody,
+  Halt,
   DocumentBody,
   MissionBody,
   OperationBody,
@@ -195,4 +196,11 @@ export interface OperationDetailView extends OperationSummary {
   timeline: RecordEvent[];
   record: DocumentView | null;
   afterAction: DocumentView | null;
+}
+
+/** Every stand-down order in force, for the banner and the Stand down controls. */
+export interface StandDownView {
+  all: Halt | null;
+  units: { id: string; name: string; halt: Halt }[];
+  bots: { id: string; callsign: string; unitId: string; halt: Halt }[];
 }

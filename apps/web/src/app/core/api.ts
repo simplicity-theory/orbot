@@ -2,6 +2,8 @@ import { HttpClient } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import type {
+  StandDownRequest,
+  StandDownView,
   ChatSendResult,
   OrdersLogEntryView,
   RecordEvent as ChatRecordEvent,
@@ -67,6 +69,7 @@ export const apiUrl = {
   orders: () => `${API}/orders`,
   supply: () => `${API}/supply`,
   settings: () => `${API}/settings`,
+  standDown: () => `${API}/stand-down`,
 };
 
 export type SettingsView = SettingsBody & { version: number; actionKinds: string[] };
@@ -264,6 +267,13 @@ export class Api {
   decideDeploy(taskId: string, approve: boolean, note: string | null = null) {
     return firstValueFrom(
       this.http.post<TaskView>(`${API}/tasks/${taskId}/deploy-decision`, { approve, note }),
+    );
+  }
+
+  /** Give a stand-down order (`lift: false`) or lift one. */
+  standDown(req: StandDownRequest, lift = false) {
+    return firstValueFrom(
+      this.http.post<StandDownView>(`${API}/stand-down${lift ? '/lift' : ''}`, req),
     );
   }
 

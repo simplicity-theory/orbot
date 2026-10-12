@@ -22,6 +22,9 @@ import { openDialog } from '../ui/dialog';
 import { Breadcrumbs } from './breadcrumbs';
 import { CommandPalette } from './command-palette';
 import { ShortcutsDialog } from './shortcuts-dialog';
+import { StandDownBanner } from './stand-down-banner';
+import { StandDowns } from '../core/stand-down';
+import { StandDownButton } from '../ui/stand-down';
 
 interface NavItem {
   label: string;
@@ -77,6 +80,8 @@ const POPOVER: ConnectedPosition[] = [
     CdkOverlayOrigin,
     CdkTrapFocus,
     Backbrief,
+    StandDownBanner,
+    StandDownButton,
   ],
   templateUrl: './shell.html',
   styleUrl: './shell.scss',
@@ -91,6 +96,7 @@ export class Shell {
   protected readonly theme = inject(ThemeService);
   protected readonly live = inject(Live);
   protected readonly needsYou = inject(NeedsYou);
+  protected readonly standDowns = inject(StandDowns);
   private readonly auth = inject(Auth);
   private readonly router = inject(Router);
   private readonly dialog = inject(Dialog);

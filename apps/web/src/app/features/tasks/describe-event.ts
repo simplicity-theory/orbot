@@ -199,6 +199,22 @@ export function describeEvent(e: RecordEvent): EventSummary {
         text: `${(b['lessons'] as unknown[]).length} lesson(s) kept as standing orders`,
         tone: 'info',
       };
+    case 'stand-down':
+      return {
+        icon: 'octagon-pause',
+        label: 'Stand down',
+        term: 'stood-down',
+        text: `${b['scope'] === 'all' ? 'All units' : `One ${String(b['scope'])}`}: ${s('reason')}`,
+        tone: 'warning',
+      };
+    case 'stand-down.lifted':
+      return {
+        icon: 'activity',
+        label: 'Resumed',
+        term: 'stood-down',
+        text: `Stand-down lifted: ${s('reason')}`,
+        tone: 'success',
+      };
     case 'frago':
       return { icon: 'radio', label: 'Frago', term: 'frago', text: s('text'), tone: 'warning' };
     case 'orders.log':

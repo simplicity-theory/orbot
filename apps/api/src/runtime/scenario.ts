@@ -10,6 +10,11 @@ const Text = z.union([z.string(), z.array(z.string()).min(1)]);
 export const ScenarioStep = z.discriminatedUnion('do', [
   z.object({ do: z.literal('step'), action: z.string(), detail: Text, outcome: Text.optional() }),
   z.object({ do: z.literal('wait'), ms: z.number().int().nonnegative() }),
+  /**
+   * Real-time pause, not scaled by sim speed, so a bot can be caught mid-task (stand down).
+   * Skipped when the brief carries a handover for this task: the work is being picked up again.
+   */
+  z.object({ do: z.literal('hold'), ms: z.number().int().nonnegative() }),
   z.object({ do: z.literal('diary'), category: DiaryCategory, text: Text }),
   z.object({ do: z.literal('sitrep'), text: Text, status: TaskStatus.optional() }),
   z.object({ do: z.literal('write-file'), path: z.string(), content: Text }),
