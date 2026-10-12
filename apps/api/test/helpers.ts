@@ -24,6 +24,7 @@ export function testConfig(overrides: Record<string, string> = {}): AppConfig {
     ORBOT_SESSION_SECRET: 'test-session-secret-test-session-secret',
     ORBOT_SIM_SPEED: '0',
     ORBOT_COLDSTART_INTERVAL_MINUTES: '0',
+    ORBOT_ESCALATION_SWEEP_SECONDS: '0',
     ORBOT_LOG_LEVEL: 'info',
     ORBOT_WORKSPACES_DIR: mkdtempSync(join(tmpdir(), 'orbot-test-ws-')),
     ...overrides,

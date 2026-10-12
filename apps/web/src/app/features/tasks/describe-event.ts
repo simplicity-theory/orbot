@@ -199,6 +199,19 @@ export function describeEvent(e: RecordEvent): EventSummary {
         text: `${(b['lessons'] as unknown[]).length} lesson(s) kept as standing orders`,
         tone: 'info',
       };
+    case 'escalation': {
+      const level =
+        { overseer: 'Overseer', hq: 'HQ', commander: 'To you' }[s('level')] ?? s('level');
+      return {
+        icon: 'arrow-right',
+        label: `Escalation · ${level}`,
+        term: 'escalation',
+        text: `${s('text')} ${s('action')}`,
+        tone: s('level') === 'commander' ? 'danger' : 'warning',
+      };
+    }
+    case 'escalation.resolved':
+      return { icon: 'check', label: 'Escalation closed', text: s('note'), tone: 'success' };
     case 'budget.warning':
       return {
         icon: 'coins',

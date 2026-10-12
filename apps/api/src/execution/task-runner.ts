@@ -47,6 +47,7 @@ interface ActiveRun {
   handoverWritten: boolean;
   branch: string | null;
   finished: Promise<RunOutcome> | null;
+  startedAt: number;
 }
 
 const STARTABLE: readonly TaskStatus[] = ['queued', 'blocked', 'stood-down'];
@@ -78,6 +79,17 @@ export class TaskRunner {
 
   runningCount(): number {
     return this.active.size;
+  }
+
+  /** Every run in progress, for the escalation sweep. */
+  running(): { taskId: string; runId: string; unitId: string; botId: string; startedAt: number }[] {
+    return [...this.active.entries()].map(([taskId, r]) => ({
+      taskId,
+      runId: r.runId,
+      unitId: r.unitId,
+      botId: r.botId,
+      startedAt: r.startedAt,
+    }));
   }
 
   /** Task ids currently running in a unit. */
@@ -212,6 +224,7 @@ export class TaskRunner {
       handoverWritten: false,
       branch: null,
       finished: null,
+      startedAt: Date.now(),
     };
     this.active.set(taskId, run);
 

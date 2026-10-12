@@ -133,3 +133,16 @@ Judgement calls made where the design was ambiguous or a choice had to be made. 
 **D60. The warning fires once per crossing.** When a cost takes spend across the warning share (setting `budgetWarnAt`, default 80%), ORBOT writes a `budget.warning` event and a unit sitrep. While spend stays at or above the share (and at the cap), the ORBAT, Approvals and the operation page show a Needs-you item.
 
 **D61. Raising a cap releases exactly the work it held.** Setting a cap (unit page, operation page, or in chat: "Give Engineers 20 more compute budget") restarts blocked tasks whose reason is the budget cap, in that unit or operation. Each restart goes through the policy check again, so work still over another cap stays held. A `budget.set` event records the change and the tasks it released. A simulated bot picking up held work skips a commit it already made.
+
+**D62. Escalation climbs a fixed chain: Overseer → HQ → Commander.** Each level's step is an `escalation` event (same `chainId`): what that level saw and what it did, plus a sitrep at Overseer and HQ level. The Commander's step stays open as a Needs-you item, with Acknowledge, until the work moves on (the task is picked up again or done, or the stood-down bot resumes) or the Commander acknowledges it. Closing it is an `escalation.resolved` event.
+
+**D63. What counts as stuck, and what the Overseer does first** (thresholds are settings):
+
+- **Stall:** no entry on the task's record for `stallSeconds`. The Overseer first sends a status-check frago. Still silent for another `stallSeconds`, it stops the run (paused with a handover) and escalates.
+- **Timeout:** one run longer than `timeoutSeconds`. It is stopped with a handover and escalated.
+- **Repeated failure:** a task that has failed `repeatedFailures` times is not retried. It is escalated, and the escalation replaces the plain "failed" item for that task.
+- **Failing bot:** a bot whose last `failingBotRuns` runs all failed is stood down by its Overseer and escalated.
+
+A single failure is not an escalation: it already shows as a failed task, and a failure is usually a judgement that needs the Commander anyway. The sweep runs every `ORBOT_ESCALATION_SWEEP_SECONDS` (tests call it directly).
+
+**D64. HQ has no remedy of its own yet.** It records that it saw the escalation and raises it to the Commander. Moving work to another unit is left for later (Deconfliction / Main Effort).

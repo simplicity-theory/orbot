@@ -54,6 +54,19 @@ export const RecordEventBodies = {
     documentId: z.string(),
     lessons: z.array(z.object({ unitId: z.string().nullable(), text: z.string() })),
   }),
+  /**
+   * Stuck work going up the chain. One chain (same `chainId`) has a step per level:
+   * what that level saw and what it did. The Commander level stays open until resolved.
+   */
+  escalation: z.object({
+    chainId: z.string(),
+    cause: z.enum(['stall', 'timeout', 'repeated-failure', 'failing-bot']),
+    level: z.enum(['overseer', 'hq', 'commander']),
+    text: z.string(),
+    action: z.string(),
+    runId: z.string().nullable(),
+  }),
+  'escalation.resolved': z.object({ chainId: z.string(), note: z.string() }),
   /** Spending crossed the warning share of a compute budget (unit, operation or task). */
   'budget.warning': z.object({
     scope: z.enum(['unit', 'operation', 'task']),

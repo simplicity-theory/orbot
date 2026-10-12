@@ -45,6 +45,8 @@ const Env = z.object({
   ANTHROPIC_API_KEY: z.string().default(''),
   /** How often each Overseer runs its cold-start check (0 = only on demand). */
   ORBOT_COLDSTART_INTERVAL_MINUTES: z.coerce.number().min(0).default(360),
+  /** How often stuck work is looked for (0 = never; tests call the sweep directly). */
+  ORBOT_ESCALATION_SWEEP_SECONDS: z.coerce.number().min(0).default(30),
   ORBOT_LOG_LEVEL: z
     .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
     .default('info'),
@@ -73,6 +75,7 @@ export interface AppConfig {
   claudeModel: string;
   anthropicApiKey: string;
   coldStartIntervalMs: number;
+  escalationSweepMs: number;
   logLevel: z.infer<typeof Env>['ORBOT_LOG_LEVEL'];
 }
 
@@ -114,6 +117,7 @@ export function loadConfig(overrides: Record<string, string | undefined> = {}): 
     claudeModel: e.ORBOT_CLAUDE_MODEL,
     anthropicApiKey: e.ANTHROPIC_API_KEY,
     coldStartIntervalMs: e.ORBOT_COLDSTART_INTERVAL_MINUTES * 60_000,
+    escalationSweepMs: e.ORBOT_ESCALATION_SWEEP_SECONDS * 1000,
     logLevel: e.ORBOT_LOG_LEVEL,
   };
 }

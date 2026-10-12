@@ -28,6 +28,7 @@ import type {
 import { APP_CONFIG, type AppConfig } from '../config/config.js';
 import { FieldManualService } from '../documents/field-manual.service.js';
 import { UnitDocsService } from '../documents/unit-docs.service.js';
+import { EscalationService } from '../overseer/escalation.service.js';
 import { RecordService } from '../record/record.service.js';
 import { toView, toViews } from './view.js';
 
@@ -44,6 +45,7 @@ export class ViewsService {
     private readonly record: RecordService,
     private readonly fieldManual: FieldManualService,
     private readonly docs: UnitDocsService,
+    private readonly escalations: EscalationService,
   ) {}
 
   async orbat(): Promise<OrbatView> {
@@ -59,6 +61,7 @@ export class ViewsService {
     const allHalted = !!settings?.halt;
     const warnAt = settings?.budgetWarnAt ?? 0.8;
     const spentBy = await this.record.costBy('unit');
+    const open = await this.escalations.openChains();
     const out: OrbatUnit[] = units
       .sort((a, b) => a.body.order - b.body.order)
       .map((u) => {
@@ -80,7 +83,10 @@ export class ViewsService {
           currentMission: um.find((m) => m.status !== 'done') ?? null,
           status: unitStatus(ub, ut, ubb, allHalted || !!u.body.halt),
           attention: [
-            ...attentionFor(u.entityId, ub, ut, ubb),
+            ...withEscalations(
+              attentionFor(u.entityId, ub, ut, ubb),
+              open.filter((e) => e.unitId === u.entityId),
+            ),
             ...budgetAttention(u.body.name, `/units/${u.entityId}`, u.entityId, budget),
           ],
           backbriefs: ubb,
@@ -183,7 +189,10 @@ export class ViewsService {
       retiredEntries: toViews(retired),
       warDiary: [...warDiary].reverse(),
       supply: toViews(supply.filter((s) => u.body.supplyIds.includes(s.entityId))),
-      attention: attentionFor(id, bv, tv, awaiting),
+      attention: withEscalations(
+        attentionFor(id, bv, tv, awaiting),
+        await this.escalations.openChains({ unitId: id }),
+      ),
       backbriefs: awaiting,
       coldStart: (coldStart[0] as RecordEvent<'coldstart.check'> | undefined) ?? null,
       docsMirror,
@@ -480,6 +489,32 @@ function unitStatus(
   if (active.some((b) => b.status === 'working')) return 'working';
   if (bots.length && !active.length) return 'stood-down';
   return 'idle';
+}
+
+/**
+ * Escalations that reached the Commander, in place of the plain failure item for the same
+ * task (the escalation says more: what the Overseer and HQ already did).
+ */
+function withEscalations(
+  items: AttentionItem[],
+  open: RecordEvent<'escalation'>[],
+): AttentionItem[] {
+  const escalated = new Set(open.map((e) => e.taskId).filter(Boolean));
+  return [
+    ...open.map((e): AttentionItem => ({
+      kind: 'escalation',
+      label: `Escalated to you: ${e.body.text}`,
+      link: e.taskId
+        ? taskLink(e.unitId!, e.botId, e.taskId)
+        : e.botId
+          ? botLink(e.unitId!, e.botId)
+          : `/units/${e.unitId}`,
+      entityId: e.taskId ?? e.botId ?? e.body.chainId,
+      action: 'acknowledge',
+      chainId: e.body.chainId,
+    })),
+    ...items.filter((i) => !(i.kind === 'failed-task' && escalated.has(i.entityId))),
+  ];
 }
 
 function attentionFor(

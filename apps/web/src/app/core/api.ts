@@ -253,6 +253,12 @@ export class Api {
     irreversibleActions?: string[];
     confirmationPhrase?: string;
     budgetWarnAt?: number;
+    escalation?: {
+      stallSeconds: number;
+      timeoutSeconds: number;
+      repeatedFailures: number;
+      failingBotRuns: number;
+    };
     reason: string;
     expectedVersion: number;
   }) {
@@ -282,6 +288,12 @@ export class Api {
   decideDeploy(taskId: string, approve: boolean, note: string | null = null) {
     return firstValueFrom(
       this.http.post<TaskView>(`${API}/tasks/${taskId}/deploy-decision`, { approve, note }),
+    );
+  }
+
+  resolveEscalation(chainId: string, note: string) {
+    return firstValueFrom(
+      this.http.post<unknown>(`${API}/escalations/${chainId}/resolve`, { note }),
     );
   }
 

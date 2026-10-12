@@ -2,6 +2,7 @@ import { Component, computed, input, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { STATUS_META, type BotStatus, type OrbatUnit } from '@orbot/shared';
 import { Backbrief } from '../../ui/backbrief';
+import { Acknowledge } from '../../ui/acknowledge';
 import { BudgetMeter } from '../../ui/budget';
 import { Icon } from '../../ui/icon';
 import { StatusBadge } from '../../ui/status-badge';
@@ -18,7 +19,7 @@ const ATTENTION_ICON = {
 /** A unit at a glance, with an attention strip of everything that needs the Commander. */
 @Component({
   selector: 'orb-unit-card',
-  imports: [RouterLink, Icon, StatusBadge, Term, Backbrief, BudgetMeter],
+  imports: [RouterLink, Icon, StatusBadge, Term, Backbrief, BudgetMeter, Acknowledge],
   template: `
     @let u = unit();
     <article class="card" [attr.aria-labelledby]="'unit-' + u.unit.id">
@@ -87,6 +88,9 @@ const ATTENTION_ICON = {
                   </button>
                 } @else {
                   <a [routerLink]="a.link">{{ a.label }}</a>
+                  @if (a.action === 'acknowledge' && a.chainId) {
+                    <orb-acknowledge [chainId]="a.chainId" [label]="a.label" />
+                  }
                 }
               </li>
               @if (bb && reviewing() === bb.id) {

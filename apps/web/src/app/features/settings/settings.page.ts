@@ -3,6 +3,7 @@ import { Component, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Api, apiUrl, type SettingsView } from '../../core/api';
 import { toUserError } from '../../core/api-error';
+import { Term } from '../../ui/term';
 import { Toasts } from '../../ui/toast';
 import { Breadcrumbs, ORBAT_CRUMB } from '../../core/breadcrumbs';
 import { Meta } from '../../core/meta';
@@ -10,7 +11,7 @@ import { ThemeService } from '../../core/theme';
 
 @Component({
   selector: 'orb-settings-page',
-  imports: [FormsModule],
+  imports: [FormsModule, Term],
   template: `
     <div class="page page--detail">
       <header class="page-header">
@@ -76,6 +77,45 @@ import { ThemeService } from '../../core/theme';
               [(ngModel)]="warnAt"
               required
             />
+            <fieldset class="escalation">
+              <legend><orb-term key="escalation">Escalation</orb-term> for stuck work</legend>
+              <label for="esc-stall">Stall: no progress for (minutes)</label>
+              <input
+                id="esc-stall"
+                name="stall"
+                class="input"
+                type="number"
+                min="1"
+                [(ngModel)]="stallMinutes"
+              />
+              <label for="esc-timeout">Timeout: one run longer than (minutes)</label>
+              <input
+                id="esc-timeout"
+                name="timeout"
+                class="input"
+                type="number"
+                min="1"
+                [(ngModel)]="timeoutMinutes"
+              />
+              <label for="esc-failures">Repeated failures: a task failing (times)</label>
+              <input
+                id="esc-failures"
+                name="failures"
+                class="input"
+                type="number"
+                min="1"
+                [(ngModel)]="repeatedFailures"
+              />
+              <label for="esc-bot">Failing bot: its last runs all failed (runs)</label>
+              <input
+                id="esc-bot"
+                name="botRuns"
+                class="input"
+                type="number"
+                min="2"
+                [(ngModel)]="failingBotRuns"
+              />
+            </fieldset>
             <label for="settings-reason">Why the change?</label>
             <input id="settings-reason" name="reason" class="input" [(ngModel)]="reason" required />
             <div class="actions">
@@ -134,6 +174,15 @@ import { ThemeService } from '../../core/theme';
     .kinds {
       flex-wrap: wrap;
     }
+    .escalation {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) var(--input-narrow);
+      align-items: center;
+      gap: var(--space-2) var(--space-3);
+      legend {
+        grid-column: 1 / -1;
+      }
+    }
   `,
 })
 export class SettingsPage {
@@ -146,6 +195,10 @@ export class SettingsPage {
   protected readonly busy = signal(false);
   protected phrase = '';
   protected warnAt = 80;
+  protected stallMinutes = 10;
+  protected timeoutMinutes = 60;
+  protected repeatedFailures = 2;
+  protected failingBotRuns = 3;
   protected reason = '';
 
   constructor() {
@@ -156,6 +209,13 @@ export class SettingsPage {
       this.chosen.set(st.irreversibleActions);
       this.phrase = st.confirmationPhrase;
       this.warnAt = Math.round((st.budgetWarnAt ?? 0.8) * 100);
+      const esc = st.escalation;
+      if (esc) {
+        this.stallMinutes = Math.max(1, Math.round(esc.stallSeconds / 60));
+        this.timeoutMinutes = Math.max(1, Math.round(esc.timeoutSeconds / 60));
+        this.repeatedFailures = esc.repeatedFailures;
+        this.failingBotRuns = esc.failingBotRuns;
+      }
     });
   }
 
@@ -170,6 +230,12 @@ export class SettingsPage {
         irreversibleActions: this.chosen(),
         confirmationPhrase: this.phrase.trim(),
         budgetWarnAt: Math.min(100, Math.max(10, this.warnAt)) / 100,
+        escalation: {
+          stallSeconds: Math.max(1, Math.round(this.stallMinutes)) * 60,
+          timeoutSeconds: Math.max(1, Math.round(this.timeoutMinutes)) * 60,
+          repeatedFailures: Math.max(1, Math.round(this.repeatedFailures)),
+          failingBotRuns: Math.max(2, Math.round(this.failingBotRuns)),
+        },
         reason: this.reason.trim(),
         expectedVersion: version,
       });

@@ -357,6 +357,25 @@ export type FmEntryBody = z.infer<typeof FmEntryBody>;
 // ---------- Settings ----------
 
 /** Product settings that change behaviour without code changes. One versioned entity. */
+/** When stuck work goes up the chain (bot → Overseer → HQ → Commander). */
+export const EscalationSettings = z.object({
+  /** No entry on the record for this long while working: the Overseer checks in; twice: escalate. */
+  stallSeconds: z.number().int().min(1).default(600),
+  /** A single run longer than this is stopped with a handover and escalated. */
+  timeoutSeconds: z.number().int().min(1).default(3600),
+  /** A task that fails this many times is not retried; it goes up the chain. */
+  repeatedFailures: z.number().int().min(1).default(2),
+  /** A bot whose last this-many runs all failed is stood down and escalated. */
+  failingBotRuns: z.number().int().min(2).default(3),
+});
+export type EscalationSettings = z.infer<typeof EscalationSettings>;
+export const DEFAULT_ESCALATION: EscalationSettings = {
+  stallSeconds: 600,
+  timeoutSeconds: 3600,
+  repeatedFailures: 2,
+  failingBotRuns: 3,
+};
+
 export const SettingsBody = z.object({
   /** Chat action kinds that need a typed one-line confirmation before they run. */
   irreversibleActions: z.array(z.string()),
@@ -364,6 +383,7 @@ export const SettingsBody = z.object({
   confirmationPhrase: z.string().min(1),
   /** Share of a compute budget (0–1) at which ORBOT warns before the hard cap. */
   budgetWarnAt: z.number().min(0.1).max(1).default(0.8),
+  escalation: EscalationSettings.default(DEFAULT_ESCALATION),
   /** "Everything, stand down": a stand-down order on every unit (Phase 5). */
   halt: Halt.nullable().default(null),
 });
@@ -376,6 +396,7 @@ export const DEFAULT_SETTINGS: SettingsBody = {
   irreversibleActions: ['grant-deploy-rights'],
   confirmationPhrase: 'confirm',
   budgetWarnAt: 0.8,
+  escalation: DEFAULT_ESCALATION,
   halt: null,
 };
 

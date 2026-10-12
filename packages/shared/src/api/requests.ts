@@ -164,3 +164,8 @@ export const SetBudgetRequest = z.object({
   reason: z.string().trim().min(1).max(500),
 });
 export type SetBudgetRequest = z.input<typeof SetBudgetRequest>;
+
+export const ResolveEscalationRequest = z.object({
+  note: z.string().trim().min(1).max(500),
+});
+export type ResolveEscalationRequest = z.input<typeof ResolveEscalationRequest>;

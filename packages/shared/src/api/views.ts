@@ -62,7 +62,9 @@ export interface BudgetView {
 export interface AttentionItem {
   kind: AttentionKind;
   /** Something the Commander can do right there, e.g. approve a production deploy. */
-  action?: 'approve-deploy';
+  action?: 'approve-deploy' | 'acknowledge';
+  /** For escalations: the chain to acknowledge. */
+  chainId?: string;
   label: string;
   /** App route that resolves it, e.g. `/units/<id>/bots/<id>`. */
   link: string;

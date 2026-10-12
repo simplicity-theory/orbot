@@ -21,8 +21,12 @@ export class NeedsYou {
   constructor() {
     reloadOnLive(
       (n) =>
-        n.type === 'version' &&
-        ['task', 'bot', 'mission', 'backbrief'].includes(n.version.entityType),
+        (n.type === 'version' &&
+          ['task', 'bot', 'mission', 'backbrief', 'unit', 'operation'].includes(
+            n.version.entityType,
+          )) ||
+        (n.type === 'event' &&
+          ['escalation', 'escalation.resolved', 'budget.warning', 'cost'].includes(n.event.kind)),
       () => this.inbox.reload(),
       300,
     );
