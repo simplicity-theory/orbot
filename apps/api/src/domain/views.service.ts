@@ -64,6 +64,9 @@ export class ViewsService {
     const warnAt = settings?.budgetWarnAt ?? 0.8;
     const spentBy = await this.record.costBy('unit');
     const open = await this.escalations.openChains();
+    const referred = await this.record.listActive('dispute', {
+      bodyContains: { status: 'referred' },
+    });
     const out: OrbatUnit[] = units
       .sort((a, b) => a.body.order - b.body.order)
       .map((u) => {
@@ -90,6 +93,16 @@ export class ViewsService {
               open.filter((e) => e.unitId === u.entityId),
             ),
             ...budgetAttention(u.body.name, `/units/${u.entityId}`, u.entityId, budget),
+            ...referred
+              .filter((d) => d.body.unitId === u.entityId)
+              .map((d): AttentionItem => ({
+                kind: 'dispute',
+                label: `Dispute to rule on: ${u.body.name} v ${
+                  units.find((x) => x.entityId === d.body.againstUnitId)?.body.name ?? '?'
+                } — ${d.body.claim}`,
+                link: `/disputes#dispute-${d.entityId}`,
+                entityId: d.entityId,
+              })),
           ],
           backbriefs: ubb,
           bots: ub

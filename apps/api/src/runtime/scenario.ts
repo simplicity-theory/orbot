@@ -15,6 +15,11 @@ export const ScenarioStep = z.discriminatedUnion('do', [
    * Skipped when the brief carries a handover for this task: the work is being picked up again.
    */
   z.object({ do: z.literal('hold'), ms: z.number().int().nonnegative() }),
+  /**
+   * Disagree with another unit (by name) and stop until HQ (or the Commander) rules.
+   * Picked up again with a ruling in the brief, the bot follows it and carries on.
+   */
+  z.object({ do: z.literal('dispute'), against: Text, claim: Text }),
   z.object({ do: z.literal('diary'), category: DiaryCategory, text: Text }),
   z.object({ do: z.literal('sitrep'), text: Text, status: TaskStatus.optional() }),
   z.object({ do: z.literal('write-file'), path: z.string(), content: Text }),

@@ -13,6 +13,8 @@ import {
   type HandoverNote,
   type AfterActionInput,
   type AfterActionReview,
+  type DisputeInput,
+  type DisputeRuling,
   type InterpretInput,
   type OperationPlan,
   type OperationPlanInput,
@@ -74,6 +76,10 @@ export class SimulatedRuntime implements BotRuntime {
     return Promise.resolve(this.overseer.afterAction(input));
   }
 
+  ruleDispute(input: DisputeInput): Promise<DisputeRuling> {
+    return Promise.resolve(this.overseer.ruleDispute(input));
+  }
+
   interpret(input: InterpretInput): Promise<Interpretation> {
     return Promise.resolve(this.interpreter.interpret(input));
   }
@@ -93,6 +99,7 @@ export class SimulatedRuntime implements BotRuntime {
         callsign: brief.bot.callsign,
         branch: brief.workspace.branch,
         unit: brief.unit.name,
+        description: brief.task.description,
       },
       handover: null,
     };
@@ -140,6 +147,15 @@ export class SimulatedRuntime implements BotRuntime {
       case 'wait':
         await sleep(step.ms * ctx.timeScale, ctx.signal);
         return false;
+      case 'dispute':
+        if (brief.rulings.length) {
+          // Ruled on: follow the ruling and carry on.
+          for (const r of brief.rulings)
+            yield { type: 'step', action: 'read-ruling', detail: r.text, outcome: 'will comply' };
+          return false;
+        }
+        yield { type: 'dispute', against: text(step.against), claim: text(step.claim) };
+        return true;
       case 'hold':
         if (brief.lastHandover) return false;
         await sleep(step.ms, ctx.signal);

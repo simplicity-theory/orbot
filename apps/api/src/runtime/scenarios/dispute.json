@@ -1,0 +1,34 @@
+{
+  "id": "dispute",
+  "description": "Reads the brief, finds it conflicts with another unit's rules (the task description is the claim; the other unit is Guard), and raises a dispute. Picked up again with a ruling, it follows the ruling and finishes.",
+  "seed": 5901,
+  "script": [
+    {
+      "do": "step",
+      "action": "read-brief",
+      "detail": "Read the brief for “{task}”.",
+      "outcome": "understood"
+    },
+    {
+      "do": "step",
+      "action": "check-rules",
+      "detail": "Checked the brief against the other units' rules.",
+      "outcome": "conflict"
+    },
+    { "do": "dispute", "against": "Guard", "claim": "{description}" },
+    {
+      "do": "write-file",
+      "path": "orbot/task-{number}.md",
+      "content": "# Task #{number}: {task}\n\nDone by {callsign} as ruled.\n"
+    },
+    { "do": "commit", "message": "Task #{number}: {task} (as ruled)" },
+    { "do": "cost", "units": 1 },
+    {
+      "do": "handover",
+      "state": "Task #{number} done on {branch}, following the ruling.",
+      "nextSteps": [],
+      "flagsForSuccessor": []
+    },
+    { "do": "done", "summary": "Done, as ruled." }
+  ]
+}

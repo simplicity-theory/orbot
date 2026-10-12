@@ -17,6 +17,7 @@ export const ENTITY_TYPES = [
   'backbrief',
   'fm-entry',
   'settings',
+  'dispute',
 ] as const;
 export const EntityType = z.enum(ENTITY_TYPES);
 export type EntityType = z.infer<typeof EntityType>;
@@ -357,6 +358,41 @@ export type FmEntryBody = z.infer<typeof FmEntryBody>;
 // ---------- Settings ----------
 
 /** Product settings that change behaviour without code changes. One versioned entity. */
+// ---------- Dispute ----------
+
+/** A ruling on a dispute: who prevails, why, and the standing orders it rests on. */
+export const Ruling = z.object({
+  prevails: z.enum(['raiser', 'other']),
+  reasoning: z.string().min(1),
+  cited: z.array(
+    z.object({ unitId: Id.nullable(), orderId: z.string().nullable(), text: z.string() }),
+  ),
+  by: z.string(),
+  at: z.iso.datetime({ offset: true }),
+});
+export type Ruling = z.infer<typeof Ruling>;
+
+export const DisputeStatus = z.enum(['open', 'ruled', 'referred', 'final']);
+export type DisputeStatus = z.infer<typeof DisputeStatus>;
+
+/**
+ * A disagreement between units, raised by a bot about its task. HQ rules under standing
+ * orders (or refers it to the Commander when none settles it); the Commander has final say.
+ */
+export const DisputeBody = z.object({
+  /** The unit that raised it. */
+  unitId: Id,
+  againstUnitId: Id,
+  taskId: Id,
+  botId: Id.nullable(),
+  operationId: Id.nullable().default(null),
+  claim: z.string().min(1),
+  status: DisputeStatus,
+  hqRuling: Ruling.nullable().default(null),
+  commanderRuling: Ruling.nullable().default(null),
+});
+export type DisputeBody = z.infer<typeof DisputeBody>;
+
 /** When stuck work goes up the chain (bot → Overseer → HQ → Commander). */
 export const EscalationSettings = z.object({
   /** No entry on the record for this long while working: the Overseer checks in; twice: escalate. */
@@ -413,6 +449,7 @@ export const ENTITY_BODY_SCHEMAS = {
   backbrief: BackbriefBody,
   'fm-entry': FmEntryBody,
   settings: SettingsBody,
+  dispute: DisputeBody,
 } as const satisfies Record<EntityType, z.ZodType>;
 
 export interface EntityBodyMap {
@@ -426,6 +463,7 @@ export interface EntityBodyMap {
   backbrief: BackbriefBody;
   'fm-entry': FmEntryBody;
   settings: SettingsBody;
+  dispute: DisputeBody;
 }
 
 /** What a write may supply: defaulted fields are optional and filled in by the schema. */

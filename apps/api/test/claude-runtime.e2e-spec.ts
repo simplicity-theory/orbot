@@ -183,6 +183,37 @@ describe('ClaudeRuntime (against a scripted API)', () => {
     );
   });
 
+  it('raise_dispute (after a handover) stops the task as disputed, for HQ to rule on', async () => {
+    const fake = new FakeClaude([
+      [
+        toolUse('d1', 'write_handover', {
+          state: 'Stopped before changing the limit.',
+          nextSteps: ['Follow the ruling'],
+          triedAndFailed: [],
+          openProblems: [],
+          flagsForSuccessor: [],
+        }),
+      ],
+      [toolUse('d2', 'raise_dispute', { against: 'Guard', claim: 'Guard caps logins at 5.' })],
+    ]);
+    t.app
+      .get(RuntimeRegistry)
+      .register(new ClaudeRuntime(fake as unknown as ClaudeClient, { model: 'claude-opus-5-5' }));
+    const task = (
+      await t.agent
+        .post('/api/tasks')
+        .send({ unitId, botId, title: 'Raise the login limit', repoSupplyId: repoId })
+        .expect(201)
+    ).body;
+    await t.agent.post(`/api/tasks/${task.id}/run`).expect(202);
+    await settled(t.app);
+    const d: TaskDetailView = (await t.agent.get(`/api/tasks/${task.id}`).expect(200)).body;
+    expect(d.task.status).toBe('blocked');
+    expect(d.task.statusReason).toBe('Disputed with Guard: Guard caps logins at 5.');
+    expect(d.events.map((e) => e.kind)).toContain('dispute.raised');
+    expect(JSON.stringify(fake.requests[0])).toContain('raise_dispute');
+  });
+
   it('interprets chat through the model with structured output, validated by ORBOT', async () => {
     const fake = new FakeClaude([], {
       kinds: ['rule-change'],

@@ -80,7 +80,28 @@ export class BriefingService {
       },
       workspace,
       ...k,
+      rulings: await this.rulings(task.entityId),
     };
+  }
+
+  /** Rulings on disputes this task raised; the Commander's (final) ruling wins over HQ's. */
+  private async rulings(taskId: string): Promise<TaskBrief['rulings']> {
+    const disputes = await this.record.listActive('dispute', { bodyContains: { taskId } });
+    const out: TaskBrief['rulings'] = [];
+    for (const d of disputes) {
+      const r = d.body.commanderRuling ?? d.body.hqRuling;
+      if (!r) continue;
+      const winner = await this.record.getActive(
+        'unit',
+        r.prevails === 'raiser' ? d.body.unitId : d.body.againstUnitId,
+      );
+      const who = d.body.commanderRuling ? 'The Commander (final)' : 'HQ';
+      out.push({
+        disputeId: d.entityId,
+        text: `${who} ruled: ${winner?.body.name ?? 'the other unit'} prevails. ${r.reasoning}`,
+      });
+    }
+    return out;
   }
 
   /** What the unit's documents say about this work. Used for briefs and cold-start checks. */

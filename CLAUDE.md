@@ -41,6 +41,14 @@ Tests use the `orbot_test` / `orbot_secrets_test` databases and reset them; the 
   - `overseer/` — `OverseerService` (missions → backbriefs → tasks, dispatch, unit sitreps, reassign, replace bots), `BriefingService` (handover + Field Manual + War Diary → `TaskBrief`, `task.briefed` event), `CurationService`, `ColdStartService`.
   - `overseer/hq.service.ts` — `HqService` (actor `system:hq`): operation → O Group plan → chained missions on an integration branch → backbriefs → execution → handoffs/send-backs → deploy approval → After Action review → closed; renders the operation's shared record document.
   - `runtime/claude.runtime.ts` — `ClaudeRuntime` (Messages API tool loop confined to the worktree; structured outputs for Overseer/HQ). Registered only if `ANTHROPIC_API_KEY` is set; tests use a scripted fake client.
+  - Phase 5 command services in `overseer/`:
+    - `StandDownService`: halt orders on a bot, a unit or everything; running work pauses with a handover.
+    - `BudgetService`: hard caps per unit, operation and task, with a warning first.
+    - `EscalationService`: stalls, timeouts and repeated failures go Overseer → HQ → Commander.
+    - `DeconflictionService`: who touches what, worked out from git; HQ notices overlaps.
+    - `DisputeService`: HQ rules under standing orders; the Commander's ruling is final.
+      Each registers its own `PolicyRule` and/or bus listener.
+  - `policy/duties.service.ts` — separation of duties as a `RecordService` write guard: no bot approves its own work, changes its own rules or grants itself supply, by any path.
   - `chat/` — `ChatService` (message → `runtime.interpret` → actions/pending → orders log → read-back; undo; confirm/decline) and `ActionsService` (one executor per `ChatAction`, each returning its inverse).
   - `settings/` — the versioned settings entity (irreversible action kinds, confirmation phrase).
   - `documents/` — `FieldManualService` (entries, render/parse), `UnitDocsService` + `UnitDocumentStore` (Markdown mirror in the unit's repo, import of human edits).
@@ -68,4 +76,5 @@ Tests use the `orbot_test` / `orbot_secrets_test` databases and reset them; the 
 - **Field Manual edits go through entries** (`FieldManualService.promote/merge/edit/retire/reinstate` + `rerender` in the same transaction). Never rewrite the `field-manual` document directly.
 - **Chat changes go through `ActionsService`.** Add a new chat capability by adding a `ChatAction` kind (shared zod union), an executor that calls existing services and returns its inverse, and interpreter support. Never act on free text.
 - **Bus reactions go through `Background.run(key, …)`** with key `unit:<id>` (or `docs:<id>`) so a unit's work stays ordered.
+- **New limits on bots go in the policy layer.** Add a `PolicyRule` (bot actions: `task.start`, `task.continue`, `bot.*`) or a record write guard (entity changes). Never scatter `if` checks across controllers.
 - Tests are written alongside code. Each phase's "done when" is an automated test.

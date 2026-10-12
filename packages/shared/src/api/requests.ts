@@ -169,3 +169,10 @@ export const ResolveEscalationRequest = z.object({
   note: z.string().trim().min(1).max(500),
 });
 export type ResolveEscalationRequest = z.input<typeof ResolveEscalationRequest>;
+
+/** The Commander's ruling on a dispute: final. */
+export const RuleDisputeRequest = z.object({
+  prevails: z.enum(['raiser', 'other']),
+  reasoning: z.string().trim().min(1).max(1000),
+});
+export type RuleDisputeRequest = z.input<typeof RuleDisputeRequest>;

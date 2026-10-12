@@ -35,6 +35,8 @@ export interface BotRuntime {
   planOperation(input: OperationPlanInput): Promise<OperationPlan>;
   /** After Action review: what went well, what to improve, lessons to keep as standing orders. */
   afterAction(input: AfterActionInput): Promise<AfterActionReview>;
+  /** Rule on a dispute between two units, under their standing orders (null = none settles it). */
+  ruleDispute(input: DisputeInput): Promise<DisputeRuling>;
 }
 
 // ---------- Briefing ----------
@@ -74,6 +76,8 @@ export interface TaskBrief {
   fieldManual: BriefFieldManualEntry[];
   /** Recent War Diary entries from the unit. */
   recentDiary: BriefDiaryEntry[];
+  /** Rulings on disputes this task raised: the bot follows them. */
+  rulings: { disputeId: string; text: string }[];
 }
 
 export interface RecordSearchResult {
@@ -126,6 +130,8 @@ export type BotEvent =
   | { type: 'diary'; category: DiaryCategory; text: string }
   | { type: 'sitrep'; text: string; status?: TaskStatus }
   | { type: 'artifact'; kind: 'commit' | 'file' | 'deployment'; ref: string; summary: string }
+  /** The bot disagrees with another unit (named) about this work: HQ rules on it. */
+  | { type: 'dispute'; against: string; claim: string }
   /** A check failed: send the work back to the unit that handed it over. */
   | { type: 'send-back'; reason: string }
   | { type: 'cost'; units: number }
@@ -306,4 +312,18 @@ export interface AfterActionReview {
   toImprove: string[];
   /** Lessons saved as standing orders (unitId null = every unit). */
   lessons: { unitId: string | null; text: string }[];
+}
+
+export interface DisputeInput {
+  claim: string;
+  raiser: { id: string; name: string; standingOrders: { id: string; text: string }[] };
+  other: { id: string; name: string; standingOrders: { id: string; text: string }[] };
+  task: { number: number; title: string; description: string };
+}
+
+export interface DisputeRuling {
+  /** Who prevails; null when no standing order settles it (HQ refers it to the Commander). */
+  prevails: 'raiser' | 'other' | null;
+  reasoning: string;
+  cited: { unitId: string | null; orderId: string | null; text: string }[];
 }

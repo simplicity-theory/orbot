@@ -1,6 +1,7 @@
 import type {
   BackbriefBody,
   BotBody,
+  DisputeBody,
   FmEntryBody,
   Halt,
   DocumentBody,
@@ -47,7 +48,7 @@ export interface MissionProgress {
 }
 
 export type AttentionKind =
-  'blocked-bot' | 'failed-task' | 'awaiting-approval' | 'escalation' | 'budget';
+  'blocked-bot' | 'failed-task' | 'awaiting-approval' | 'escalation' | 'budget' | 'dispute';
 
 /** A compute budget and what has been spent against it. */
 export interface BudgetView {
@@ -260,3 +261,12 @@ export function budgetView(cap: number | null, spent: number, warnAt: number): B
     cap === null ? 'uncapped' : spent >= cap ? 'capped' : spent >= cap * warnAt ? 'warning' : 'ok';
   return { cap, spent, warnAt, state };
 }
+
+/** A dispute with the names of the units involved. */
+export type DisputeView = Versioned<DisputeBody> & {
+  unitName: string;
+  againstUnitName: string;
+  taskNumber: number;
+  taskTitle: string;
+  botCallsign: string | null;
+};

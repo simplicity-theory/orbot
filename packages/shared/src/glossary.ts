@@ -117,6 +117,12 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     short: 'Halted, ready to resume',
     meaning: 'Work is paused with a handover so it can be picked up again.',
   },
+  dispute: {
+    term: 'Dispute',
+    short: 'Units disagree; HQ rules',
+    meaning:
+      'One unit disagrees with another about its work. HQ rules under their standing orders; if none settles it, you rule. Your ruling is final.',
+  },
   escalation: {
     term: 'Escalation',
     short: 'Sent up the chain',

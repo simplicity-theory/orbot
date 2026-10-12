@@ -66,6 +66,8 @@ export const RecordEventBodies = {
     action: z.string(),
     runId: z.string().nullable(),
   }),
+  /** A bot raised a dispute with another unit about its task (the task waits for a ruling). */
+  'dispute.raised': z.object({ against: z.string(), claim: z.string() }),
   /** HQ found two active tasks changing the same files in one repository. */
   deconfliction: z.object({
     repoSupplyId: z.string(),

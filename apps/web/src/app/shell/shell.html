@@ -98,7 +98,7 @@
         @for (a of needsYou.items(); track a.entityId + a.kind) {
           <div class="inbox-item">
             <span class="meta">{{ a.unitName }}</span>
-            <a [routerLink]="a.link" (click)="inboxOpen.set(false)">{{ a.label }}</a>
+            <a [routerLink]="a.link | url" (click)="inboxOpen.set(false)">{{ a.label }}</a>
           </div>
         }
         @if (needsYou.count() === 0) {

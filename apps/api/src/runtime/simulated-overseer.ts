@@ -8,10 +8,12 @@ import {
   type CurationAction,
   type CurationInput,
 } from '@orbot/shared';
-import { DUPLICATE_THRESHOLD, similarity, titleFrom } from '../common/similarity.js';
+import { DUPLICATE_THRESHOLD, similarity, titleFrom, words } from '../common/similarity.js';
 import type {
   AfterActionInput,
   AfterActionReview,
+  DisputeInput,
+  DisputeRuling,
   OperationPlan,
   OperationPlanInput,
   ProposedTask,
@@ -225,6 +227,34 @@ export class SimulatedOverseer {
         : [];
     });
     return { name: input.name, missions };
+  }
+
+  /**
+   * HQ rules under standing orders: the order (of either unit) that best matches the claim
+   * settles it, and its unit prevails. If no order speaks to it, HQ refers it upward.
+   */
+  ruleDispute(input: DisputeInput): DisputeRuling {
+    const claim = words(input.claim);
+    const candidates = [
+      ...input.raiser.standingOrders.map((o) => ({ o, side: 'raiser' as const, u: input.raiser })),
+      ...input.other.standingOrders.map((o) => ({ o, side: 'other' as const, u: input.other })),
+    ].map((c) => {
+      const ws = [...words(c.o.text)];
+      return { ...c, score: ws.length ? ws.filter((w) => claim.has(w)).length / ws.length : 0 };
+    });
+    const best = candidates.sort((a, b) => b.score - a.score)[0];
+    if (!best || best.score < 0.5) {
+      return {
+        prevails: null,
+        reasoning: `No standing order of ${input.raiser.name} or ${input.other.name} settles this.`,
+        cited: [],
+      };
+    }
+    return {
+      prevails: best.side,
+      reasoning: `${best.u.name}'s standing order “${best.o.text}” settles it: ${best.u.name} prevails.`,
+      cited: [{ unitId: best.u.id, orderId: best.o.id, text: best.o.text }],
+    };
   }
 
   afterAction(input: AfterActionInput): AfterActionReview {

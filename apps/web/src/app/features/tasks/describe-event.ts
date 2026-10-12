@@ -199,6 +199,14 @@ export function describeEvent(e: RecordEvent): EventSummary {
         text: `${(b['lessons'] as unknown[]).length} lesson(s) kept as standing orders`,
         tone: 'info',
       };
+    case 'dispute.raised':
+      return {
+        icon: 'users',
+        label: 'Dispute',
+        term: 'dispute',
+        text: `With ${s('against')}: ${s('claim')}`,
+        tone: 'warning',
+      };
     case 'deconfliction':
       return {
         icon: 'git-branch',

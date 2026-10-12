@@ -161,3 +161,11 @@ A single failure is not an escalation: it already shows as a failed task, and a 
 The refusal is a policy decision on the record ("Separation of duties: …", action `duty:<kind>`), and the write is rolled back. The Commander, HQ and other system actors are not bots and are not limited by this. Bots acting on other units are not "their own" and are left to the other rules.
 
 **D68. On "escalations only", HQ approves plans on the Commander's behalf.** Before, the Overseer that wrote the plan also approved it. Now `system:hq` does, so no bot approves its own work. The Commander still sees every approval on the record.
+
+**D69. Disputes are raised by bots about their own task, and the task waits.** A `dispute` bot event (a scenario step, or the ClaudeRuntime `raise_dispute` tool) names the other unit and states the claim. The task blocks ("Disputed with Guard: …"), and a versioned `dispute` entity opens.
+
+**D70. HQ rules only under standing orders.** `BotRuntime.ruleDispute` decides who prevails and cites the orders that settle it. ORBOT keeps only citations of orders that really exist on the two units, and a ruling without one is treated as no ruling. If an order settles it, the ruling takes effect at once: the task resumes with the ruling in its brief (`TaskBrief.rulings`) and the bot follows it. If none does, HQ refers it to the Commander (a Needs-you item) and the task stays blocked.
+
+**D71. The Commander has final say over any dispute.** The Commander can rule on a referred dispute, or uphold or overturn an HQ ruling. That ruling is final: a second ruling is refused, and the way to change course is a new order. An overturn reaches the work in progress: a blocked task resumes with the final ruling, and a running one gets a frago. If the work is already done, the ruling is on the record, and acting on it is a new order.
+
+**D72. Links from the API keep their fragments.** Attention links like `/disputes#dispute-…` go through a `url` pipe (Router.parseUrl) so `routerLink` doesn't encode the `#`. This also fixes the backbrief links in Needs you.

@@ -71,6 +71,7 @@ export const apiUrl = {
   settings: () => `${API}/settings`,
   standDown: () => `${API}/stand-down`,
   deconfliction: () => `${API}/deconfliction`,
+  disputes: () => `${API}/disputes`,
 };
 
 export type SettingsView = SettingsBody & { version: number; actionKinds: string[] };
@@ -289,6 +290,12 @@ export class Api {
   decideDeploy(taskId: string, approve: boolean, note: string | null = null) {
     return firstValueFrom(
       this.http.post<TaskView>(`${API}/tasks/${taskId}/deploy-decision`, { approve, note }),
+    );
+  }
+
+  ruleDispute(id: string, prevails: 'raiser' | 'other', reasoning: string) {
+    return firstValueFrom(
+      this.http.post<unknown>(`${API}/disputes/${id}/rule`, { prevails, reasoning }),
     );
   }
 

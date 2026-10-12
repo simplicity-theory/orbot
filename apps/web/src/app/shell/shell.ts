@@ -25,6 +25,7 @@ import { ShortcutsDialog } from './shortcuts-dialog';
 import { StandDownBanner } from './stand-down-banner';
 import { StandDowns } from '../core/stand-down';
 import { StandDownButton } from '../ui/stand-down';
+import { UrlPipe } from '../ui/url.pipe';
 
 interface NavItem {
   label: string;
@@ -40,6 +41,7 @@ const NAV: NavItem[] = [
   { label: 'Sitreps', link: '/sitreps', icon: 'radio' },
   { label: 'Chat', link: '/chat', icon: 'user' },
   { label: 'Orders log', link: '/orders', icon: 'book' },
+  { label: 'Disputes', link: '/disputes', icon: 'users' },
   { label: 'Deconfliction', link: '/deconfliction', icon: 'git-branch' },
   { label: 'Supply Depot', link: '/supply', icon: 'key' },
   { label: 'Archive', link: '/archive', icon: 'archive' },
@@ -84,6 +86,7 @@ const POPOVER: ConnectedPosition[] = [
     Backbrief,
     StandDownBanner,
     StandDownButton,
+    UrlPipe,
   ],
   templateUrl: './shell.html',
   styleUrl: './shell.scss',

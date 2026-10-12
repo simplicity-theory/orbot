@@ -9,6 +9,8 @@ import {
   ChatAction,
   type AfterActionInput,
   type AfterActionReview,
+  type DisputeInput,
+  type DisputeRuling,
   type BackbriefDraft,
   type BackbriefInput,
   type BotEvent,
@@ -143,9 +145,15 @@ const TOOLS: Anthropic.Beta.BetaTool[] = [
     description: 'Stop part-way (after a handover) so another bot can pick the task up.',
     input_schema: obj({ reason: str }),
   },
+  {
+    name: 'raise_dispute',
+    description:
+      'You disagree with another unit (name it) about this work, e.g. its rules conflict with your brief. HQ rules under standing orders; you then follow the ruling.',
+    input_schema: obj({ against: str, claim: str }),
+  },
 ].map((t) => ({ ...t, strict: true }));
 
-const TERMINAL = new Set(['done', 'blocked', 'failed', 'send_back', 'stand_down']);
+const TERMINAL = new Set(['done', 'blocked', 'failed', 'send_back', 'stand_down', 'raise_dispute']);
 
 /**
  * Runs a real bot with Claude, in the task's git worktree. Talks only through the
@@ -227,7 +235,9 @@ export class ClaudeRuntime implements BotRuntime {
             });
             continue;
           }
-          yield this.terminal(call.name, String(input['reason'] ?? input['summary'] ?? ''));
+          yield call.name === 'raise_dispute'
+            ? { type: 'dispute', against: String(input['against']), claim: String(input['claim']) }
+            : this.terminal(call.name, String(input['reason'] ?? input['summary'] ?? ''));
           return;
         }
         try {
@@ -407,7 +417,7 @@ export class ClaudeRuntime implements BotRuntime {
       `You are ${brief.bot.callsign}, a ${brief.bot.role} in the ${brief.unit.name} unit of ORBOT, working one task in your own git worktree on branch ${brief.workspace.branch}.`,
       'You arrived today: everything you know about this work comes from the brief below (the unit’s documents). Act on it, and leave the unit better documented than you found it.',
       'Work only through your tools; you cannot reach anything outside the workspace. Record decisions and surprises in the War Diary as you go, send a sitrep at milestones, commit your changes, and always write a handover before you finish, block, fail, send back or stand down.',
-      'If a check you are running fails because of the previous unit’s work, use send_back with a reason they can act on. If you need something only someone outside the unit can give (access, a decision), use blocked.',
+      'If a check you are running fails because of the previous unit’s work, use send_back with a reason they can act on. If you need something only someone outside the unit can give (access, a decision), use blocked. If another unit’s rules conflict with your brief, use raise_dispute; once ruled on, follow the ruling.',
       brief.unit.standingOrders.length
         ? `Standing orders (always apply):\n${brief.unit.standingOrders.map((o) => `- ${o}`).join('\n')}`
         : '',
@@ -420,6 +430,9 @@ export class ClaudeRuntime implements BotRuntime {
     return [
       `# Task #${brief.task.number}: ${brief.task.title}`,
       brief.task.description,
+      brief.rulings.length
+        ? `## Rulings on your disputes (follow them)\n${brief.rulings.map((r) => `- ${r.text}`).join('\n')}`
+        : '',
       brief.lastHandover
         ? `## Last handover for this work (v${brief.lastHandover.version})\n${brief.lastHandover.markdown}`
         : '## Last handover\nNone: nobody has worked this before.',
@@ -577,6 +590,29 @@ export class ClaudeRuntime implements BotRuntime {
         ...input,
         instructions:
           'Give each unit one mission, in handoff order build → inspect → guard → deploy, matched to the unit roles. Use only the unit ids given.',
+      }),
+    );
+  }
+
+  async ruleDispute(input: DisputeInput): Promise<DisputeRuling> {
+    const R = z.object({
+      prevails: z.enum(['raiser', 'other']).nullable(),
+      reasoning: z.string(),
+      cited: z.array(
+        z.object({
+          unitId: z.string().nullable(),
+          orderId: z.string().nullable(),
+          text: z.string(),
+        }),
+      ),
+    });
+    return this.structured(
+      R,
+      'You are HQ in ORBOT, ruling on a dispute between two units under their standing orders.',
+      JSON.stringify({
+        ...input,
+        instructions:
+          'Rule only on the standing orders given: cite the order(s) that settle it (copy their text, unit id and order id). If no standing order settles it, set prevails to null so it goes to the Commander. Do not invent orders.',
       }),
     );
   }

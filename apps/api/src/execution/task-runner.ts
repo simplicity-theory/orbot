@@ -398,6 +398,23 @@ export class TaskRunner {
             }
             break;
           }
+          case 'dispute':
+            // The bot disagrees with another unit: HQ rules, and the task waits for it.
+            await this.record.event(
+              'dispute.raised',
+              { against: ev.against, claim: ev.claim },
+              refs,
+              botActor,
+            );
+            return this.finish(
+              'blocked',
+              `Disputed with ${ev.against}: ${ev.claim}`,
+              task.body,
+              refs,
+              botActor,
+              run.runId,
+              spent,
+            );
           case 'send-back':
             // The check did its job: pause this task until the previous unit has fixed it.
             return this.finish(

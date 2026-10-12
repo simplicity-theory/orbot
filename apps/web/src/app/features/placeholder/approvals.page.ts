@@ -4,6 +4,7 @@ import { Breadcrumbs, ORBAT_CRUMB } from '../../core/breadcrumbs';
 import { NeedsYou } from '../../core/needs-you';
 import { Backbrief } from '../../ui/backbrief';
 import { Acknowledge } from '../../ui/acknowledge';
+import { UrlPipe } from '../../ui/url.pipe';
 import { DeployApproval } from '../../ui/deploy-approval';
 import { EmptyState } from '../../ui/empty-state';
 import { Icon } from '../../ui/icon';
@@ -25,6 +26,7 @@ import { scrollToFragment } from './scroll-to-fragment';
     Skeleton,
     DeployApproval,
     Acknowledge,
+    UrlPipe,
   ],
   template: `
     <div class="page page--detail">
@@ -75,11 +77,13 @@ import { scrollToFragment } from './scroll-to-fragment';
                           ? 'coins'
                           : a.kind === 'escalation'
                             ? 'arrow-right'
-                            : 'octagon-pause'
+                            : a.kind === 'dispute'
+                              ? 'users'
+                              : 'octagon-pause'
                     "
                   />
                   <span class="meta">{{ a.unitName }}</span>
-                  <a [routerLink]="a.link">{{ a.label }}</a>
+                  <a [routerLink]="a.link | url">{{ a.label }}</a>
                   @if (a.action === 'approve-deploy') {
                     <orb-deploy-approval class="inline" [taskId]="a.entityId" [label]="a.label" />
                   } @else if (a.action === 'acknowledge' && a.chainId) {
