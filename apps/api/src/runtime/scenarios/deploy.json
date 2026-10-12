@@ -1,0 +1,35 @@
+{
+  "id": "deploy",
+  "description": "Logistics deploys the integration branch to production. Needs production in the unit's supply (deploy rights).",
+  "seed": 9902,
+  "script": [
+    {
+      "do": "step",
+      "action": "read-brief",
+      "detail": "Read the brief for “{task}”.",
+      "outcome": "understood"
+    },
+    {
+      "do": "require-supply",
+      "pattern": "^production$",
+      "missing": "No deploy rights: the production environment has not been issued to {unit}."
+    },
+    {
+      "do": "step",
+      "action": "pipeline",
+      "detail": "Pipeline green on the integration branch.",
+      "outcome": "ok"
+    },
+    { "do": "deploy", "environment": "production" },
+    { "do": "sitrep", "text": "{callsign}: deployed to production.", "status": "working" },
+    {
+      "do": "handover",
+      "state": "Deployed {branch} to production.",
+      "nextSteps": [],
+      "triedAndFailed": [],
+      "openProblems": [],
+      "flagsForSuccessor": []
+    },
+    { "do": "done", "summary": "Deployed to production." }
+  ]
+}

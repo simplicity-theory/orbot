@@ -8,6 +8,7 @@ import {
   RecordEventBodies,
   type DiffLine,
   type EntityBodyMap,
+  type EntityInputMap,
   type EntityType,
   type EventQuery,
   type RecordEvent,
@@ -130,7 +131,7 @@ export class RecordWriter {
   /** Create a new entity (version 1). */
   async create<T extends EntityType>(
     type: T,
-    body: EntityBodyMap[T],
+    body: EntityInputMap[T],
     ctx: WriteContext,
     id: string = randomUUID(),
   ): Promise<RecordVersion<EntityBodyMap[T]>> {
@@ -215,7 +216,7 @@ export class RecordWriter {
     type: T,
     id: string,
     version: number,
-    body: EntityBodyMap[T],
+    body: EntityInputMap[T],
     ctx: WriteContext,
   ): Promise<RecordVersion<EntityBodyMap[T]>> {
     const red = this.redaction.redactDeep(body);
@@ -334,7 +335,7 @@ export class RecordService {
     }
   }
 
-  create<T extends EntityType>(type: T, body: EntityBodyMap[T], ctx: WriteContext, id?: string) {
+  create<T extends EntityType>(type: T, body: EntityInputMap[T], ctx: WriteContext, id?: string) {
     return this.transaction((w) => w.create(type, body, ctx, id));
   }
 

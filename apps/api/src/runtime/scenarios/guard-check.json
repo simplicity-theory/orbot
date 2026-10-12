@@ -1,0 +1,34 @@
+{
+  "id": "guard-check",
+  "description": "Guard's security review of the integration branch. Blocks while low-severity findings are ordered to block release.",
+  "seed": 9901,
+  "script": [
+    {
+      "do": "step",
+      "action": "read-brief",
+      "detail": "Read the brief for “{task}”.",
+      "outcome": "understood"
+    },
+    {
+      "do": "step",
+      "action": "scan",
+      "detail": "Dependency audit and static scan on the integration branch.",
+      "outcome": "0 high, 0 critical"
+    },
+    {
+      "do": "respect-order",
+      "pattern": "low-severity findings (also )?block",
+      "holdMs": 0,
+      "blocked": "Low-severity findings found, and standing orders say they block release."
+    },
+    {
+      "do": "handover",
+      "state": "Security review passed on {branch}.",
+      "nextSteps": [],
+      "triedAndFailed": [],
+      "openProblems": [],
+      "flagsForSuccessor": []
+    },
+    { "do": "done", "summary": "Security review passed for task #{number}." }
+  ]
+}

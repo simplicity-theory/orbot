@@ -115,7 +115,9 @@ export class ChatService {
     opts: { reason: string; reverses?: string },
   ): Promise<ReadbackItem> {
     const channelUnit = channel === HQ ? null : channel;
-    const routedVia = action.unitId !== channelUnit ? HQ : null;
+    // Orders for another unit — and new operations — go through HQ.
+    const routedVia =
+      action.unitId !== channelUnit || action.kind === 'create-operation' ? HQ : null;
     const result = await this.actions.run(action, { actor, reason: opts.reason });
     const entry = await this.record.event(
       'orders.log',
@@ -132,7 +134,7 @@ export class ChatService {
       { unitId: action.unitId },
       actor,
     );
-    if (routedVia && channel !== action.unitId) {
+    if (routedVia && action.unitId && channel !== action.unitId) {
       // The other unit's Overseer hears it in its own channel, relayed by HQ.
       await this.record.event(
         'chat.message',
@@ -146,11 +148,13 @@ export class ChatService {
         HQ_ACTOR,
       );
     }
-    this.overseer.applyToLiveWork(
-      action.unitId,
-      { summary: result.summary, affects: result.affects },
-      actor,
-    );
+    if (action.unitId) {
+      this.overseer.applyToLiveWork(
+        action.unitId,
+        { summary: result.summary, affects: result.affects },
+        actor,
+      );
+    }
     return {
       ordersLogId: entry.id,
       summary: result.summary,
@@ -399,6 +403,7 @@ export class ChatService {
             statusReason: t.body.statusReason,
             missionId: t.body.missionId,
             botCallsign: t.body.botId ? (callsign.get(t.body.botId) ?? null) : null,
+            kind: t.body.kind ?? 'work',
           })),
           missions: missions
             .filter((m) => m.body.unitId === u.entityId)
@@ -421,6 +426,11 @@ export class ChatService {
         connected: s.body.connected,
         tier: s.body.spec.kind === 'environment' ? (s.body.spec.details['tier'] ?? null) : null,
       })),
+      operations: (await this.record.listActive('operation')).map((o) => ({
+        id: o.entityId,
+        name: o.body.name,
+        phase: o.body.phase,
+      })),
     };
   }
 
@@ -439,6 +449,7 @@ export class ChatService {
 
   /** A one-line, human description of an action that has not run yet. */
   private async describe(a: ChatAction): Promise<string> {
+    if (a.kind === 'create-operation') return `Launch Operation ${a.name}: “${a.intent}”`;
     const unit = await this.record.requireActive('unit', a.unitId);
     const u = unit.body.name;
     switch (a.kind) {

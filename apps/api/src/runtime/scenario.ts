@@ -61,6 +61,15 @@ export const ScenarioStep = z.discriminatedUnion('do', [
     holdMs: z.number().int().nonnegative().default(0),
     blocked: Text,
   }),
+  /** Inspect the branch: send the work back unless a tracked file matches `pattern`. */
+  z.object({
+    do: z.literal('check-branch'),
+    check: z.string(),
+    pattern: z.string(),
+    sendBack: Text,
+  }),
+  /** Deploy the workspace head to an environment (moves `deploy/<environment>` to it). */
+  z.object({ do: z.literal('deploy'), environment: z.string() }),
   /** Block unless the unit's live supply has an item whose name matches `pattern`. */
   z.object({ do: z.literal('require-supply'), pattern: z.string(), missing: Text }),
 ]);

@@ -1,0 +1,28 @@
+{
+  "id": "fix",
+  "description": "Fixes what a later stage sent back, on the operation's integration branch.",
+  "seed": 7707,
+  "script": [
+    {
+      "do": "step",
+      "action": "read-brief",
+      "detail": "Read the send-back: “{task}”.",
+      "outcome": "understood"
+    },
+    {
+      "do": "write-file",
+      "path": "orbot/fix-{number}.md",
+      "content": "# Fix for task #{number}\n\n{task}\n\nAdded the missing tests for the limiter."
+    },
+    { "do": "commit", "message": "Task #{number}: {task}" },
+    {
+      "do": "handover",
+      "state": "Fixed what was sent back; committed on {branch}.",
+      "nextSteps": [],
+      "triedAndFailed": [],
+      "openProblems": [],
+      "flagsForSuccessor": []
+    },
+    { "do": "done", "summary": "Fix for task #{number} done." }
+  ]
+}

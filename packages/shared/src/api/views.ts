@@ -49,6 +49,8 @@ export type AttentionKind = 'blocked-bot' | 'failed-task' | 'awaiting-approval' 
 
 export interface AttentionItem {
   kind: AttentionKind;
+  /** Something the Commander can do right there, e.g. approve a production deploy. */
+  action?: 'approve-deploy';
   label: string;
   /** App route that resolves it, e.g. `/units/<id>/bots/<id>`. */
   link: string;
@@ -166,4 +168,27 @@ export interface OrdersLogEntryView {
   /** The Commander message that caused it (null for undos). */
   message: RecordEvent<'chat.message'> | null;
   unitName: string;
+}
+
+export interface OperationMissionView {
+  mission: MissionView;
+  unit: UnitView;
+  done: number;
+  total: number;
+  tasks: TaskView[];
+  backbrief: BackbriefView | null;
+}
+
+export interface OperationSummary {
+  operation: OperationView;
+  missions: OperationMissionView[];
+  /** Things on this operation waiting on the Commander. */
+  needsYou: AttentionItem[];
+}
+
+export interface OperationDetailView extends OperationSummary {
+  /** Phase changes, handoffs, send-backs, integration, deployment, HQ and unit sitreps. */
+  timeline: RecordEvent[];
+  record: DocumentView | null;
+  afterAction: DocumentView | null;
 }

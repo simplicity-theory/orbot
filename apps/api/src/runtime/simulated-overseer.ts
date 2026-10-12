@@ -9,6 +9,13 @@ import {
   type CurationInput,
 } from '@orbot/shared';
 import { DUPLICATE_THRESHOLD, similarity, titleFrom } from '../common/similarity.js';
+import type {
+  AfterActionInput,
+  AfterActionReview,
+  OperationPlan,
+  OperationPlanInput,
+  ProposedTask,
+} from '@orbot/shared';
 
 /** A lesson that applies beyond the task it came from. */
 export function isGeneral(lesson: string): boolean {
@@ -27,19 +34,44 @@ export class SimulatedOverseer {
         ...b,
         load: b.queueLength + (b.status === 'working' || b.status === 'blocked' ? 1 : 0),
       }));
-    const proposedTasks = input.mission.definitionOfDone.map((item) => {
+    const pick = () => {
       const bot = [...bots].sort(
         (a, b) =>
           a.load - b.load || a.callsign.localeCompare(b.callsign, undefined, { numeric: true }),
       )[0];
       if (bot) bot.load++;
-      return {
-        title: item,
-        description: `Part of mission “${input.mission.goal}”. Done when: ${item}.`,
-        botId: bot?.id ?? null,
-        scenario: 'happy-path',
-      };
-    });
+      return bot?.id ?? null;
+    };
+    // In an operation, each stage has its own kind of work.
+    const stage = input.mission.stage;
+    const proposedTasks: ProposedTask[] =
+      stage === 'inspect' || stage === 'guard' || stage === 'deploy'
+        ? [
+            {
+              title:
+                stage === 'inspect'
+                  ? `Test: ${input.mission.goal}`
+                  : stage === 'guard'
+                    ? `Security review: ${input.mission.goal}`
+                    : `Deploy to production: ${input.mission.goal}`,
+              description: `Stage “${stage}” of the operation. Done when: ${input.mission.definitionOfDone.join('; ')}.`,
+              botId: pick(),
+              scenario:
+                stage === 'inspect'
+                  ? 'inspect-strict'
+                  : stage === 'guard'
+                    ? 'guard-check'
+                    : 'deploy',
+              kind: stage === 'deploy' ? 'deploy' : 'check',
+            },
+          ]
+        : input.mission.definitionOfDone.map((item) => ({
+            title: item,
+            description: `Part of mission “${input.mission.goal}”. Done when: ${item}.`,
+            botId: pick(),
+            scenario: 'happy-path',
+            kind: 'work' as const,
+          }));
 
     const risks: string[] = [];
     if (!bots.length)
@@ -165,5 +197,76 @@ export class SimulatedOverseer {
       });
     }
     return { score: Math.max(0, 100 - gaps.length * 25), gaps };
+  }
+
+  /** O Group: one mission per unit, ordered build → inspect → guard → deploy, matched by each unit's role. */
+  planOperation(input: OperationPlanInput): OperationPlan {
+    const stageOf = (u: OperationPlanInput['units'][number]) => {
+      const text = `${u.name} ${u.role}`.toLowerCase();
+      if (/engineer|develop/.test(text)) return 'build' as const;
+      if (/inspect|qa|test/.test(text)) return 'inspect' as const;
+      if (/guard|secur/.test(text)) return 'guard' as const;
+      if (/logistic|devops|ops|deploy/.test(text)) return 'deploy' as const;
+      return null;
+    };
+    const intent = input.intent.replace(/[.!]+$/, '');
+    const goals = {
+      build: { goal: intent, dod: [intent] },
+      inspect: {
+        goal: `Prove it works: ${intent}`,
+        dod: ['Tests cover the change', 'Tests pass on the integration branch'],
+      },
+      guard: { goal: `Security review: ${intent}`, dod: ['No high or critical findings'] },
+      deploy: {
+        goal: `Deploy to production: ${intent}`,
+        dod: ['Deployed to production with the Commander’s approval'],
+      },
+    };
+    const order = ['build', 'inspect', 'guard', 'deploy'] as const;
+    const missions = order.flatMap((stage) => {
+      const unit = input.units.find((u) => stageOf(u) === stage);
+      return unit
+        ? [{ unitId: unit.id, stage, goal: goals[stage].goal, definitionOfDone: goals[stage].dod }]
+        : [];
+    });
+    return { name: input.name, missions };
+  }
+
+  afterAction(input: AfterActionInput): AfterActionReview {
+    const of = (k: string) => input.timeline.filter((t) => t.kind === k);
+    const sendbacks = of('sendback');
+    const blocks = of('blocked');
+    const handoffs = of('handoff');
+    const deployed = of('deployment').length > 0;
+    const lessons: AfterActionReview['lessons'] = [];
+    for (const s of sendbacks) {
+      const unit = input.units.find((u) => u.name === s.unit);
+      lessons.push({
+        unitId: unit?.id ?? null,
+        text: `Before handing over, check: ${s.text.replace(/^Sent back[^:]*:\s*/i, '').replace(/[.]$/, '')}.`,
+      });
+    }
+    for (const b of blocks) {
+      if (/deploy rights|not been issued|no access/i.test(b.text)) {
+        lessons.push({
+          unitId: null,
+          text: `Issue supply before the work that needs it starts (blocked: ${b.text.replace(/[.]$/, '')}).`,
+        });
+      }
+    }
+    return {
+      summary: `Operation ${input.operation.name}: ${deployed ? 'deployed to production' : 'not deployed'} after ${handoffs.length} handoff(s), ${sendbacks.length} send-back(s) and ${blocks.length} block(s).`,
+      wentWell: [
+        ...(deployed ? ['The change reached production with your approval.'] : []),
+        ...(handoffs.length
+          ? [`Every handoff carried the same integration branch (${handoffs.length} in total).`]
+          : []),
+      ],
+      toImprove: [
+        ...sendbacks.map((s) => `Send-back: ${s.text}`),
+        ...blocks.map((b) => `Block: ${b.text}`),
+      ],
+      lessons,
+    };
   }
 }

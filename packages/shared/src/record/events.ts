@@ -22,7 +22,38 @@ export const RecordEventBodies = {
   'bot.step': z.object({ action: z.string(), detail: z.string(), outcome: z.string().nullable() }),
   'diary.entry': z.object({ category: DiaryCategory, text: z.string() }),
   sitrep: z.object({ level: SitrepLevel, text: z.string(), status: TaskStatus.nullable() }),
-  artifact: z.object({ kind: z.enum(['commit', 'file']), ref: z.string(), summary: z.string() }),
+  artifact: z.object({
+    kind: z.enum(['commit', 'file', 'deployment']),
+    ref: z.string(),
+    summary: z.string(),
+  }),
+  'operation.phase': z.object({ from: z.string(), to: z.string(), reason: z.string() }),
+  /** Work passed from one unit to the next in an operation. */
+  handoff: z.object({
+    fromUnitId: z.string(),
+    toUnitId: z.string(),
+    fromMissionId: z.string(),
+    toMissionId: z.string(),
+    ref: z.string(),
+    commit: z.string(),
+  }),
+  /** A failed check sent work back to the previous unit. */
+  sendback: z.object({
+    fromUnitId: z.string(),
+    toUnitId: z.string(),
+    reason: z.string(),
+    fixTaskId: z.string(),
+  }),
+  integration: z.object({ branch: z.string(), commit: z.string(), from: z.string() }),
+  deployment: z.object({ environment: z.string(), ref: z.string(), commit: z.string() }),
+  'deploy.approval': z.object({
+    status: z.enum(['approved', 'rejected']),
+    note: z.string().nullable(),
+  }),
+  'after-action': z.object({
+    documentId: z.string(),
+    lessons: z.array(z.object({ unitId: z.string().nullable(), text: z.string() })),
+  }),
   cost: z.object({ units: z.number().nonnegative(), total: z.number().nonnegative() }),
   'credential.used': z.object({ secretName: z.string(), purpose: z.string() }),
   'policy.check': z.object({

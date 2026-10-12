@@ -20,6 +20,7 @@ const unit = (over: Partial<InterpretUnit> = {}): InterpretUnit => ({
       statusReason: null,
       missionId: null,
       botCallsign: 'G-1',
+      kind: 'work',
     },
   ],
   missions: [],
@@ -45,6 +46,7 @@ const input = (message: string, over: Partial<InterpretInput> = {}): InterpretIn
       tier: 'production',
     },
   ],
+  operations: [],
   ...over,
 });
 const i = new SimulatedInterpreter();

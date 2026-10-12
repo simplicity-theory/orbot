@@ -11,6 +11,8 @@ import type {
   MissionBody,
   MissionProgress,
   MissionView,
+  OperationDetailView,
+  OperationSummary,
   OrbatUnit,
   OrbatView,
   PaletteItem,
@@ -229,6 +231,97 @@ export class ViewsService {
     return backbriefViews([bb], missions, units, bots)[0]!;
   }
 
+  async operations(): Promise<OperationSummary[]> {
+    const ops = await this.record.listActive('operation');
+    return Promise.all(
+      ops
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+        .map((o) => this.operationSummary(o.entityId)),
+    );
+  }
+
+  async operationSummary(id: string): Promise<OperationSummary> {
+    const op = await this.record.requireActive('operation', id);
+    const [units, bots, missions, tasks, backbriefs] = await Promise.all([
+      this.record.listActive('unit'),
+      this.record.listActive('bot'),
+      this.record.listActive('mission', { bodyContains: { operationId: id } }),
+      this.record.listActive('task'),
+      this.record.listActive('backbrief'),
+    ]);
+    const order = op.body.missionIds.length ? op.body.missionIds : missions.map((m) => m.entityId);
+    const bbViews = backbriefViews(
+      backbriefs.filter((b) => order.includes(b.body.missionId)),
+      missions,
+      units,
+      bots,
+    );
+    const rows = order.flatMap((mid) => {
+      const m = missions.find((x) => x.entityId === mid);
+      const u = m && units.find((x) => x.entityId === m.body.unitId);
+      if (!m || !u) return [];
+      const mt = toViews(tasks.filter((t) => t.body.missionId === mid));
+      return [
+        {
+          mission: toView(m),
+          unit: toView(u),
+          done: mt.filter((t) => t.status === 'done').length,
+          total: mt.length,
+          tasks: mt,
+          backbrief: bbViews.find((b) => b.missionId === mid) ?? null,
+        },
+      ];
+    });
+    const needsYou = rows.flatMap((r) => [
+      ...(r.backbrief?.status === 'awaiting-approval'
+        ? [
+            {
+              kind: 'awaiting-approval' as const,
+              label: `${r.unit.name} backbrief awaiting approval`,
+              link: `/operations/${id}`,
+              entityId: r.backbrief.id,
+            },
+          ]
+        : []),
+      ...attentionFor(
+        r.unit.id,
+        toViews(bots.filter((b) => b.body.unitId === r.unit.id)),
+        r.tasks,
+        [],
+      ),
+    ]);
+    return { operation: toView(op), missions: rows, needsYou };
+  }
+
+  async operation(id: string): Promise<OperationDetailView> {
+    const summary = await this.operationSummary(id);
+    const op = summary.operation;
+    const [timeline, record, aar] = await Promise.all([
+      this.record.listEvents({
+        operationId: id,
+        kinds: [
+          'operation.phase',
+          'handoff',
+          'sendback',
+          'integration',
+          'deployment',
+          'sitrep',
+          'deploy.approval',
+          'after-action',
+        ],
+        limit: 1000,
+      }),
+      op.recordDocumentId ? this.record.getActive('document', op.recordDocumentId) : null,
+      op.afterActionDocumentId ? this.record.getActive('document', op.afterActionDocumentId) : null,
+    ]);
+    return {
+      ...summary,
+      timeline,
+      record: record ? toView(record) : null,
+      afterAction: aar ? toView(aar) : null,
+    };
+  }
+
   /** Everything the command palette can jump to. */
   async palette(): Promise<PaletteItem[]> {
     const [units, bots, tasks, ops, docs, missions] = await Promise.all([
@@ -276,7 +369,7 @@ export class ViewsService {
         id: o.entityId,
         label: `Operation ${o.body.name}`,
         sublabel: `Operation · ${o.body.phase}`,
-        link: `/archive/${o.entityId}`,
+        link: `/operations/${o.entityId}`,
       })),
       ...docs.map((d) => ({
         kind: 'document' as const,
@@ -366,11 +459,15 @@ function attentionFor(
     });
   }
   for (const t of tasks.filter((t) => t.status === 'awaiting-approval')) {
+    const deploy = t.kind === 'deploy';
     items.push({
       kind: 'awaiting-approval',
-      label: `Task #${t.number} awaiting approval`,
+      label: deploy
+        ? `Production deploy awaiting approval: #${t.number} ${t.title}`
+        : `Task #${t.number} awaiting approval`,
       link: taskLink(unitId, t.botId, t.id),
       entityId: t.id,
+      ...(deploy ? { action: 'approve-deploy' as const } : {}),
     });
   }
   return items;

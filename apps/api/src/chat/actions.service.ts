@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { BadRequestException, Injectable } from '@nestjs/common';
 import type { ChatAction, ChatLink, TaskBody, TaskStatus } from '@orbot/shared';
 import { TaskRunner } from '../execution/task-runner.js';
+import { HqService } from '../overseer/hq.service.js';
 import { OverseerService } from '../overseer/overseer.service.js';
 import { RecordService, type WriteContext } from '../record/record.service.js';
 import { SupplyService } from '../supply/supply.service.js';
@@ -31,9 +32,19 @@ export class ActionsService {
     private readonly overseer: OverseerService,
     private readonly supply: SupplyService,
     private readonly runner: TaskRunner,
+    private readonly hq: HqService,
   ) {}
 
   async run(action: ChatAction, ctx: WriteContext): Promise<ActionResult> {
+    if (action.kind === 'create-operation') {
+      const op = await this.hq.createOperation(action.intent, action.name, ctx.actor);
+      return {
+        summary: `Operation ${op.body.name} launched: HQ is holding the O Group and will issue missions to the units.`,
+        links: [{ label: `Operation ${op.body.name}`, link: `/operations/${op.entityId}` }],
+        inverse: null,
+        affects: [],
+      };
+    }
     const unit = await this.record.requireActive('unit', action.unitId);
     const u = unit.body.name;
     switch (action.kind) {
@@ -234,6 +245,22 @@ export class ActionsService {
           summary: `${s.body.name} withdrawn from ${u}.`,
           links: [{ label: `${u} supply`, link: unitLink(action.unitId, 'supply') }],
           inverse: { kind: 'supply-grant', unitId: action.unitId, supplyId: action.supplyId },
+          affects: [],
+        };
+      }
+      case 'approve-deploy': {
+        const t = await this.overseer.decideDeploy(
+          action.taskId,
+          action.approve,
+          'Given in chat',
+          ctx.actor,
+        );
+        return {
+          summary: action.approve
+            ? `Production deploy approved for task #${t.body.number} (${u}).`
+            : `Production deploy rejected for task #${t.body.number} (${u}).`,
+          links: [{ label: `Task #${t.body.number}`, link: taskLink(t.body, t.entityId) }],
+          inverse: null,
           affects: [],
         };
       }

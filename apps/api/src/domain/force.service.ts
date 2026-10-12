@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { BotBody, UnitBody } from '@orbot/shared';
+import type { EntityInputMap } from '@orbot/shared';
 import { RecordService, type WriteContext } from '../record/record.service.js';
 
 /** Units and bots: the order of battle. */
@@ -16,7 +16,7 @@ export class ForceService {
     return this.record.requireActive('unit', id);
   }
 
-  createUnit(body: UnitBody, ctx: WriteContext, id?: string) {
+  createUnit(body: EntityInputMap['unit'], ctx: WriteContext, id?: string) {
     return this.record.create('unit', body, ctx, id);
   }
 
@@ -28,7 +28,7 @@ export class ForceService {
     return this.record.requireActive('bot', id);
   }
 
-  createBot(body: BotBody, ctx: WriteContext, id?: string) {
+  createBot(body: EntityInputMap['bot'], ctx: WriteContext, id?: string) {
     return this.record.create('bot', body, ctx, id);
   }
 

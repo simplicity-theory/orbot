@@ -58,7 +58,7 @@ describe('demo seed', () => {
 
     const ops = (await t.agent.get('/api/operations').expect(200)).body;
     expect(ops).toHaveLength(1);
-    expect(ops[0].phase).toBe('execution');
+    expect(ops[0].operation.phase).toBe('execution');
   });
 
   it('is idempotent', async () => {

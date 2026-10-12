@@ -24,6 +24,8 @@ export interface UnitFixtureOptions {
   /** Give the unit an Overseer (default true). */
   overseer?: boolean;
   gate?: 'approve-everything' | 'backbriefs-and-deploys' | 'escalations-only';
+  role?: string;
+  prefix?: string;
   bots?: number;
   supplyIds?: string[];
 }
@@ -42,9 +44,9 @@ export async function makeUnitWithBot(
     {
       name,
       slug: name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
-      role: 'Developers',
+      role: opts.role ?? 'Developers',
       standingMission: 'Build features and fix bugs to spec.',
-      callsignPrefix: 'E',
+      callsignPrefix: opts.prefix ?? 'E',
       overseerBotId: overseerId,
       approvalGate: opts.gate ?? 'backbriefs-and-deploys',
       rulesOfEngagement: { mayDoAlone: [], mustEscalate: [] },

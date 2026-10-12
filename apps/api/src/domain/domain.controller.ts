@@ -47,11 +47,6 @@ export class DomainController {
     return this.views.bot(id);
   }
 
-  @Get('operations')
-  async operations() {
-    return toViews(await this.work.listOperations());
-  }
-
   @Get('tasks')
   async tasks(@Query(new ZodPipe(TaskFilter)) q: z.infer<typeof TaskFilter>) {
     return toViews(await this.work.listTasks(q));

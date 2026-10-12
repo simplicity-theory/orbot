@@ -160,10 +160,15 @@ describe('command by chat', () => {
     expect((relay.body as { relayedFrom: string }).relayedFrom).toBe(eng);
   });
 
-  it('HQ asks which unit when an order names none', async () => {
+  it('to HQ, an order naming no unit launches an operation; anything else asks which unit', async () => {
     const r = await say('hq', 'Add audit logging.');
-    expect(r.readback.body.items).toEqual([]);
-    expect(r.readback.body.unclear[0]).toMatch(/which unit should do this/);
+    expect(r.readback.body.items[0]).toMatchObject({
+      routedVia: 'hq',
+      summary: expect.stringMatching(/^Operation Audit Logging launched/),
+    });
+    const r2 = await say('hq', 'The login page needs a dark theme.');
+    expect(r2.readback.body.items).toEqual([]);
+    expect(r2.readback.body.unclear[0]).toMatch(/which unit should do this/);
   });
 
   it('the chat view shows both sides, undo state and answered pending items', async () => {

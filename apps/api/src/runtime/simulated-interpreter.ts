@@ -21,8 +21,9 @@ const RESUME = /\b(resume|pick (it|that|.+) back up|restart|carry on with|un-?pa
 const FRAGO_DROP =
   /\b(drop|pause|hold off( on)?|put .+ on hold|park|shelve|deprioriti[sz]e)\b|\bfor now\b/i;
 const FRAGO_AMEND = /\b(instead|also make sure|make sure|change .+ to)\b/i;
+const DEPLOY_DECISION = /\b(approve|reject|refuse|hold)\b.*\b(deploy|deployment|release)\b/i;
 const IMPERATIVE =
-  /^(add|build|fix|implement|create|write|make|ship|refactor|update|remove|migrate|investigate|review|test|document|set up|harden|improve|support|rename|upgrade|split|clean up|automate|audit|scan)\b/i;
+  /^(ship|launch|roll out|add|build|fix|implement|create|write|make|ship|refactor|update|remove|migrate|investigate|review|test|document|set up|harden|improve|support|rename|upgrade|split|clean up|automate|audit|scan)\b/i;
 const FILLER = new Set([
   'work',
   'along',
@@ -51,6 +52,14 @@ function overlap(about: Set<string>, text: string): number {
   for (const w of about)
     if (t.has(w) || [...t].some((x) => x.startsWith(w.slice(0, 5)) && w.length > 4)) n++;
   return n / about.size;
+}
+
+/** A short code name from the intent's first content words, e.g. "Login Rate Limiting". */
+function operationName(intent: string): string {
+  const ws = [...words(intent)]
+    .filter((w) => !['ship', 'launch', 'production', 'add', 'build', 'roll'].includes(w))
+    .slice(0, 3);
+  return ws.length ? ws.map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : 'Unnamed';
 }
 
 const sentenceCase = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -87,7 +96,47 @@ export class SimulatedInterpreter {
         answers.push(this.answer(sentence, unit, input));
         continue;
       }
+      // Deploy approvals can be given from any channel.
+      if (DEPLOY_DECISION.test(sentence)) {
+        const approve = /\bapprove\b/i.test(sentence);
+        const waiting = (unit ? [unit] : input.units).flatMap((u) =>
+          u.tasks
+            .filter((t) => t.kind === 'deploy' && t.status === 'awaiting-approval')
+            .map((t) => ({ u, t })),
+        );
+        if (!waiting.length) {
+          out.unclear.push(`${raw} — no deploy is waiting for approval.`);
+        } else {
+          kinds.add('order');
+          for (const { u, t } of waiting)
+            out.actions.push({ kind: 'approve-deploy', unitId: u.id, taskId: t.id, approve });
+        }
+        continue;
+      }
       if (!unit) {
+        // To HQ, an order that names no unit is a statement of intent: launch an operation.
+        if (
+          !input.channelUnitId &&
+          (IMPERATIVE.test(sentence) || /\boperation\b/i.test(sentence))
+        ) {
+          const intent = sentenceCase(
+            sentence.replace(/^(launch an? |start an? )?operation[:,]?\s*/i, ''),
+          );
+          const action: ChatAction = {
+            kind: 'create-operation',
+            unitId: null,
+            intent: `${intent}.`,
+            name: operationName(intent),
+          };
+          if (hedged) {
+            kinds.add('musing');
+            out.musings.push(action);
+          } else {
+            kinds.add('order');
+            out.actions.push(action);
+          }
+          continue;
+        }
         out.unclear.push(
           `${raw} — which unit should do this? Name it, or say it to that unit's Overseer.`,
         );

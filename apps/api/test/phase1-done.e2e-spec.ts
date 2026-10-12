@@ -199,5 +199,9 @@ function matchInRecord(
       return ofKind('task.status').some(
         (e) => e.body.to === 'stood-down' && e.body.reason === ev.reason,
       );
+    case 'send-back':
+      return ofKind('task.status').some(
+        (e) => e.body.to === 'stood-down' && e.body.reason === `Sent back: ${ev.reason}`,
+      );
   }
 }

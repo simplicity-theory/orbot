@@ -126,3 +126,15 @@ export const StandingOrdersRequest = z.object({
   expectedVersion: z.number().int().positive(),
 });
 export type StandingOrdersRequest = z.input<typeof StandingOrdersRequest>;
+
+export const CreateOperationRequest = z.object({
+  intent: z.string().trim().min(1).max(1000),
+  name: z.string().trim().min(1).max(100).optional(),
+});
+export type CreateOperationRequest = z.input<typeof CreateOperationRequest>;
+
+export const DeployDecisionRequest = z.object({
+  approve: z.boolean(),
+  note: z.string().trim().max(1000).nullable().default(null),
+});
+export type DeployDecisionRequest = z.input<typeof DeployDecisionRequest>;

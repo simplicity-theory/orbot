@@ -43,6 +43,8 @@ import { CurationService } from './overseer/curation.service.js';
 import { OverseerController } from './overseer/overseer.controller.js';
 import { OverseerService } from './overseer/overseer.service.js';
 import { Overseers } from './overseer/overseers.js';
+import { HqService } from './overseer/hq.service.js';
+import { OperationsController } from './overseer/operations.controller.js';
 import { ActionsService } from './chat/actions.service.js';
 import { ChatController } from './chat/chat.controller.js';
 import { ChatService } from './chat/chat.service.js';
@@ -70,6 +72,7 @@ export class AppModule {
         OverseerController,
         ChatController,
         SettingsController,
+        OperationsController,
       ],
       providers: [
         { provide: LOG_DESTINATION, useValue: opts.logDestination ?? null },
@@ -115,6 +118,7 @@ export class AppModule {
         ColdStartService,
         OverseerService,
         SettingsService,
+        HqService,
         ActionsService,
         ChatService,
         EventsGateway,

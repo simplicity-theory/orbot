@@ -93,16 +93,37 @@ export const OperationPhase = z.enum([
 ]);
 export type OperationPhase = z.infer<typeof OperationPhase>;
 
+export const Deployment = z.object({
+  environment: z.string(),
+  ref: z.string(),
+  commit: z.string(),
+  taskId: Id,
+  at: z.iso.datetime({ offset: true }),
+});
+export type Deployment = z.infer<typeof Deployment>;
+
 export const OperationBody = z.object({
   name: z.string().min(1),
   intent: z.string().min(1),
   phase: OperationPhase,
   supplyIds: z.array(Id),
+  /** Missions in handoff order (Engineers → Inspection → Guard → Logistics). */
+  missionIds: z.array(Id).default([]),
+  /** The repository the operation's work lands in. */
+  repoSupplyId: Id.nullable().default(null),
+  /** Branch every unit's work is integrated on, then deployed from. */
+  integrationBranch: z.string().nullable().default(null),
+  deployment: Deployment.nullable().default(null),
+  /** The shared cross-unit record (a document) and the After Action review. */
+  recordDocumentId: Id.nullable().default(null),
+  afterActionDocumentId: Id.nullable().default(null),
 });
 export type OperationBody = z.infer<typeof OperationBody>;
 
 export const MissionStatus = z.enum([
   'withdrawn',
+  /** Approved, waiting for the upstream unit to hand off. */
+  'waiting',
   'planning',
   'awaiting-approval',
   'working',
@@ -112,6 +133,12 @@ export const MissionStatus = z.enum([
 ]);
 export type MissionStatus = z.infer<typeof MissionStatus>;
 
+export const MissionStage = z.enum(['build', 'inspect', 'guard', 'deploy']);
+export type MissionStage = z.infer<typeof MissionStage>;
+
+/** Which unit role does which stage, in handoff order. */
+export const STAGE_ORDER: readonly MissionStage[] = ['build', 'inspect', 'guard', 'deploy'];
+
 export const MissionBody = z.object({
   /** Null for missions given straight to a unit (before HQ routes them, Phase 4). */
   operationId: Id.nullable(),
@@ -119,6 +146,9 @@ export const MissionBody = z.object({
   goal: z.string().min(1),
   definitionOfDone: z.array(z.string().min(1)),
   status: MissionStatus,
+  /** In an operation: the stage this mission is, and the mission that hands off to it. */
+  stage: MissionStage.nullable().default(null),
+  dependsOnMissionId: Id.nullable().default(null),
 });
 export type MissionBody = z.infer<typeof MissionBody>;
 
@@ -136,6 +166,18 @@ export const Workspace = z.object({
   baseCommit: z.string().min(1),
 });
 export type Workspace = z.infer<typeof Workspace>;
+
+export const TaskKind = z.enum(['work', 'fix', 'check', 'deploy']);
+export type TaskKind = z.infer<typeof TaskKind>;
+
+export const TaskApproval = z.object({
+  kind: z.literal('production-deploy'),
+  status: z.enum(['pending', 'approved', 'rejected']),
+  by: z.string().nullable(),
+  at: z.iso.datetime({ offset: true }).nullable(),
+  note: z.string().nullable(),
+});
+export type TaskApproval = z.infer<typeof TaskApproval>;
 
 export const TaskBody = z.object({
   /** Human-facing number, e.g. Task #142. */
@@ -158,6 +200,11 @@ export const TaskBody = z.object({
   continuesTaskId: Id.nullable().default(null),
   /** Started by the Overseer's dispatcher when its bot is free (tasks from approved backbriefs). */
   autoStart: z.boolean().default(false),
+  kind: TaskKind.default('work'),
+  /** Branch the task's workspace is cut from (an operation's integration branch); null = default branch. */
+  baseRef: z.string().nullable().default(null),
+  /** Production deploys wait for the Commander's approval (per the unit's approval gate). */
+  approval: TaskApproval.nullable().default(null),
 });
 export type TaskBody = z.infer<typeof TaskBody>;
 
@@ -197,6 +244,7 @@ export type SupplyBody = z.infer<typeof SupplyBody>;
 // ---------- Documents ----------
 
 export const DocumentKind = z.enum([
+  'operation-record',
   'field-manual',
   'standing-orders',
   'handover',
@@ -212,6 +260,8 @@ export const DocumentBody = z.object({
   markdown: z.string(),
   /** For handovers: the task the handover closes. */
   taskId: Id.nullable(),
+  /** For operation records and After Action reviews. */
+  operationId: Id.nullable().default(null),
   botId: Id.nullable(),
 });
 export type DocumentBody = z.infer<typeof DocumentBody>;
@@ -224,6 +274,7 @@ export const ProposedTask = z.object({
   botId: Id.nullable(),
   /** SimulatedRuntime scenario; ignored by other runtimes. */
   scenario: z.string().nullable(),
+  kind: TaskKind.default('work'),
 });
 export type ProposedTask = z.infer<typeof ProposedTask>;
 
@@ -331,3 +382,6 @@ export interface EntityBodyMap {
   'fm-entry': FmEntryBody;
   settings: SettingsBody;
 }
+
+/** What a write may supply: defaulted fields are optional and filled in by the schema. */
+export type EntityInputMap = { [K in EntityType]: z.input<(typeof ENTITY_BODY_SCHEMAS)[K]> };

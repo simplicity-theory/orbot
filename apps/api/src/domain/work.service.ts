@@ -1,10 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import {
-  CreateTaskRequest,
-  type MissionBody,
-  type OperationBody,
-  type TaskBody,
-} from '@orbot/shared';
+import { CreateTaskRequest, type EntityInputMap, type TaskBody } from '@orbot/shared';
 import type { z } from 'zod';
 import { RecordService, type RecordWriter, type WriteContext } from '../record/record.service.js';
 
@@ -13,7 +8,7 @@ import { RecordService, type RecordWriter, type WriteContext } from '../record/r
 export class WorkService {
   constructor(private readonly record: RecordService) {}
 
-  createOperation(body: OperationBody, ctx: WriteContext, id?: string) {
+  createOperation(body: EntityInputMap['operation'], ctx: WriteContext, id?: string) {
     return this.record.create('operation', body, ctx, id);
   }
 
@@ -21,7 +16,7 @@ export class WorkService {
     return this.record.listActive('operation');
   }
 
-  createMission(body: MissionBody, ctx: WriteContext, id?: string) {
+  createMission(body: EntityInputMap['mission'], ctx: WriteContext, id?: string) {
     return this.record.create('mission', body, ctx, id);
   }
 
@@ -70,11 +65,16 @@ export class WorkService {
   async writeTask(
     w: RecordWriter,
     number: number,
-    input: z.output<typeof CreateTaskRequest> & { autoStart?: boolean },
+    input: z.output<typeof CreateTaskRequest> & {
+      autoStart?: boolean;
+      kind?: TaskBody['kind'];
+      baseRef?: string | null;
+      approval?: TaskBody['approval'];
+    },
     ctx: WriteContext,
     id?: string,
   ) {
-    const body: TaskBody = {
+    const body: EntityInputMap['task'] = {
       number,
       title: input.title,
       description: input.description,
@@ -90,6 +90,9 @@ export class WorkService {
       statusReason: null,
       continuesTaskId: input.continuesTaskId ?? null,
       autoStart: input.autoStart ?? false,
+      kind: input.kind ?? 'work',
+      baseRef: input.baseRef ?? null,
+      approval: input.approval ?? null,
     };
     const task = await w.create('task', body, ctx, id);
     await w.event(

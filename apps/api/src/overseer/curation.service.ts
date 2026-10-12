@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { SourceRef } from '@orbot/shared';
+import { parseHandoverMarkdown, type SourceRef } from '@orbot/shared';
 import { FieldManualService } from '../documents/field-manual.service.js';
 import { RecordService } from '../record/record.service.js';
 import { Overseers } from './overseers.js';
@@ -40,6 +40,7 @@ export class CurationService {
         tags: e.body.tags,
       })),
     });
+    await this.crossUnitLessons(doc.body.markdown, unitId, task?.body.missionId ?? null, cmd.actor);
     if (!actions.length) return;
 
     const source: SourceRef = {
@@ -72,5 +73,29 @@ export class CurationService {
         reason: `Curated from ${source.label}`,
       });
     });
+  }
+
+  /** Flags that name another unit are lessons for that unit: they go up to HQ's shared record. */
+  private async crossUnitLessons(
+    markdown: string,
+    unitId: string,
+    missionId: string | null,
+    actor: string,
+  ) {
+    const units = await this.record.listActive('unit');
+    const from = units.find((u) => u.entityId === unitId)?.body.name ?? 'A unit';
+    const mission = missionId ? await this.record.getActive('mission', missionId) : null;
+    for (const flag of parseHandoverMarkdown(markdown).flagsForSuccessor) {
+      const other = units.find(
+        (u) => u.entityId !== unitId && new RegExp(`\\b${u.body.name}\\b`, 'i').test(flag),
+      );
+      if (!other) continue;
+      await this.record.event(
+        'sitrep',
+        { level: 'hq', text: `Lesson for ${other.body.name} from ${from}: ${flag}`, status: null },
+        { operationId: mission?.body.operationId ?? null, unitId: other.entityId },
+        actor,
+      );
+    }
   }
 }

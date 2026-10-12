@@ -84,6 +84,11 @@ export class OverseerService implements OnApplicationBootstrap, OnModuleDestroy 
     this.sub?.unsubscribe();
   }
 
+  /** Ask the unit's Overseer to start whatever it can (after a handoff, an approval…). */
+  dispatchSoon(unitId: string): void {
+    this.enqueue(unitId, 'dispatch', () => this.dispatch(unitId));
+  }
+
   private enqueue(unitId: string, label: string, job: () => Promise<unknown>) {
     this.background.run(`unit:${unitId}`, `overseer:${label}`, job);
   }
@@ -122,6 +127,7 @@ export class OverseerService implements OnApplicationBootstrap, OnModuleDestroy 
         id: missionId,
         goal: mission.body.goal,
         definitionOfDone: mission.body.definitionOfDone,
+        stage: mission.body.stage ?? null,
       },
       unit: {
         id: cmd.unit.entityId,
@@ -281,6 +287,17 @@ export class OverseerService implements OnApplicationBootstrap, OnModuleDestroy 
     const numbers: number[] = [];
     for (let i = 0; i < tasks.length; i++) numbers.push(await this.record.nextTaskNumber());
 
+    // In an operation: work lands on the operation's branch, and waits for the upstream handoff.
+    const mission = await this.record.requireActive('mission', bb.body.missionId);
+    const op = mission.body.operationId
+      ? await this.record.getActive('operation', mission.body.operationId)
+      : null;
+    const upstream = mission.body.dependsOnMissionId
+      ? await this.record.getActive('mission', mission.body.dependsOnMissionId)
+      : null;
+    const waiting = !!upstream && upstream.body.status !== 'done';
+    const deployNeedsApproval = cmd.unit.body.approvalGate !== 'escalations-only';
+
     return this.record.transaction(async (w) => {
       const taskIds: string[] = [];
       for (const [i, t] of tasks.entries()) {
@@ -293,12 +310,18 @@ export class OverseerService implements OnApplicationBootstrap, OnModuleDestroy 
             missionId: bb.body.missionId,
             title: t.title,
             description: t.description,
-            repoSupplyId: repo?.entityId ?? null,
+            repoSupplyId: op?.body.repoSupplyId ?? repo?.entityId ?? null,
             credentialNames,
             scenario: t.scenario,
             budgetLimitUnits: null,
             continuesTaskId: null,
             autoStart: true,
+            kind: t.kind,
+            baseRef: op?.body.integrationBranch ?? null,
+            approval:
+              t.kind === 'deploy' && deployNeedsApproval
+                ? { kind: 'production-deploy', status: 'pending', by: null, at: null, note: null }
+                : null,
           },
           { actor: cmd.actor, reason: `Issued under approved backbrief (round ${bb.body.round})` },
         );
@@ -325,11 +348,16 @@ export class OverseerService implements OnApplicationBootstrap, OnModuleDestroy 
           expectedVersion: input.expectedVersion,
         },
       );
-      const mission = await w.revise(
+      await w.revise(
         'mission',
         bb.body.missionId,
-        (m) => ({ ...m, status: 'working' }),
-        { actor: cmd.actor, reason: 'Backbrief approved; work issued' },
+        (m) => ({ ...m, status: waiting ? 'waiting' : 'working' }),
+        {
+          actor: cmd.actor,
+          reason: waiting
+            ? 'Backbrief approved; waiting for the handoff from upstream'
+            : 'Backbrief approved; work issued',
+        },
       );
       await this.sitrep(
         w,
@@ -337,7 +365,7 @@ export class OverseerService implements OnApplicationBootstrap, OnModuleDestroy 
         bb.body.missionId,
         null,
         cmd.actor,
-        `Wilco. “${mission.body.goal}”: ${tasks.length} task(s) issued${outcome === 'amended' ? ' as amended' : ''}.`,
+        `Wilco. “${mission.body.goal}”: ${tasks.length} task(s) issued${outcome === 'amended' ? ' as amended' : ''}${waiting ? '; they start when the upstream unit hands off' : ''}.`,
       );
       return decided;
     });
@@ -358,6 +386,48 @@ export class OverseerService implements OnApplicationBootstrap, OnModuleDestroy 
         if (this.runner.isRunning(taskId)) break;
         const task = await this.record.getActive('task', taskId);
         if (!task || task.body.status !== 'queued' || !task.body.autoStart) continue;
+        if (task.body.missionId) {
+          const m = await this.record.getActive('mission', task.body.missionId);
+          if (m?.body.status === 'waiting') continue; // not handed off yet
+        }
+        if (task.body.kind === 'deploy' && task.body.approval?.status === 'pending') {
+          // Production deploys wait for the Commander.
+          await this.record.transaction(async (w) => {
+            await w.revise(
+              'task',
+              taskId,
+              (t) => ({
+                ...t,
+                status: 'awaiting-approval',
+                statusReason: 'Production deploy: waiting for your approval',
+              }),
+              {
+                actor: cmd.actor,
+                reason: 'Production deploys need the Commander’s approval',
+              },
+            );
+            await w.event(
+              'task.status',
+              {
+                from: 'queued',
+                to: 'awaiting-approval',
+                reason: 'Production deploy: waiting for your approval',
+              },
+              { unitId, botId: bot.entityId, taskId, missionId: task.body.missionId },
+              cmd.actor,
+            );
+            await this.sitrep(
+              w,
+              unitId,
+              task.body.missionId,
+              taskId,
+              cmd.actor,
+              `Task #${task.body.number} is ready to deploy to production and waits for your approval.`,
+              'awaiting-approval',
+            );
+          });
+          continue;
+        }
         try {
           await this.runner.start(taskId, cmd.actor);
         } catch (err) {
@@ -438,6 +508,77 @@ export class OverseerService implements OnApplicationBootstrap, OnModuleDestroy 
       }
     });
     await this.dispatch(task.body.unitId);
+  }
+
+  /** The Commander approves (or rejects) a production deploy. */
+  async decideDeploy(taskId: string, approve: boolean, note: string | null, actor: string) {
+    const task = await this.record.requireActive('task', taskId);
+    const mission = task.body.missionId
+      ? await this.record.getActive('mission', task.body.missionId)
+      : null;
+    const operationId = mission?.body.operationId ?? null;
+    if (task.body.kind !== 'deploy' || task.body.approval?.status !== 'pending') {
+      throw new ConflictException({
+        message: `Task #${task.body.number} is not a deploy waiting for approval.`,
+        action: 'Reload to see its current state.',
+      });
+    }
+    const next = await this.record.transaction(async (w) => {
+      const t = await w.revise(
+        'task',
+        taskId,
+        (b) => ({
+          ...b,
+          approval: {
+            ...b.approval!,
+            status: approve ? 'approved' : 'rejected',
+            by: actor,
+            at: new Date().toISOString(),
+            note,
+          },
+          status: approve ? 'queued' : 'stood-down',
+          statusReason: approve
+            ? 'Production deploy approved'
+            : `Production deploy rejected${note ? `: ${note}` : ''}`,
+        }),
+        {
+          actor,
+          reason: approve
+            ? `Production deploy approved${note ? `: ${note}` : ''}`
+            : `Production deploy rejected${note ? `: ${note}` : ''}`,
+        },
+      );
+      await w.event(
+        'deploy.approval',
+        { status: approve ? 'approved' : 'rejected', note },
+        {
+          unitId: task.body.unitId,
+          taskId,
+          botId: task.body.botId,
+          missionId: task.body.missionId,
+          operationId,
+        },
+        actor,
+      );
+      await w.event(
+        'task.status',
+        {
+          from: task.body.status,
+          to: approve ? 'queued' : 'stood-down',
+          reason: approve ? 'Production deploy approved' : 'Production deploy rejected',
+        },
+        {
+          unitId: task.body.unitId,
+          taskId,
+          botId: task.body.botId,
+          missionId: task.body.missionId,
+        },
+        actor,
+      );
+      return t;
+    });
+    this.enqueue(task.body.unitId, 'dispatch', () => this.dispatch(task.body.unitId));
+    return next;
   }
 
   /** Move a task to another bot of the same unit. Its workspace (branch) goes with it. */

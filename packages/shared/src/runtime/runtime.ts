@@ -28,6 +28,13 @@ export interface BotRuntime {
   assessColdStart(input: ColdStartInput): Promise<ColdStartAssessment>;
   /** Read a Commander's chat message: answer it and/or turn it into typed actions. */
   interpret(input: InterpretInput): Promise<Interpretation>;
+
+  // ---- HQ staff work ----
+
+  /** O Group: split an operation's intent into one mission per unit, in handoff order. */
+  planOperation(input: OperationPlanInput): Promise<OperationPlan>;
+  /** After Action review: what went well, what to improve, lessons to keep as standing orders. */
+  afterAction(input: AfterActionInput): Promise<AfterActionReview>;
 }
 
 // ---------- Briefing ----------
@@ -118,7 +125,9 @@ export type BotEvent =
   | { type: 'step'; action: string; detail: string; outcome?: string }
   | { type: 'diary'; category: DiaryCategory; text: string }
   | { type: 'sitrep'; text: string; status?: TaskStatus }
-  | { type: 'artifact'; kind: 'commit' | 'file'; ref: string; summary: string }
+  | { type: 'artifact'; kind: 'commit' | 'file' | 'deployment'; ref: string; summary: string }
+  /** A check failed: send the work back to the unit that handed it over. */
+  | { type: 'send-back'; reason: string }
   | { type: 'cost'; units: number }
   | { type: 'blocked'; reason: string }
   /** The bot stops part-way (handed over) so another bot can pick the task up. */
@@ -182,7 +191,13 @@ export function parseHandoverMarkdown(md: string): HandoverNote {
 // ---------- Overseer inputs and outputs ----------
 
 export interface BackbriefInput {
-  mission: { id: string; goal: string; definitionOfDone: string[] };
+  /** `stage` is set for missions that are part of an operation's handoff chain. */
+  mission: {
+    id: string;
+    goal: string;
+    definitionOfDone: string[];
+    stage: 'build' | 'inspect' | 'guard' | 'deploy' | null;
+  };
   unit: { id: string; name: string; standingOrders: string[] };
   bots: { id: string; callsign: string; role: string; status: string; queueLength: number }[];
   fieldManual: BriefFieldManualEntry[];
@@ -243,6 +258,7 @@ export interface InterpretUnit {
     statusReason: string | null;
     missionId: string | null;
     botCallsign: string | null;
+    kind: string;
   }[];
   missions: { id: string; goal: string; status: string; done: number; total: number }[];
 }
@@ -253,4 +269,36 @@ export interface InterpretInput {
   channelUnitId: string | null;
   units: InterpretUnit[];
   depot: { id: string; name: string; kind: string; connected: boolean; tier: string | null }[];
+  operations: { id: string; name: string; phase: string }[];
+}
+
+export interface OperationPlanInput {
+  name: string;
+  intent: string;
+  units: { id: string; name: string; role: string; standingMission: string }[];
+}
+
+export interface OperationPlan {
+  name: string;
+  missions: {
+    unitId: string;
+    stage: 'build' | 'inspect' | 'guard' | 'deploy';
+    goal: string;
+    definitionOfDone: string[];
+  }[];
+}
+
+export interface AfterActionInput {
+  operation: { name: string; intent: string };
+  units: { id: string; name: string }[];
+  /** What happened, in order: sitreps, handoffs, send-backs, blocks, the deployment. */
+  timeline: { at: string; unit: string | null; kind: string; text: string }[];
+}
+
+export interface AfterActionReview {
+  summary: string;
+  wentWell: string[];
+  toImprove: string[];
+  /** Lessons saved as standing orders (unitId null = every unit). */
+  lessons: { unitId: string | null; text: string }[];
 }

@@ -150,6 +150,12 @@ export class TaskRunner {
         action: 'Assign a bot first.',
       });
     }
+    if (t.kind === 'deploy' && t.approval && t.approval.status !== 'approved') {
+      throw new ConflictException({
+        message: `Task #${t.number} is a production deploy waiting for your approval.`,
+        action: 'Approve it in Approvals (or in chat: “Approve the deploy”).',
+      });
+    }
     if (!t.repoSupplyId) {
       throw new BadRequestException({
         message: `Task #${t.number} has no repository.`,
@@ -193,11 +199,13 @@ export class TaskRunner {
       displayName: bot.body.callsign,
     };
     const botActor = actorRef(botPrincipal);
+    const mission = t.missionId ? await this.record.getActive('mission', t.missionId) : null;
     const refs: RecordEventRefs = {
       unitId: t.unitId,
       botId: bot.entityId,
       taskId,
       missionId: t.missionId,
+      operationId: mission?.body.operationId ?? null,
     };
 
     try {
@@ -329,14 +337,35 @@ export class TaskRunner {
               botActor,
             );
             break;
-          case 'artifact':
+          case 'artifact': {
             await this.record.event(
               'artifact',
               { kind: ev.kind, ref: ev.ref, summary: ev.summary },
               refs,
               botActor,
             );
+            if (ev.kind === 'deployment') {
+              const [ref, commit] = ev.ref.split('@');
+              await this.record.event(
+                'deployment',
+                { environment: ref!.replace(/^deploy\//, ''), ref: ref!, commit: commit ?? '' },
+                refs,
+                botActor,
+              );
+            }
             break;
+          }
+          case 'send-back':
+            // The check did its job: pause this task until the previous unit has fixed it.
+            return this.finish(
+              'stopped',
+              `Sent back: ${ev.reason}`,
+              task.body,
+              refs,
+              botActor,
+              run.runId,
+              spent,
+            );
           case 'cost':
             spent += ev.units;
             await this.record.event('cost', { units: ev.units, total: spent }, refs, botActor);

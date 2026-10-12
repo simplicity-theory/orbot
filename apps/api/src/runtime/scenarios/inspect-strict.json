@@ -1,0 +1,42 @@
+{
+  "id": "inspect-strict",
+  "description": "Inspection check. Sends the work back to the unit that handed it over unless a fix with tests is on the branch.",
+  "seed": 8808,
+  "script": [
+    {
+      "do": "step",
+      "action": "read-brief",
+      "detail": "Read the brief for \u201c{task}\u201d.",
+      "outcome": "understood"
+    },
+    {
+      "do": "sitrep",
+      "text": "{callsign} on task #{number}: testing the integration branch.",
+      "status": "working"
+    },
+    {
+      "do": "check-branch",
+      "check": "Looked for tests covering the rate limiter.",
+      "pattern": "^orbot/fix-",
+      "sendBack": "Login tests for the rate limiter are missing; add them before handing over."
+    },
+    {
+      "do": "step",
+      "action": "run-tests",
+      "detail": "Ran the full suite on the integration branch.",
+      "outcome": "all green"
+    },
+    {
+      "do": "handover",
+      "state": "Inspection passed on {branch}.",
+      "nextSteps": [],
+      "triedAndFailed": [],
+      "openProblems": [],
+      "flagsForSuccessor": ["Engineers: include tests for every new limit before handing over."]
+    },
+    {
+      "do": "done",
+      "summary": "Inspection passed for task #{number}."
+    }
+  ]
+}

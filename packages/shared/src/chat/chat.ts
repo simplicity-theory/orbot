@@ -59,6 +59,15 @@ export const ChatAction = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('supply-grant'), unitId: Id, supplyId: Id }),
   z.object({ kind: z.literal('supply-revoke'), unitId: Id, supplyId: Id }),
   z.object({ kind: z.literal('budget-grant'), unitId: Id, units: z.number() }),
+  /** Through HQ: launch an operation from a statement of intent. */
+  z.object({
+    kind: z.literal('create-operation'),
+    unitId: Id.nullable(),
+    intent: z.string().min(1).max(1000),
+    name: z.string().min(1).max(100),
+  }),
+  /** Approve (or reject) a production deploy waiting on the Commander. */
+  z.object({ kind: z.literal('approve-deploy'), unitId: Id, taskId: Id, approve: z.boolean() }),
   /** Issue a production environment to a unit: deploy rights. Irreversible by default. */
   z.object({ kind: z.literal('grant-deploy-rights'), unitId: Id, supplyId: Id }),
 ]);

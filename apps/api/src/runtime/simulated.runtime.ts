@@ -11,7 +11,11 @@ import {
   type CurationAction,
   type CurationInput,
   type HandoverNote,
+  type AfterActionInput,
+  type AfterActionReview,
   type InterpretInput,
+  type OperationPlan,
+  type OperationPlanInput,
   type Interpretation,
   type RunContext,
   type TaskBrief,
@@ -60,6 +64,14 @@ export class SimulatedRuntime implements BotRuntime {
 
   assessColdStart(input: ColdStartInput): Promise<ColdStartAssessment> {
     return Promise.resolve(this.overseer.assessColdStart(input));
+  }
+
+  planOperation(input: OperationPlanInput): Promise<OperationPlan> {
+    return Promise.resolve(this.overseer.planOperation(input));
+  }
+
+  afterAction(input: AfterActionInput): Promise<AfterActionReview> {
+    return Promise.resolve(this.overseer.afterAction(input));
   }
 
   interpret(input: InterpretInput): Promise<Interpretation> {
@@ -288,6 +300,40 @@ export class SimulatedRuntime implements BotRuntime {
           action: 'check-orders',
           detail: 'Current standing orders allow going on.',
           outcome: 'ok',
+        };
+        return false;
+      }
+      case 'check-branch': {
+        const files = (await git(brief.workspace.path, ['ls-files'])).split('\n');
+        const re = new RegExp(step.pattern);
+        const hit = files.find((f) => re.test(f));
+        yield {
+          type: 'step',
+          action: 'check',
+          detail: step.check,
+          outcome: hit ? `found ${hit}` : 'missing',
+        };
+        if (!hit) {
+          yield { type: 'send-back', reason: text(step.sendBack) };
+          return true;
+        }
+        return false;
+      }
+      case 'deploy': {
+        const commit = await git(brief.workspace.path, ['rev-parse', 'HEAD']);
+        const ref = `deploy/${step.environment}`;
+        await git(brief.workspace.path, ['branch', '--force', ref, commit]);
+        yield {
+          type: 'step',
+          action: 'deploy',
+          detail: `Deployed ${commit.slice(0, 10)} to ${step.environment}.`,
+          outcome: ref,
+        };
+        yield {
+          type: 'artifact',
+          kind: 'deployment',
+          ref: `${ref}@${commit}`,
+          summary: `Deployed to ${step.environment}`,
         };
         return false;
       }

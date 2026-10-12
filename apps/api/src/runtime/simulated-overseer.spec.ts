@@ -15,7 +15,7 @@ const handover = (flags: string[], tried: string[] = []) =>
 describe('SimulatedOverseer', () => {
   it('spreads a mission across the least-loaded bots', () => {
     const d = o.draftBackbrief({
-      mission: { id: 'm', goal: 'G', definitionOfDone: ['a', 'b', 'c'] },
+      mission: { id: 'm', goal: 'G', definitionOfDone: ['a', 'b', 'c'], stage: null },
       unit: { id: 'u', name: 'Engineers', standingOrders: [] },
       bots: [
         { id: '1', callsign: 'E-1', role: 'dev', status: 'working', queueLength: 2 },
