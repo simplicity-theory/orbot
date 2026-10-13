@@ -136,6 +136,24 @@ export const Deployment = z.object({
 });
 export type Deployment = z.infer<typeof Deployment>;
 
+/** A pull request ORBOT opened on a connected code host. */
+export const PullRequestRef = z.object({
+  connectionId: Id,
+  number: z.number().int(),
+  url: z.string(),
+  branch: z.string(),
+});
+export type PullRequestRef = z.infer<typeof PullRequestRef>;
+
+/** An issue on a connected tracker that a mission took on. */
+export const IssueRef = z.object({
+  connectionId: Id,
+  number: z.number().int(),
+  url: z.string(),
+  title: z.string(),
+});
+export type IssueRef = z.infer<typeof IssueRef>;
+
 export const OperationBody = z.object({
   name: z.string().min(1),
   intent: z.string().min(1),
@@ -156,6 +174,8 @@ export const OperationBody = z.object({
   /** HQ sends a unit to recon before planning; the plan takes the report into account. */
   reconFirst: z.boolean().default(false),
   reconTaskId: Id.nullable().default(null),
+  /** The pull request for the integration branch, once the code host has one. */
+  pullRequest: PullRequestRef.nullable().default(null),
 });
 export type OperationBody = z.infer<typeof OperationBody>;
 
@@ -188,6 +208,8 @@ export const MissionBody = z.object({
   /** In an operation: the stage this mission is, and the mission that hands off to it. */
   stage: MissionStage.nullable().default(null),
   dependsOnMissionId: Id.nullable().default(null),
+  /** The tracker issue this mission took on, if any. */
+  issue: IssueRef.nullable().default(null),
 });
 export type MissionBody = z.infer<typeof MissionBody>;
 
@@ -245,12 +267,21 @@ export const TaskBody = z.object({
   baseRef: z.string().nullable().default(null),
   /** Production deploys wait for the Commander's approval (per the unit's approval gate). */
   approval: TaskApproval.nullable().default(null),
+  /** A pull request opened for this task's branch, if any. */
+  pullRequest: PullRequestRef.nullable().default(null),
 });
 export type TaskBody = z.infer<typeof TaskBody>;
 
 // ---------- Supply ----------
 
-export const SupplyKind = z.enum(['repository', 'environment', 'tool', 'credential', 'compute']);
+export const SupplyKind = z.enum([
+  'repository',
+  'environment',
+  'tool',
+  'credential',
+  'compute',
+  'connection',
+]);
 export type SupplyKind = z.infer<typeof SupplyKind>;
 
 export const RepositorySupply = z.object({
@@ -274,10 +305,39 @@ export const GenericSupply = z.object({
   details: z.record(z.string(), z.string()),
 });
 
+/**
+ * A connection to an outside service for one of ORBOT's repositories: the code host (push
+ * branches, open pull requests), the issue tracker (take issues on as missions, close them
+ * when done) and the build pipeline (its result gates production deploys). The token is a
+ * credential, referenced by name.
+ */
+export const ConnectionSupply = z.object({
+  kind: z.literal('connection'),
+  provider: z.enum(['github']),
+  /** API base, e.g. https://api.github.com (or a GitHub Enterprise URL). */
+  apiUrl: z.string().min(1),
+  owner: z.string().min(1),
+  repo: z.string().min(1),
+  /** Where branches are pushed (a git remote URL without credentials). */
+  pushUrl: z.string().min(1),
+  /** The ORBOT repository (supply) this connection serves. */
+  repoSupplyId: Id,
+  credentialName: z.string().nullable(),
+  services: z.object({ codeHost: z.boolean(), issues: z.boolean(), pipeline: z.boolean() }),
+  /** Comment on and close an issue when the mission that took it on is done. */
+  closeIssues: z.boolean().default(true),
+});
+export type ConnectionSupply = z.infer<typeof ConnectionSupply>;
+
 export const SupplyBody = z.object({
   name: z.string().min(1),
   connected: z.boolean(),
-  spec: z.discriminatedUnion('kind', [RepositorySupply, CredentialSupply, GenericSupply]),
+  spec: z.discriminatedUnion('kind', [
+    RepositorySupply,
+    CredentialSupply,
+    GenericSupply,
+    ConnectionSupply,
+  ]),
 });
 export type SupplyBody = z.infer<typeof SupplyBody>;
 

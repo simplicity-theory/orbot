@@ -226,3 +226,22 @@ export const ResetPasswordRequest = z.object({
   password: z.string().min(12, { message: 'Use at least 12 characters.' }).max(200),
 });
 export type ResetPasswordRequest = z.input<typeof ResetPasswordRequest>;
+
+/** Connect an outside service (GitHub) for one of the depot's repositories. */
+export const ConnectServiceRequest = z.object({
+  name: z.string().trim().min(1).max(100),
+  provider: z.enum(['github']).default('github'),
+  apiUrl: z.string().trim().url().default('https://api.github.com'),
+  owner: z.string().trim().min(1).max(100),
+  repo: z.string().trim().min(1).max(100),
+  pushUrl: z.string().trim().min(1).max(1000),
+  repoSupplyId: Id,
+  credentialName: z.string().trim().min(1).nullable().default(null),
+  services: z.object({ codeHost: z.boolean(), issues: z.boolean(), pipeline: z.boolean() }),
+  closeIssues: z.boolean().default(true),
+});
+export type ConnectServiceRequest = z.input<typeof ConnectServiceRequest>;
+
+/** Take a tracker issue on as a mission for a unit. */
+export const TakeIssueRequest = z.object({ unitId: Id, number: z.number().int().positive() });
+export type TakeIssueRequest = z.input<typeof TakeIssueRequest>;

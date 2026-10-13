@@ -4,6 +4,7 @@ import type { ChatAction, ChatLink, TaskBody, TaskStatus } from '@orbot/shared';
 import { TaskRunner } from '../execution/task-runner.js';
 import { HqService } from '../overseer/hq.service.js';
 import { MainEffortService } from '../overseer/main-effort.service.js';
+import { ConnectionsService } from '../connections/connections.service.js';
 import { ReconService } from '../overseer/recon.service.js';
 import { SandTableService } from '../overseer/sand-table.service.js';
 import { StandDownService } from '../overseer/stand-down.service.js';
@@ -43,6 +44,7 @@ export class ActionsService {
     private readonly mainEffort: MainEffortService,
     private readonly recon: ReconService,
     private readonly sandTables: SandTableService,
+    private readonly connections: ConnectionsService,
   ) {}
 
   async run(action: ChatAction, ctx: WriteContext): Promise<ActionResult> {
@@ -340,6 +342,25 @@ export class ActionsService {
             : `Production deploy rejected for task #${t.body.number} (${u}).`,
           links: [{ label: `Task #${t.body.number}`, link: taskLink(t.body, t.entityId) }],
           inverse: null,
+          affects: [],
+        };
+      }
+      case 'take-issue': {
+        const m = await this.connections.takeIssue(
+          action.connectionId,
+          action.unitId,
+          action.number,
+          ctx.actor,
+        );
+        return {
+          summary: `${u} takes on issue #${action.number}: new mission “${m.body.goal}”. The Overseer will brief back a plan.`,
+          links: [{ label: m.body.goal, link: unitLink(action.unitId) }],
+          inverse: {
+            kind: 'withdraw-mission',
+            unitId: action.unitId,
+            missionId: m.entityId,
+            note: 'Undo of a chat order',
+          },
           affects: [],
         };
       }

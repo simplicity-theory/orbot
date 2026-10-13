@@ -3,6 +3,7 @@ import { inject, Injectable } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import type {
   AppointOfficerRequest,
+  ConnectServiceRequest,
   MeView,
   OfficerView,
   UpdateOfficerRequest,
@@ -79,6 +80,8 @@ export const apiUrl = {
   mainEffort: () => `${API}/main-effort`,
   dailyBrief: () => `${API}/daily-brief`,
   officers: () => `${API}/officers`,
+  connections: () => `${API}/connections`,
+  issues: (connectionId: string) => `${API}/connections/${connectionId}/issues`,
   serviceRecord: (botId: string) => `${API}/bots/${botId}/service-record`,
   alerts: () => `${API}/alerts`,
   secrets: () => `${API}/supply/secrets`,
@@ -347,6 +350,33 @@ export class Api {
         {},
       ),
     );
+  }
+
+  connectService(req: ConnectServiceRequest) {
+    return firstValueFrom(this.http.post<SupplyView>(`${API}/supply/connections`, req));
+  }
+
+  disconnectService(id: string) {
+    return firstValueFrom(
+      this.http.post<SupplyView>(`${API}/supply/connections/${id}/disconnect`, {}),
+    );
+  }
+
+  takeIssue(connectionId: string, unitId: string, number: number) {
+    return firstValueFrom(
+      this.http.post<MissionView>(`${API}/connections/${connectionId}/issues/take`, {
+        unitId,
+        number,
+      }),
+    );
+  }
+
+  openPullRequest(taskId: string) {
+    return firstValueFrom(this.http.post<TaskView>(`${API}/tasks/${taskId}/pull-request`, {}));
+  }
+
+  pollPipelines() {
+    return firstValueFrom(this.http.post<void>(`${API}/connections/poll`, {}));
   }
 
   /** Rehearse an operation's plan on the sand table. */

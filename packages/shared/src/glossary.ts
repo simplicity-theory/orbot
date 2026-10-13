@@ -123,6 +123,12 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     meaning:
       'One unit disagrees with another about its work. HQ rules under their standing orders; if none settles it, you rule. Your ruling is final.',
   },
+  connection: {
+    term: 'Connection',
+    short: 'An outside service ORBOT works with',
+    meaning:
+      'The code host, issue tracker and build pipeline for a repository. Branches are pushed and pull requests opened there; issues become missions; a red pipeline holds production deploys.',
+  },
   'service-record': {
     term: 'Service record',
     short: 'A bot’s history of service',

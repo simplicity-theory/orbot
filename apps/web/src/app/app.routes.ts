@@ -50,6 +50,12 @@ export const routes: Routes = [
           import('./features/operations/operations.page').then((m) => m.OperationsPage),
       },
       {
+        path: 'connections',
+        title: 'Connections',
+        loadComponent: () =>
+          import('./features/connections/connections.page').then((m) => m.ConnectionsPage),
+      },
+      {
         path: 'officers',
         title: 'Officers',
         loadComponent: () =>

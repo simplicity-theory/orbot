@@ -294,6 +294,8 @@ export interface InterpretInput {
   allHalted: boolean;
   /** The operation that is the main effort, if any. */
   mainEffortOperationId?: string | null;
+  /** Connected issue trackers. */
+  trackers?: { id: string; name: string }[];
 }
 
 export interface OperationPlanInput {

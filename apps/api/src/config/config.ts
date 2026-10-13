@@ -49,6 +49,8 @@ const Env = z.object({
   ORBOT_ESCALATION_SWEEP_SECONDS: z.coerce.number().min(0).default(30),
   /** How often HQ checks whether the daily brief is due (0 = never; tests write it on demand). */
   ORBOT_DAILY_BRIEF_CHECK_SECONDS: z.coerce.number().min(0).default(60),
+  /** How often pending build pipelines are checked on connected services (0 = only on push). */
+  ORBOT_CONNECTIONS_POLL_SECONDS: z.coerce.number().min(0).default(30),
   ORBOT_LOG_LEVEL: z
     .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
     .default('info'),
@@ -79,6 +81,7 @@ export interface AppConfig {
   coldStartIntervalMs: number;
   escalationSweepMs: number;
   dailyBriefCheckMs: number;
+  connectionsPollMs: number;
   logLevel: z.infer<typeof Env>['ORBOT_LOG_LEVEL'];
 }
 
@@ -122,6 +125,7 @@ export function loadConfig(overrides: Record<string, string | undefined> = {}): 
     coldStartIntervalMs: e.ORBOT_COLDSTART_INTERVAL_MINUTES * 60_000,
     escalationSweepMs: e.ORBOT_ESCALATION_SWEEP_SECONDS * 1000,
     dailyBriefCheckMs: e.ORBOT_DAILY_BRIEF_CHECK_SECONDS * 1000,
+    connectionsPollMs: e.ORBOT_CONNECTIONS_POLL_SECONDS * 1000,
     logLevel: e.ORBOT_LOG_LEVEL,
   };
 }

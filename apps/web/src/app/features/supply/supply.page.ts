@@ -15,7 +15,7 @@ import { Skeleton } from '../../ui/skeleton';
 import { Term } from '../../ui/term';
 import { Toasts } from '../../ui/toast';
 
-type Form = 'repository' | 'credential' | 'environment';
+type Form = 'repository' | 'credential' | 'environment' | 'service';
 
 /** Only what the Commander has connected exists. Connect it here, then issue it to units. */
 @Component({
@@ -120,6 +120,81 @@ type Form = 'repository' | 'credential' | 'environment';
               </div>
             </form>
           }
+          @case ('service') {
+            <form class="form" (ngSubmit)="connectService()">
+              <p class="hint">
+                <orb-term key="connection">Connect</orb-term> GitHub (or GitHub Enterprise) for one
+                of the depot's repositories: its code host, issue tracker and build pipeline. Store
+                the access token as a credential first.
+              </p>
+              <label for="svc-name">Name</label>
+              <input
+                id="svc-name"
+                name="name"
+                class="input"
+                required
+                [(ngModel)]="svc.name"
+                placeholder="GitHub acme/app"
+              />
+              <label for="svc-repo-supply">For repository</label>
+              <select
+                id="svc-repo-supply"
+                name="repoSupplyId"
+                class="input"
+                required
+                [(ngModel)]="svc.repoSupplyId"
+              >
+                @for (r of repositories(); track r.id) {
+                  <option [value]="r.id">{{ r.name }}</option>
+                }
+              </select>
+              <label for="svc-api">API URL</label>
+              <input id="svc-api" name="apiUrl" class="input" required [(ngModel)]="svc.apiUrl" />
+              <label for="svc-owner">Owner</label>
+              <input id="svc-owner" name="owner" class="input" required [(ngModel)]="svc.owner" />
+              <label for="svc-repo">Repository name</label>
+              <input id="svc-repo" name="repo" class="input" required [(ngModel)]="svc.repo" />
+              <label for="svc-push">Push URL <span class="hint">(no token in it)</span></label>
+              <input
+                id="svc-push"
+                name="pushUrl"
+                class="input"
+                required
+                [(ngModel)]="svc.pushUrl"
+                placeholder="https://github.com/acme/app.git"
+              />
+              <label for="svc-cred">Token (credential)</label>
+              <select id="svc-cred" name="cred" class="input" [(ngModel)]="svc.credentialName">
+                <option [ngValue]="null">None</option>
+                @for (c of credentials(); track c) {
+                  <option [ngValue]="c">{{ c }}</option>
+                }
+              </select>
+              <div class="checks" role="group" aria-label="Use it as">
+                <label
+                  ><input type="checkbox" name="codeHost" [(ngModel)]="svc.codeHost" /> Code host
+                  (push, pull requests)</label
+                >
+                <label
+                  ><input type="checkbox" name="issues" [(ngModel)]="svc.issues" /> Issue
+                  tracker</label
+                >
+                <label
+                  ><input type="checkbox" name="pipeline" [(ngModel)]="svc.pipeline" /> Build
+                  pipeline (gates production deploys)</label
+                >
+                <label
+                  ><input type="checkbox" name="closeIssues" [(ngModel)]="svc.closeIssues" /> Close
+                  issues when their mission is done</label
+                >
+              </div>
+              <div class="actions">
+                <button type="submit" class="btn btn--primary" [disabled]="busy()">
+                  Connect service
+                </button>
+              </div>
+            </form>
+          }
           @case ('environment') {
             <form class="form" (ngSubmit)="connectEnv()">
               <label for="env-name">Name</label>
@@ -162,7 +237,7 @@ type Form = 'repository' | 'credential' | 'environment';
                   <span class="chip">{{ s.spec.kind }}{{ tier(s) ? ' · ' + tier(s) : '' }}</span>
                   <span class="meta">{{ s.connected ? 'connected' : 'not connected' }}</span>
                 </div>
-                <div class="row holders">
+                <div class="row holders" [hidden]="s.spec.kind === 'connection'">
                   <span class="meta">Issued to:</span>
                   @for (u of holders(s.id); track u.id) {
                     <span class="chip">
@@ -221,6 +296,16 @@ type Form = 'repository' | 'credential' | 'environment';
     </div>
   `,
   styles: `
+    .checks {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-3);
+      label {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-2);
+      }
+    }
     .notice {
       display: flex;
       align-items: center;
@@ -279,12 +364,33 @@ export class SupplyPage implements OnInit {
   protected readonly supply = httpResource<SupplyView[]>(() => apiUrl.supply());
   private readonly unitList = httpResource<UnitView[]>(() => apiUrl.units());
   protected readonly units = computed(() => this.unitList.value() ?? []);
-  protected readonly forms: Form[] = ['repository', 'credential', 'environment'];
+  protected readonly forms: Form[] = ['repository', 'credential', 'environment', 'service'];
   protected readonly form = signal<Form>('repository');
   protected readonly busy = signal(false);
   protected repo = { name: '', location: '' };
   protected cred = { name: '', value: '' };
   protected env: { name: string; tier: 'staging' | 'production' } = { name: '', tier: 'staging' };
+  protected svc = {
+    name: '',
+    apiUrl: 'https://api.github.com',
+    owner: '',
+    repo: '',
+    pushUrl: '',
+    repoSupplyId: '',
+    credentialName: null as string | null,
+    codeHost: true,
+    issues: true,
+    pipeline: true,
+    closeIssues: true,
+  };
+  protected readonly repositories = computed(() =>
+    (this.supply.value() ?? []).filter((s) => s.spec.kind === 'repository' && s.connected),
+  );
+  protected readonly credentials = computed(() =>
+    (this.supply.value() ?? []).flatMap((s) =>
+      s.spec.kind === 'credential' && s.connected ? [s.spec.secretName] : [],
+    ),
+  );
 
   constructor() {
     inject(Breadcrumbs).set([ORBAT_CRUMB, { label: 'Supply Depot', term: 'supply-depot' }]);
@@ -319,7 +425,9 @@ export class SupplyPage implements OnInit {
       ? 'git-branch'
       : s.spec.kind === 'credential'
         ? 'key'
-        : 'coins';
+        : s.spec.kind === 'connection'
+          ? 'link'
+          : 'coins';
   }
 
   protected tier(s: SupplyView): string | null {
@@ -355,6 +463,25 @@ export class SupplyPage implements OnInit {
       const s = await this.api.connectEnvironment(this.env.name.trim(), this.env.tier);
       this.env = { name: '', tier: 'staging' };
       return `Connected environment ${s.name}.`;
+    });
+  }
+
+  protected connectService(): Promise<void> {
+    return this.act(async () => {
+      const v = this.svc;
+      const s = await this.api.connectService({
+        name: v.name.trim(),
+        apiUrl: v.apiUrl.trim(),
+        owner: v.owner.trim(),
+        repo: v.repo.trim(),
+        pushUrl: v.pushUrl.trim(),
+        // The list shows the first repository until another is picked.
+        repoSupplyId: v.repoSupplyId || this.repositories()[0]?.id || '',
+        credentialName: v.credentialName,
+        services: { codeHost: v.codeHost, issues: v.issues, pipeline: v.pipeline },
+        closeIssues: v.closeIssues,
+      });
+      return `Connected ${s.name}.`;
     });
   }
 

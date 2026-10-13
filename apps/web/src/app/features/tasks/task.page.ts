@@ -3,7 +3,7 @@ import { httpResource } from '@angular/common/http';
 import { Component, computed, effect, inject, input, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { marked } from 'marked';
-import type { TaskDetailView } from '@orbot/shared';
+import type { ConnectionSupply, ConnectionView, TaskDetailView } from '@orbot/shared';
 import { Api, apiUrl } from '../../core/api';
 import { toUserError } from '../../core/api-error';
 import { Breadcrumbs, ORBAT_CRUMB } from '../../core/breadcrumbs';
@@ -52,6 +52,36 @@ export class TaskPage {
   private readonly api = inject(Api);
   private readonly toasts = inject(Toasts);
   protected readonly starting = signal(false);
+  protected readonly opening = signal(false);
+  private readonly connections = httpResource<ConnectionView[]>(() => apiUrl.connections());
+  /** A finished task with a branch, whose repository has a code host connected. */
+  protected readonly canOpenPr = computed(() => {
+    const t = this.view.value()?.task;
+    if (!t || t.status !== 'done' || !t.workspace || t.pullRequest || !this.auth.can(t.unitId))
+      return false;
+    return (this.connections.value() ?? []).some((c) => {
+      const s = c.supply.spec as ConnectionSupply;
+      return s.repoSupplyId === t.repoSupplyId && s.services.codeHost;
+    });
+  });
+
+  protected async openPr(): Promise<void> {
+    this.opening.set(true);
+    try {
+      const t = await this.api.openPullRequest(this.taskId());
+      this.view.reload();
+      this.toasts.show({
+        tone: 'success',
+        message: `Pull request #${t.pullRequest?.number} opened.`,
+        detail: 'The branch was pushed to the code host.',
+      });
+    } catch (err) {
+      const e = toUserError(err);
+      this.toasts.show({ tone: 'danger', message: e.message, detail: e.action });
+    } finally {
+      this.opening.set(false);
+    }
+  }
   protected readonly canStart = computed(() => {
     const t = this.view.value()?.task;
     return (

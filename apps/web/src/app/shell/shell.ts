@@ -46,6 +46,7 @@ const NAV: NavItem[] = [
   { label: 'Disputes', link: '/disputes', icon: 'users' },
   { label: 'Deconfliction', link: '/deconfliction', icon: 'git-branch' },
   { label: 'Supply Depot', link: '/supply', icon: 'key' },
+  { label: 'Connections', link: '/connections', icon: 'link' },
   { label: 'Archive', link: '/archive', icon: 'archive' },
   { label: 'Officers', link: '/officers', icon: 'users' },
   { label: 'Settings', link: '/settings', icon: 'sliders' },

@@ -265,4 +265,19 @@ describe('SimulatedInterpreter', () => {
       { kind: 'rehearse', unitId: null, operationId: '00000000-0000-4000-8000-0000000000e1' },
     ]);
   });
+
+  it('takes an issue from the connected tracker on as a mission', () => {
+    const trackers = [{ id: '00000000-0000-4000-8000-0000000000f1', name: 'GitHub acme/app' }];
+    expect(i.interpret(input('Take on issue #7.', { trackers })).actions).toEqual([
+      {
+        kind: 'take-issue',
+        unitId: '00000000-0000-4000-8000-0000000000a1',
+        connectionId: '00000000-0000-4000-8000-0000000000f1',
+        number: 7,
+      },
+    ]);
+    expect(i.interpret(input('Take on issue #7.')).missing).toEqual([
+      { what: 'an issue tracker', kind: 'supply' },
+    ]);
+  });
 });

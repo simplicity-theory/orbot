@@ -249,6 +249,48 @@ export function describeEvent(e: RecordEvent): EventSummary {
         text: b['verdict'] === 'go' ? 'Rehearsal: go.' : 'Rehearsal: no-go.',
         tone: b['verdict'] === 'go' ? 'success' : 'danger',
       };
+    case 'connection.pr':
+      return {
+        icon: 'link',
+        label: 'Pull request',
+        term: 'connection',
+        text: `#${String(b['number'])} opened for ${s('branch')} → ${s('base')}.`,
+        tone: 'info',
+      };
+    case 'pipeline.status':
+      return {
+        icon: 'activity',
+        label: 'Pipeline',
+        term: 'connection',
+        text: `${s('branch')} at ${s('sha').slice(0, 10)}: ${
+          b['state'] === 'success' ? 'passed' : b['state'] === 'failure' ? 'failed' : 'running'
+        }.`,
+        tone: b['state'] === 'success' ? 'success' : b['state'] === 'failure' ? 'danger' : 'info',
+      };
+    case 'issue.taken':
+      return {
+        icon: 'link',
+        label: 'Issue taken on',
+        term: 'connection',
+        text: `#${String(b['number'])} ${s('title')}`,
+        tone: 'info',
+      };
+    case 'issue.closed':
+      return {
+        icon: 'check',
+        label: 'Issue closed',
+        term: 'connection',
+        text: `#${String(b['number'])}: ${s('comment')}`,
+        tone: 'success',
+      };
+    case 'connection.error':
+      return {
+        icon: 'triangle-alert',
+        label: 'Connection error',
+        term: 'connection',
+        text: `${s('what')}: ${s('error')}`,
+        tone: 'danger',
+      };
     case 'report.filed':
       return {
         icon: 'search',

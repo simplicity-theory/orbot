@@ -26,6 +26,7 @@ const EVERYTHING =
   /\b(everything|everyone|everybody|all units|all bots|all work|all of you|whole force)\b/i;
 const SCOPE_WORDS = new Set(['unit', 'bots', 'team', 'all', 'order', 'tools', 'everyone', 'stop']);
 const REASON = /[,:;—-]?\s*\b(because|while|until|since|so that|so)\b\s+(.+)$/i;
+const TAKE_ISSUE = /\b(?:take on|take|pick up|work on|handle)\s+issue\s+#?(\d+)\b/i;
 const RECON =
   /^(recon|reconnoitre|reconnoiter|scout(?: out)?|survey|find out|look into)\b[:,]?\s*/i;
 const REHEARSE = /\b(rehearse|rehearsal|sand ?table|walk (me )?through the plan|war-?game)\b/i;
@@ -368,6 +369,21 @@ export class SimulatedInterpreter {
     | null {
     // "Guard, review the…" → classify "review the…".
     sentence = sentence.replace(new RegExp(`^${unit.name},?\\s+`, 'i'), '');
+    // An issue from a connected tracker, taken on as a mission.
+    const issue = TAKE_ISSUE.exec(sentence);
+    if (issue) {
+      const tracker = input.trackers?.[0];
+      if (!tracker) return { missing: { what: 'an issue tracker', kind: 'supply' } };
+      return {
+        kind: 'order',
+        action: {
+          kind: 'take-issue',
+          unitId: unit.id,
+          connectionId: tracker.id,
+          number: Number(issue[1]),
+        },
+      };
+    }
     // Recon: a read-only survey that answers a question.
     const recon = RECON.exec(sentence);
     if (recon) {

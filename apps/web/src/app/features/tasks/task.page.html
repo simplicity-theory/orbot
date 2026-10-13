@@ -17,6 +17,15 @@
           <orb-main-effort-badge />
         }
         <orb-status [status]="t.status" />
+        @if (t.pullRequest; as pr) {
+          <a class="btn btn--ghost" [href]="pr.url" target="_blank" rel="noopener"
+            ><orb-icon name="link" /> Pull request #{{ pr.number }}</a
+          >
+        } @else if (canOpenPr()) {
+          <button type="button" class="btn" [disabled]="opening()" (click)="openPr()">
+            <orb-icon name="link" /> Open pull request
+          </button>
+        }
         @if (canStart()) {
           <button type="button" class="btn btn--primary" [disabled]="starting()" (click)="start()">
             {{ starting() ? 'Starting…' : t.status === 'queued' ? 'Start task' : 'Resume task' }}

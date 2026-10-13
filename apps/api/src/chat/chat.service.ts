@@ -490,6 +490,12 @@ export class ChatService {
       })),
       allHalted: !!settings?.body.halt,
       mainEffortOperationId: settings?.body.mainEffort?.operationId ?? null,
+      trackers: supply
+        .filter(
+          (s) =>
+            s.body.spec.kind === 'connection' && s.body.connected && s.body.spec.services.issues,
+        )
+        .map((s) => ({ id: s.entityId, name: s.body.name })),
     };
   }
 
@@ -532,6 +538,8 @@ export class ChatService {
     switch (a.kind) {
       case 'recon':
         return `Send ${u} on recon: “${a.question}”`;
+      case 'take-issue':
+        return `${u} takes on issue #${a.number}`;
       case 'budget-grant':
         return `Raise ${u}${u.endsWith('s') ? "'" : "'s"} compute budget by ${a.units} units`;
       case 'supply-grant':

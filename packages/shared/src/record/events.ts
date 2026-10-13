@@ -165,6 +165,33 @@ export const RecordEventBodies = {
     delivered: z.boolean(),
     error: z.string().nullable(),
   }),
+  /** ORBOT pushed a branch and opened (or found) a pull request on a connected code host. */
+  'connection.pr': z.object({
+    connectionId: z.string(),
+    number: z.number(),
+    url: z.string(),
+    branch: z.string(),
+    base: z.string(),
+  }),
+  /** The build pipeline's result for a pushed commit. */
+  'pipeline.status': z.object({
+    connectionId: z.string(),
+    branch: z.string(),
+    sha: z.string(),
+    state: z.enum(['pending', 'success', 'failure']),
+    url: z.string().nullable(),
+  }),
+  /** A tracker issue taken on as a mission, or closed when the mission was done. */
+  'issue.taken': z.object({
+    connectionId: z.string(),
+    number: z.number(),
+    title: z.string(),
+    url: z.string(),
+    missionId: z.string(),
+  }),
+  'issue.closed': z.object({ connectionId: z.string(), number: z.number(), comment: z.string() }),
+  /** A call to a connected service failed (redacted). */
+  'connection.error': z.object({ connectionId: z.string(), what: z.string(), error: z.string() }),
   /** A bot filed a report (recon findings) as a unit document. */
   'report.filed': z.object({ documentId: z.string(), title: z.string() }),
   'redaction.applied': z.object({

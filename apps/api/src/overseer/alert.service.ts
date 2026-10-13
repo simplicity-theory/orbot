@@ -189,10 +189,13 @@ export class AlertService implements OnApplicationBootstrap, OnModuleDestroy {
   }
 
   async recent(limit = 10): Promise<RecordEvent<'alert.sent'>[]> {
-    return (await this.record.listEvents(
-      { kinds: ['alert.sent'], limit },
-      { latest: true },
-    )) as RecordEvent<'alert.sent'>[];
+    // Newest first.
+    return (
+      (await this.record.listEvents(
+        { kinds: ['alert.sent'], limit },
+        { latest: true },
+      )) as RecordEvent<'alert.sent'>[]
+    ).reverse();
   }
 
   private async deliver(

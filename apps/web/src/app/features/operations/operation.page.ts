@@ -3,7 +3,7 @@ import { httpResource } from '@angular/common/http';
 import { Component, computed, effect, inject, input } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { marked } from 'marked';
-import type { OperationDetailView, TaskDetailView } from '@orbot/shared';
+import type { ConnectionView, OperationDetailView, TaskDetailView } from '@orbot/shared';
 import { apiUrl } from '../../core/api';
 import { Breadcrumbs, ORBAT_CRUMB } from '../../core/breadcrumbs';
 import { reloadOnLive } from '../../core/live';
@@ -153,6 +153,22 @@ import { SandTable } from './sand-table';
           @if (v.operation.integrationBranch) {
             <p class="meta">
               Integration branch <span class="mono">{{ v.operation.integrationBranch }}</span>
+              @if (v.operation.pullRequest; as pr) {
+                ·
+                <a class="ext" [href]="pr.url" target="_blank" rel="noopener"
+                  >pull request #{{ pr.number }}</a
+                >
+              }
+              @if (pipeline(); as p) {
+                · pipeline
+                <strong class="state" [attr.data-state]="p.body.state">{{
+                  p.body.state === 'success'
+                    ? 'passed'
+                    : p.body.state === 'failure'
+                      ? 'failed'
+                      : 'running'
+                }}</strong>
+              }
             </p>
           }
           @if (v.operation.deployment; as d) {
@@ -233,6 +249,15 @@ import { SandTable } from './sand-table';
       letter-spacing: normal;
       text-transform: none;
     }
+    .ext {
+      text-decoration: underline;
+    }
+    .state[data-state='success'] {
+      color: var(--tone-success);
+    }
+    .state[data-state='failure'] {
+      color: var(--tone-danger);
+    }
     .markdown ::ng-deep {
       h3 {
         font-size: var(--font-size-lg);
@@ -257,6 +282,18 @@ import { SandTable } from './sand-table';
 })
 export class OperationPage {
   protected readonly efforts = inject(MainEfforts);
+  private readonly connections = httpResource<ConnectionView[]>(() => apiUrl.connections());
+  /** The latest pipeline result on this operation's integration branch. */
+  protected readonly pipeline = computed(() => {
+    const branch = this.view.value()?.operation.integrationBranch;
+    if (!branch) return null;
+    return (
+      (this.connections.value() ?? [])
+        .flatMap((c) => c.pipelines)
+        .find((p) => p.body.branch === branch) ?? null
+    );
+  });
+
   /** The recon HQ ordered before planning, if any. */
   protected readonly recon = httpResource<TaskDetailView>(() => {
     const id = this.view.value()?.operation.reconTaskId;
@@ -299,6 +336,7 @@ export class OperationPage {
           ['operation', 'mission', 'task', 'backbrief', 'document'].includes(n.version.entityType)),
       () => {
         this.view.reload();
+        this.connections.reload();
         if (this.view.value()?.operation.reconTaskId) this.recon.reload();
       },
       200,

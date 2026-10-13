@@ -343,3 +343,22 @@ export interface MeView {
   /** Units a Captain commands; every unit for the Commander; none for an Observer. */
   unitIds: string[] | 'all';
 }
+
+/** An open issue on a connected tracker, and the mission that took it on (if any). */
+export interface IssueView {
+  number: number;
+  title: string;
+  url: string;
+  labels: string[];
+  taken: { missionId: string; unitId: string; unitName: string } | null;
+}
+
+/** A connected service: what it has done lately. */
+export interface ConnectionView {
+  supply: SupplyView;
+  repositoryName: string;
+  pullRequests: RecordEvent<'connection.pr'>[];
+  /** Latest pipeline result per branch. */
+  pipelines: RecordEvent<'pipeline.status'>[];
+  errors: RecordEvent<'connection.error'>[];
+}

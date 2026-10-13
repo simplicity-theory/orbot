@@ -55,6 +55,7 @@ Tests use the `orbot_test` / `orbot_secrets_test` databases and reset them; the 
   - `policy/duties.service.ts` — separation of duties as a `RecordService` write guard: no bot approves its own work, changes its own rules or grants itself supply, by any path.
   - `domain/service-record.service.ts` — a bot's service record, computed from the record (conduct, not knowledge: never briefed).
   - `officers/` — `OfficersService` (officer entities; passwords hashed in the secrets store as `officer-login.<id>`), `AuthorityService` + `AuthorityGuard` (rank checks on every write).
+  - `connections/` — `ConnectionsService` + `Connector` (GitHub adapter): push and pull requests, pipeline results (a red pipeline holds production deploys via a policy rule), issues taken on as missions. Tokens by credential name only.
   - `chat/` — `ChatService` (message → `runtime.interpret` → actions/pending → orders log → read-back; undo; confirm/decline) and `ActionsService` (one executor per `ChatAction`, each returning its inverse).
   - `settings/` — the versioned settings entity (irreversible action kinds, confirmation phrase).
   - `documents/` — `FieldManualService` (entries, render/parse), `UnitDocsService` + `UnitDocumentStore` (Markdown mirror in the unit's repo, import of human edits).

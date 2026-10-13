@@ -56,6 +56,8 @@ import { ServiceRecordService } from './domain/service-record.service.js';
 import { AuthorityGuard, AuthorityService } from './officers/authority.js';
 import { OfficersController } from './officers/officers.controller.js';
 import { OfficersService } from './officers/officers.service.js';
+import { ConnectionsController } from './connections/connections.controller.js';
+import { ConnectionsService } from './connections/connections.service.js';
 import { AlertService } from './overseer/alert.service.js';
 import { DailyBriefController } from './overseer/daily-brief.controller.js';
 import { DailyBriefService } from './overseer/daily-brief.service.js';
@@ -100,6 +102,7 @@ export class AppModule {
         StandDownController,
         MainEffortController,
         ReconController,
+        ConnectionsController,
         OfficersController,
         DailyBriefController,
         EscalationController,
@@ -165,6 +168,7 @@ export class AppModule {
         MainEffortService,
         ReconService,
         SandTableService,
+        ConnectionsService,
         OfficersService,
         AuthorityService,
         ServiceRecordService,
