@@ -13,12 +13,23 @@ import { PhaseStepper } from '../../ui/phase-stepper';
 import { Skeleton } from '../../ui/skeleton';
 import { Term } from '../../ui/term';
 import { IntentDialog } from './intent.dialog';
+import { MainEfforts } from '../../core/main-effort';
+import { MainEffortBadge } from '../../ui/main-effort';
 import { MissionChain } from './mission-chain';
 
 /** The operations board: every operation, its phase, and progress by mission. */
 @Component({
   selector: 'orb-operations-page',
-  imports: [RouterLink, EmptyState, LoadError, Skeleton, Term, PhaseStepper, MissionChain],
+  imports: [
+    RouterLink,
+    EmptyState,
+    LoadError,
+    Skeleton,
+    Term,
+    PhaseStepper,
+    MissionChain,
+    MainEffortBadge,
+  ],
   template: `
     <div class="page">
       <header class="page-header">
@@ -42,6 +53,9 @@ import { MissionChain } from './mission-chain';
                     >Operation {{ o.operation.name }}</a
                   >
                 </h2>
+                @if (efforts.isOperation(o.operation.id)) {
+                  <orb-main-effort-badge />
+                }
                 @if (o.needsYou.length) {
                   <a class="needs" [routerLink]="['/operations', o.operation.id]"
                     >{{ o.needsYou.length }} need you</a
@@ -83,11 +97,11 @@ import { MissionChain } from './mission-chain';
       gap: var(--space-3);
       header {
         display: flex;
-        justify-content: space-between;
         align-items: baseline;
         gap: var(--space-3);
       }
       h2 {
+        margin-right: auto;
         font-size: var(--font-size-lg);
       }
     }
@@ -99,6 +113,7 @@ import { MissionChain } from './mission-chain';
 })
 export class OperationsPage {
   private readonly dialog = inject(Dialog);
+  protected readonly efforts = inject(MainEfforts);
   protected readonly ops = httpResource<OperationSummary[]>(() => apiUrl.operations());
 
   constructor() {

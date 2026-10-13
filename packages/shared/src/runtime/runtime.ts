@@ -281,6 +281,8 @@ export interface InterpretInput {
   operations: { id: string; name: string; phase: string }[];
   /** Whether "everything, stand down" is in force. */
   allHalted: boolean;
+  /** The operation that is the main effort, if any. */
+  mainEffortOperationId?: string | null;
 }
 
 export interface OperationPlanInput {

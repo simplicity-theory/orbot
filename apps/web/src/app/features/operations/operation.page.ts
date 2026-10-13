@@ -16,6 +16,8 @@ import { Skeleton } from '../../ui/skeleton';
 import { StatusBadge } from '../../ui/status-badge';
 import { Term } from '../../ui/term';
 import { RecordTimeline } from '../tasks/record-timeline';
+import { MainEfforts } from '../../core/main-effort';
+import { MainEffortBadge, MainEffortButton } from '../../ui/main-effort';
 import { MissionChain } from './mission-chain';
 
 @Component({
@@ -32,6 +34,8 @@ import { MissionChain } from './mission-chain';
     Term,
     RecordTimeline,
     MissionChain,
+    MainEffortBadge,
+    MainEffortButton,
   ],
   template: `
     @if (view.error(); as err) {
@@ -48,7 +52,16 @@ import { MissionChain } from './mission-chain';
             <p class="page-header__lede">
               <orb-term key="intent">Intent</orb-term>: {{ v.operation.intent }}
             </p>
+            @if (efforts.isOperation(v.operation.id)) {
+              <p><orb-main-effort-badge /> Its tasks go first; other work makes way for it.</p>
+            }
           </div>
+          @if (v.operation.phase !== 'closed') {
+            <orb-main-effort-button
+              [operationId]="v.operation.id"
+              [name]="'Operation ' + v.operation.name"
+            />
+          }
         </header>
         <section class="panel" aria-label="Phase">
           <orb-phase-stepper [phase]="v.operation.phase" />
@@ -216,6 +229,7 @@ import { MissionChain } from './mission-chain';
   `,
 })
 export class OperationPage {
+  protected readonly efforts = inject(MainEfforts);
   readonly operationId = input.required<string>();
   protected readonly view = httpResource<OperationDetailView>(() =>
     apiUrl.operation(this.operationId()),

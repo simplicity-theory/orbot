@@ -176,3 +176,10 @@ export const RuleDisputeRequest = z.object({
   reasoning: z.string().trim().min(1).max(1000),
 });
 export type RuleDisputeRequest = z.input<typeof RuleDisputeRequest>;
+
+/** Name the main effort (an operation), or clear it with null. */
+export const SetMainEffortRequest = z.object({
+  operationId: Id.nullable(),
+  reason: z.string().trim().min(1).max(500),
+});
+export type SetMainEffortRequest = z.input<typeof SetMainEffortRequest>;

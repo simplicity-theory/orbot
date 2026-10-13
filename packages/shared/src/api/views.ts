@@ -4,6 +4,7 @@ import type {
   DisputeBody,
   FmEntryBody,
   Halt,
+  MainEffort,
   DocumentBody,
   MissionBody,
   OperationBody,
@@ -246,6 +247,16 @@ export interface OperationDetailView extends OperationSummary {
   timeline: RecordEvent[];
   record: DocumentView | null;
   afterAction: DocumentView | null;
+}
+
+/** The main effort, for the ORBAT strip, the operations board and task badges. */
+export interface MainEffortView {
+  mainEffort: MainEffort | null;
+  operation: { id: string; name: string; phase: string } | null;
+  /** Missions of the main-effort operation: their tasks go first. */
+  missionIds: string[];
+  /** Whether supporting work pauses to free a bot for it. */
+  yieldEnabled: boolean;
 }
 
 /** Every stand-down order in force, for the banner and the Stand down controls. */

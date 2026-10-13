@@ -108,6 +108,20 @@ export const RecordEventBodies = {
     /** Tasks put back in the queue. */
     resumedTaskIds: z.array(z.string()),
   }),
+  /** The main effort changed (operationId null: no main effort). */
+  'main-effort': z.object({
+    operationId: z.string().nullable(),
+    previousOperationId: z.string().nullable(),
+    reason: z.string(),
+  }),
+  /** Supporting work made way for the main effort: moved to a free bot, or paused with a handover. */
+  'main-effort.yield': z.object({
+    mainEffortTaskId: z.string(),
+    how: z.enum(['moved', 'paused']),
+    /** The paused supporting task (how: paused), or the bot the task moved to (how: moved). */
+    yieldedTaskId: z.string().nullable(),
+    toBotId: z.string().nullable(),
+  }),
   cost: z.object({ units: z.number().nonnegative(), total: z.number().nonnegative() }),
   'credential.used': z.object({ secretName: z.string(), purpose: z.string() }),
   'policy.check': z.object({

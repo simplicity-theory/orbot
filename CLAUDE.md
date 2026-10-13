@@ -47,6 +47,7 @@ Tests use the `orbot_test` / `orbot_secrets_test` databases and reset them; the 
     - `EscalationService`: stalls, timeouts and repeated failures go Overseer → HQ → Commander.
     - `DeconflictionService`: who touches what, worked out from git; HQ notices overlaps.
     - `DisputeService`: HQ rules under standing orders; the Commander's ruling is final.
+    - `MainEffortService`: one operation goes first; supporting work makes way (moved to a free bot, or paused with a handover). `main-effort.ts` holds the dispatch-order helpers.
       Each registers its own `PolicyRule` and/or bus listener.
   - `policy/duties.service.ts` — separation of duties as a `RecordService` write guard: no bot approves its own work, changes its own rules or grants itself supply, by any path.
   - `chat/` — `ChatService` (message → `runtime.interpret` → actions/pending → orders log → read-back; undo; confirm/decline) and `ActionsService` (one executor per `ChatAction`, each returning its inverse).

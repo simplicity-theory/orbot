@@ -376,12 +376,13 @@ export class ChatService {
   }
 
   private async context(message: string, channelUnitId: string | null): Promise<InterpretInput> {
-    const [units, bots, tasks, missions, supply] = await Promise.all([
+    const [units, bots, tasks, missions, supply, settings] = await Promise.all([
       this.record.listActive('unit'),
       this.record.listActive('bot'),
       this.record.listActive('task'),
       this.record.listActive('mission'),
       this.record.listActive('supply'),
+      this.record.getActive('settings', SETTINGS_ID),
     ]);
     const callsign = new Map(bots.map((b) => [b.entityId, b.body.callsign]));
     return {
@@ -441,7 +442,8 @@ export class ChatService {
         name: o.body.name,
         phase: o.body.phase,
       })),
-      allHalted: !!(await this.record.getActive('settings', SETTINGS_ID))?.body.halt,
+      allHalted: !!settings?.body.halt,
+      mainEffortOperationId: settings?.body.mainEffort?.operationId ?? null,
     };
   }
 
@@ -461,6 +463,11 @@ export class ChatService {
   /** A one-line, human description of an action that has not run yet. */
   private async describe(a: ChatAction): Promise<string> {
     if (a.kind === 'create-operation') return `Launch Operation ${a.name}: “${a.intent}”`;
+    if (a.kind === 'main-effort') {
+      if (!a.operationId) return 'Clear the main effort';
+      const op = await this.record.requireActive('operation', a.operationId);
+      return `Make Operation ${op.body.name} the main effort`;
+    }
     if (a.kind === 'stand-down' || a.kind === 'lift-stand-down') {
       const who =
         a.scope === 'all'

@@ -241,6 +241,27 @@ export function describeEvent(e: RecordEvent): EventSummary {
         text: `Cap ${String(b['from'] ?? 'none')} → ${String(b['to'] ?? 'none')}`,
         tone: 'info',
       };
+    case 'main-effort':
+      return {
+        icon: 'crosshair',
+        label: 'Main effort',
+        term: 'main-effort',
+        text: b['operationId']
+          ? `A new main effort was named: ${s('reason')}`
+          : `No main effort any more: ${s('reason')}`,
+        tone: 'info',
+      };
+    case 'main-effort.yield':
+      return {
+        icon: 'crosshair',
+        label: 'Made way',
+        term: 'main-effort',
+        text:
+          b['how'] === 'moved'
+            ? 'Moved to a free bot so the main effort starts now.'
+            : 'Paused with a handover to free a bot for the main effort; back in the queue.',
+        tone: 'info',
+      };
     case 'stand-down':
       return {
         icon: 'octagon-pause',

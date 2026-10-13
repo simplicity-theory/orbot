@@ -114,6 +114,12 @@ export class DutiesService implements OnModuleInit {
         const b = (c.before ?? {}) as Partial<SettingsBody>;
         const a = c.after as SettingsBody;
         if (b.halt && !a.halt) return { duty: 'lift-own-stand-down', ...own };
+        // The main effort orders every unit's priorities, its own included.
+        if (
+          (b.mainEffort?.operationId ?? null) !== (a.mainEffort?.operationId ?? null) ||
+          (b.mainEffortYield ?? true) !== (a.mainEffortYield ?? true)
+        )
+          return { duty: 'change-own-rules', ...own };
         return null;
       }
       case 'backbrief': {

@@ -26,6 +26,11 @@ const EVERYTHING =
   /\b(everything|everyone|everybody|all units|all bots|all work|all of you|whole force)\b/i;
 const SCOPE_WORDS = new Set(['unit', 'bots', 'team', 'all', 'order', 'tools', 'everyone', 'stop']);
 const REASON = /[,:;—-]?\s*\b(because|while|until|since|so that|so)\b\s+(.+)$/i;
+const MAIN_EFFORT = /\bmain effort\b/i;
+const MAIN_EFFORT_CLEAR =
+  /\b(no|clear|drop|end|cancel|lift|remove)\b.*\bmain effort\b|\bmain effort\b.*\b(is over|has ended|ended|cleared|lifted)\b/i;
+const MAIN_EFFORT_FILLER =
+  /\b(make|makes|making|is|are|now|our|the|operation|op|put|first|priority|name|as|be|should|will|from|on)\b/gi;
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const FRAGO_DROP =
   /\b(drop|stand down|pause|hold off( on)?|put .+ on hold|park|shelve|deprioriti[sz]e)\b|\bfor now\b/i;
@@ -122,6 +127,19 @@ export class SimulatedInterpreter {
         }
         continue;
       }
+      const effort = this.mainEffort(sentence, input);
+      if (effort) {
+        if ('unclear' in effort) {
+          out.unclear.push(effort.unclear);
+        } else if (hedged) {
+          kinds.add('musing');
+          out.musings.push(effort);
+        } else {
+          kinds.add('order');
+          out.actions.push(effort);
+        }
+        continue;
+      }
       const halt = this.standDown(sentence, input);
       if (halt) {
         if ('unclear' in halt) {
@@ -189,6 +207,40 @@ export class SimulatedInterpreter {
     out.kinds = [...kinds];
     out.answer = answers.length ? answers.join(' ') : null;
     return out;
+  }
+
+  /**
+   * "Make Login Rate Limiting the main effort" / "No main effort any more". Main effort is
+   * HQ's business: the action names an operation, not a unit.
+   */
+  private mainEffort(
+    sentence: string,
+    input: InterpretInput,
+  ): Extract<ChatAction, { kind: 'main-effort' }> | { unclear: string } | null {
+    if (!MAIN_EFFORT.test(sentence)) return null;
+    const why = REASON.exec(sentence);
+    const body = why ? sentence.slice(0, why.index) : sentence;
+    const reason = why ? sentenceCase(stripEnd(why[2]!)) : 'Commander’s order in chat';
+    const current = input.mainEffortOperationId ?? null;
+    if (MAIN_EFFORT_CLEAR.test(body)) {
+      if (!current) return { unclear: `${sentence} — there is no main effort.` };
+      return { kind: 'main-effort', unitId: null, operationId: null, reason };
+    }
+    const open = input.operations.filter((o) => o.phase !== 'closed');
+    if (!open.length) return { unclear: `${sentence} — there is no operation under way.` };
+    const rest = topic(body.replace(MAIN_EFFORT, ' ').replace(MAIN_EFFORT_FILLER, ' '));
+    const best = open
+      .map((o) => ({ o, score: overlap(topic(o.name), body) }))
+      .sort((a, b) => b.score - a.score)[0]!;
+    const op = best.score >= 0.5 ? best.o : !rest.size && open.length === 1 ? open[0]! : null;
+    if (!op) {
+      return {
+        unclear: `${sentence} — which operation? Under way: ${open.map((o) => o.name).join(', ')}.`,
+      };
+    }
+    if (op.id === current)
+      return { unclear: `${sentence} — ${op.name} is already the main effort.` };
+    return { kind: 'main-effort', unitId: null, operationId: op.id, reason };
   }
 
   /**
@@ -422,6 +474,12 @@ export class SimulatedInterpreter {
   }
 
   private answer(sentence: string, unit: InterpretUnit | null, input: InterpretInput): string {
+    if (MAIN_EFFORT.test(sentence)) {
+      const op = input.operations.find((o) => o.id === input.mainEffortOperationId);
+      return op
+        ? `The main effort is Operation ${op.name} (${op.phase}): its tasks go first.`
+        : 'There is no main effort: work goes in normal queue order.';
+    }
     const about = topic(sentence.replace(QUESTION_START, ''));
     const scope = unit ? [unit] : input.units;
     for (const u of scope) {

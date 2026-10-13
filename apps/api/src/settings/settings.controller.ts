@@ -10,6 +10,7 @@ const UpdateSettings = z.object({
   confirmationPhrase: z.string().trim().min(1).max(50).optional(),
   budgetWarnAt: z.number().min(0.1).max(1).optional(),
   escalation: EscalationSettings.optional(),
+  mainEffortYield: z.boolean().optional(),
   reason: z.string().trim().min(1).max(500),
   expectedVersion: z.number().int().nonnegative(),
 });

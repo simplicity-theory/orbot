@@ -2,6 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import type {
+  MainEffortView,
   StandDownRequest,
   StandDownView,
   ChatSendResult,
@@ -70,6 +71,7 @@ export const apiUrl = {
   supply: () => `${API}/supply`,
   settings: () => `${API}/settings`,
   standDown: () => `${API}/stand-down`,
+  mainEffort: () => `${API}/main-effort`,
   deconfliction: () => `${API}/deconfliction`,
   disputes: () => `${API}/disputes`,
 };
@@ -255,6 +257,7 @@ export class Api {
     irreversibleActions?: string[];
     confirmationPhrase?: string;
     budgetWarnAt?: number;
+    mainEffortYield?: boolean;
     escalation?: {
       stallSeconds: number;
       timeoutSeconds: number;
@@ -302,6 +305,13 @@ export class Api {
   resolveEscalation(chainId: string, note: string) {
     return firstValueFrom(
       this.http.post<unknown>(`${API}/escalations/${chainId}/resolve`, { note }),
+    );
+  }
+
+  /** Name the main effort (an operation), or clear it with null. */
+  setMainEffort(operationId: string | null, reason: string) {
+    return firstValueFrom(
+      this.http.put<MainEffortView>(`${API}/main-effort`, { operationId, reason }),
     );
   }
 

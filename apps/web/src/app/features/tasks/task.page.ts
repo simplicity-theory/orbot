@@ -11,6 +11,8 @@ import { Icon } from '../../ui/icon';
 import { LoadError } from '../../ui/load-error';
 import { fullDate, RelativeTimePipe } from '../../ui/relative-time';
 import { Skeleton } from '../../ui/skeleton';
+import { MainEfforts } from '../../core/main-effort';
+import { MainEffortBadge } from '../../ui/main-effort';
 import { StatusBadge } from '../../ui/status-badge';
 import { Term } from '../../ui/term';
 import { Toasts } from '../../ui/toast';
@@ -19,6 +21,7 @@ import { RecordTimeline } from './record-timeline';
 @Component({
   selector: 'orb-task-page',
   imports: [
+    MainEffortBadge,
     RouterLink,
     StatusBadge,
     Skeleton,
@@ -32,6 +35,7 @@ import { RecordTimeline } from './record-timeline';
   styleUrl: './task.page.scss',
 })
 export class TaskPage {
+  protected readonly efforts = inject(MainEfforts);
   readonly unitId = input.required<string>();
   readonly botId = input<string>();
   readonly taskId = input.required<string>();

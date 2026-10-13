@@ -85,6 +85,13 @@ export const ChatAction = z.discriminatedUnion('kind', [
     targetId: Id.nullable(),
     reason: z.string().min(1),
   }),
+  /** Through HQ: name the operation the force puts first (or, with null, none). */
+  z.object({
+    kind: z.literal('main-effort'),
+    unitId: Id.nullable(),
+    operationId: Id.nullable(),
+    reason: z.string().min(1),
+  }),
   /** Issue a production environment to a unit: deploy rights. Irreversible by default. */
   z.object({ kind: z.literal('grant-deploy-rights'), unitId: Id, supplyId: Id }),
 ]);

@@ -175,4 +175,56 @@ describe('SimulatedInterpreter', () => {
       expect(r.musings[0]).toMatchObject({ kind: 'stand-down', scope: 'all' });
     });
   });
+
+  describe('main effort', () => {
+    const LOGIN = '00000000-0000-4000-8000-0000000000e1';
+    const AUDIT = '00000000-0000-4000-8000-0000000000e2';
+    const ops = {
+      channelUnitId: null,
+      operations: [
+        { id: LOGIN, name: 'Login Rate Limiting', phase: 'execution' },
+        { id: AUDIT, name: 'Audit Trail', phase: 'execution' },
+      ],
+    };
+
+    it('names the operation, with the reason given, from any channel', () => {
+      expect(
+        i.interpret(
+          input('Make login rate limiting the main effort because the launch is Friday.', ops),
+        ).actions,
+      ).toEqual([
+        { kind: 'main-effort', unitId: null, operationId: LOGIN, reason: 'The launch is Friday' },
+      ]);
+      expect(
+        i.interpret(input('Main effort is the audit trail.', { ...ops, channelUnitId: undefined }))
+          .actions[0],
+      ).toMatchObject({ kind: 'main-effort', operationId: AUDIT });
+    });
+
+    it('asks which operation when it cannot tell', () => {
+      expect(i.interpret(input('Make this the main effort.', ops)).unclear[0]).toContain(
+        'which operation? Under way: Login Rate Limiting, Audit Trail',
+      );
+    });
+
+    it('clears it, and answers what it is', () => {
+      const named = { ...ops, mainEffortOperationId: LOGIN };
+      expect(i.interpret(input('No main effort any more.', named)).actions[0]).toMatchObject({
+        kind: 'main-effort',
+        operationId: null,
+      });
+      expect(i.interpret(input('Clear the main effort.', ops)).unclear[0]).toContain(
+        'there is no main effort',
+      );
+      expect(i.interpret(input('What is the main effort?', named)).answer).toBe(
+        'The main effort is Operation Login Rate Limiting (execution): its tasks go first.',
+      );
+    });
+
+    it('holds a hedged main effort as a musing', () => {
+      const r = i.interpret(input('Maybe the audit trail should be the main effort.', ops));
+      expect(r.actions).toEqual([]);
+      expect(r.musings[0]).toMatchObject({ kind: 'main-effort', operationId: AUDIT });
+    });
+  });
 });

@@ -56,6 +56,19 @@ export const Halt = z.object({
 });
 export type Halt = z.infer<typeof Halt>;
 
+/**
+ * The main effort: the one operation the force puts first. Its tasks start before
+ * supporting work, and (if the setting allows) supporting work makes way for it.
+ */
+export const MainEffort = z.object({
+  operationId: Id,
+  reason: z.string().min(1),
+  /** Actor who named it. */
+  by: z.string().min(1),
+  at: z.iso.datetime({ offset: true }),
+});
+export type MainEffort = z.infer<typeof MainEffort>;
+
 export const UnitBody = z.object({
   name: z.string().min(1),
   slug: z.string().regex(/^[a-z][a-z0-9-]*$/),
@@ -422,6 +435,10 @@ export const SettingsBody = z.object({
   escalation: EscalationSettings.default(DEFAULT_ESCALATION),
   /** "Everything, stand down": a stand-down order on every unit (Phase 5). */
   halt: Halt.nullable().default(null),
+  /** The operation the force puts first, if any (Phase 5). */
+  mainEffort: MainEffort.nullable().default(null),
+  /** Whether running supporting work pauses (with a handover) to free a bot for the main effort. */
+  mainEffortYield: z.boolean().default(true),
 });
 export type SettingsBody = z.infer<typeof SettingsBody>;
 
@@ -434,6 +451,8 @@ export const DEFAULT_SETTINGS: SettingsBody = {
   budgetWarnAt: 0.8,
   escalation: DEFAULT_ESCALATION,
   halt: null,
+  mainEffort: null,
+  mainEffortYield: true,
 };
 
 // ---------- Registry ----------

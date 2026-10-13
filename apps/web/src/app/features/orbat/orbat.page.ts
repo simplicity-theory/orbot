@@ -10,6 +10,8 @@ import { Icon } from '../../ui/icon';
 import { LoadError } from '../../ui/load-error';
 import { Skeleton } from '../../ui/skeleton';
 import { Term } from '../../ui/term';
+import { MainEfforts } from '../../core/main-effort';
+import { MainEffortBadge } from '../../ui/main-effort';
 import { OrbatTree } from './orbat-tree';
 import { UnitCard } from './unit-card';
 
@@ -17,7 +19,17 @@ type View = 'cards' | 'tree';
 
 @Component({
   selector: 'orb-orbat-page',
-  imports: [UnitCard, OrbatTree, Skeleton, EmptyState, LoadError, Term, RouterLink, Icon],
+  imports: [
+    UnitCard,
+    OrbatTree,
+    Skeleton,
+    EmptyState,
+    LoadError,
+    Term,
+    RouterLink,
+    Icon,
+    MainEffortBadge,
+  ],
   template: `
     <div class="page">
       <header class="page-header">
@@ -47,6 +59,21 @@ type View = 'cards' | 'tree';
         </div>
       </header>
 
+      @if (efforts.view.hasValue()) {
+        <p class="effort">
+          @if (efforts.operation(); as op) {
+            <orb-main-effort-badge />
+            <a [routerLink]="['/operations', op.id]">Operation {{ op.name }}</a>
+            <span class="meta">— its tasks go first. {{ efforts.current()?.reason }}</span>
+          } @else {
+            <span class="meta"
+              >No <orb-term key="main-effort">main effort</orb-term>: work goes in queue order.
+              <a routerLink="/operations">Name one from an operation</a>.</span
+            >
+          }
+        </p>
+      }
+
       @if (orbat.error(); as err) {
         <orb-load-error [error]="err" (retry)="orbat.reload()" />
       } @else if (orbat.hasValue()) {
@@ -75,6 +102,16 @@ type View = 'cards' | 'tree';
     </div>
   `,
   styles: `
+    .effort {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: var(--space-2);
+      margin-bottom: var(--space-4);
+      a {
+        text-decoration: underline;
+      }
+    }
     .grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(var(--card-min-width), 1fr));
@@ -91,6 +128,7 @@ type View = 'cards' | 'tree';
   `,
 })
 export class OrbatPage {
+  protected readonly efforts = inject(MainEfforts);
   /** `?view=tree` — remembered in the URL so it is linkable. */
   readonly view = input<View, View | undefined>('cards', {
     transform: (v) => (v === 'tree' ? 'tree' : 'cards'),

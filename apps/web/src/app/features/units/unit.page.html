@@ -165,6 +165,9 @@
                   >
                     <span class="mono">#{{ t.number }}</span> {{ t.title }}
                   </a>
+                  @if (efforts.isTask(t)) {
+                    <orb-main-effort-badge />
+                  }
                   <span class="meta mono">{{ callsign(v, t.botId) }}</span>
                 </li>
               } @empty {

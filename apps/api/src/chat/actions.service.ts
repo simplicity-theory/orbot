@@ -3,6 +3,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import type { ChatAction, ChatLink, TaskBody, TaskStatus } from '@orbot/shared';
 import { TaskRunner } from '../execution/task-runner.js';
 import { HqService } from '../overseer/hq.service.js';
+import { MainEffortService } from '../overseer/main-effort.service.js';
 import { StandDownService } from '../overseer/stand-down.service.js';
 import { BudgetService } from '../overseer/budget.service.js';
 import { OverseerService } from '../overseer/overseer.service.js';
@@ -37,6 +38,7 @@ export class ActionsService {
     private readonly hq: HqService,
     private readonly standDowns: StandDownService,
     private readonly budget: BudgetService,
+    private readonly mainEffort: MainEffortService,
   ) {}
 
   async run(action: ChatAction, ctx: WriteContext): Promise<ActionResult> {
@@ -46,6 +48,24 @@ export class ActionsService {
         summary: `Operation ${op.body.name} launched: HQ is holding the O Group and will issue missions to the units.`,
         links: [{ label: `Operation ${op.body.name}`, link: `/operations/${op.entityId}` }],
         inverse: null,
+        affects: [],
+      };
+    }
+    if (action.kind === 'main-effort') {
+      const r = await this.mainEffort.set(action.operationId, action.reason, ctx.actor);
+      return {
+        summary: action.operationId
+          ? `${r.label} is now the main effort: its tasks go first, and other work makes way for it.`
+          : 'No main effort any more: work goes in normal queue order.',
+        links: action.operationId
+          ? [{ label: r.label, link: `/operations/${action.operationId}` }]
+          : [{ label: 'Operations', link: '/operations' }],
+        inverse: {
+          kind: 'main-effort',
+          unitId: null,
+          operationId: r.previous,
+          reason: `Undo: ${action.reason}`,
+        },
         affects: [],
       };
     }

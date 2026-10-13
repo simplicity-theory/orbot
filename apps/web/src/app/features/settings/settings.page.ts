@@ -77,6 +77,11 @@ import { ThemeService } from '../../core/theme';
               [(ngModel)]="warnAt"
               required
             />
+            <label class="check"
+              ><input type="checkbox" name="yield" [(ngModel)]="mainEffortYield" />
+              Running work an Overseer started pauses (with a handover) to free a bot for the
+              <orb-term key="main-effort">main effort</orb-term></label
+            >
             <fieldset class="escalation">
               <legend><orb-term key="escalation">Escalation</orb-term> for stuck work</legend>
               <label for="esc-stall">Stall: no progress for (minutes)</label>
@@ -174,6 +179,11 @@ import { ThemeService } from '../../core/theme';
     .kinds {
       flex-wrap: wrap;
     }
+    .check {
+      display: flex;
+      gap: var(--space-2);
+      align-items: baseline;
+    }
     .escalation {
       display: grid;
       grid-template-columns: minmax(0, 1fr) var(--input-narrow);
@@ -199,6 +209,7 @@ export class SettingsPage {
   protected timeoutMinutes = 60;
   protected repeatedFailures = 2;
   protected failingBotRuns = 3;
+  protected mainEffortYield = true;
   protected reason = '';
 
   constructor() {
@@ -209,6 +220,7 @@ export class SettingsPage {
       this.chosen.set(st.irreversibleActions);
       this.phrase = st.confirmationPhrase;
       this.warnAt = Math.round((st.budgetWarnAt ?? 0.8) * 100);
+      this.mainEffortYield = st.mainEffortYield ?? true;
       const esc = st.escalation;
       if (esc) {
         this.stallMinutes = Math.max(1, Math.round(esc.stallSeconds / 60));
@@ -236,6 +248,7 @@ export class SettingsPage {
           repeatedFailures: Math.max(1, Math.round(this.repeatedFailures)),
           failingBotRuns: Math.max(2, Math.round(this.failingBotRuns)),
         },
+        mainEffortYield: this.mainEffortYield,
         reason: this.reason.trim(),
         expectedVersion: version,
       });

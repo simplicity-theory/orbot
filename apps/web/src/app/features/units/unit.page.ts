@@ -16,6 +16,8 @@ import { Skeleton } from '../../ui/skeleton';
 import { BudgetControl } from '../../ui/budget';
 import { UrlPipe } from '../../ui/url.pipe';
 import { StandDownButton } from '../../ui/stand-down';
+import { MainEfforts } from '../../core/main-effort';
+import { MainEffortBadge } from '../../ui/main-effort';
 import { StatusBadge } from '../../ui/status-badge';
 import { Term } from '../../ui/term';
 import { RecordTimeline } from '../tasks/record-timeline';
@@ -38,6 +40,7 @@ export type UnitSection = (typeof UNIT_SECTIONS)[number]['id'];
 @Component({
   selector: 'orb-unit-page',
   imports: [
+    MainEffortBadge,
     RouterLink,
     StatusBadge,
     StandDownButton,
@@ -58,6 +61,7 @@ export type UnitSection = (typeof UNIT_SECTIONS)[number]['id'];
   styleUrl: './unit.page.scss',
 })
 export class UnitPage {
+  protected readonly efforts = inject(MainEfforts);
   readonly unitId = input.required<string>();
   /** `?section=` — every section is deep-linkable. */
   readonly section = input<UnitSection, string | undefined>('overview', {

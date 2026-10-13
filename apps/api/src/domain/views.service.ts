@@ -27,6 +27,7 @@ import type {
   UnitDetailView,
 } from '@orbot/shared';
 import { APP_CONFIG, type AppConfig } from '../config/config.js';
+import { mainEffortFirst, mainEffortMissionIds } from '../overseer/main-effort.js';
 import { FieldManualService } from '../documents/field-manual.service.js';
 import { UnitDocsService } from '../documents/unit-docs.service.js';
 import { DeconflictionService } from '../overseer/deconfliction.service.js';
@@ -166,10 +167,15 @@ export class ViewsService {
         };
       })
       .sort((a, b) => Number(a.mission.status === 'done') - Number(b.mission.status === 'done'));
+    // In dispatch order: each bot's queue, the main effort's tasks first.
+    const mainEffort = await mainEffortMissionIds(this.record);
     const queue = bv
       .filter((b) => !b.isOverseer)
       .flatMap((b) =>
-        b.queue.map((q) => tv.find((t) => t.id === q)).filter((t): t is TaskView => !!t),
+        mainEffortFirst(
+          b.queue.map((q) => tv.find((t) => t.id === q)).filter((t): t is TaskView => !!t),
+          mainEffort,
+        ),
       );
     const settings = (await this.record.getActive('settings', SETTINGS_ID))?.body;
     return {
@@ -230,7 +236,10 @@ export class ViewsService {
       bot: toView(b),
       unit: toView(unit),
       currentTask: tv.find((t) => t.id === b.body.currentTaskId) ?? null,
-      queue: b.body.queue.map((q) => tv.find((t) => t.id === q)).filter((t): t is TaskView => !!t),
+      queue: mainEffortFirst(
+        b.body.queue.map((q) => tv.find((t) => t.id === q)).filter((t): t is TaskView => !!t),
+        await mainEffortMissionIds(this.record),
+      ),
       history: tv
         .filter((t) => t.id !== b.body.currentTaskId && !b.body.queue.includes(t.id))
         .sort((x, y) => y.number - x.number),

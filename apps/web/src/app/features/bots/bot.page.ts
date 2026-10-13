@@ -14,6 +14,8 @@ import { PageTitle } from '../../core/title';
 import { LoadError } from '../../ui/load-error';
 import { Skeleton } from '../../ui/skeleton';
 import { StandDownButton } from '../../ui/stand-down';
+import { MainEfforts } from '../../core/main-effort';
+import { MainEffortBadge } from '../../ui/main-effort';
 import { StatusBadge } from '../../ui/status-badge';
 import { Term } from '../../ui/term';
 import { RecordTimeline } from '../tasks/record-timeline';
@@ -24,6 +26,7 @@ import { AddBotDialog, type AddBotData } from '../units/add-bot.dialog';
 @Component({
   selector: 'orb-bot-page',
   imports: [
+    MainEffortBadge,
     RouterLink,
     StatusBadge,
     StandDownButton,
@@ -138,6 +141,9 @@ import { AddBotDialog, type AddBotData } from '../units/add-bot.dialog';
           @for (t of v.queue; track t.id) {
             <div class="row">
               <a [routerLink]="taskLink(t)">#{{ t.number }} {{ t.title }}</a>
+              @if (efforts.isTask(t)) {
+                <orb-main-effort-badge />
+              }
               <orb-status [status]="t.status" />
             </div>
             <ng-container *ngTemplateOutlet="reassignControl; context: { $implicit: t }" />
@@ -252,6 +258,7 @@ import { AddBotDialog, type AddBotData } from '../units/add-bot.dialog';
   `,
 })
 export class BotPage {
+  protected readonly efforts = inject(MainEfforts);
   readonly unitId = input.required<string>();
   readonly botId = input.required<string>();
   protected readonly view = httpResource<BotDetailView>(() => apiUrl.bot(this.botId()));

@@ -1,3 +1,4 @@
+import { mainEffortFirst, mainEffortMissionIds } from './main-effort.js';
 import {
   BadRequestException,
   ConflictException,
@@ -385,10 +386,20 @@ export class OverseerService implements OnApplicationBootstrap, OnModuleDestroy 
     const bots = (await this.record.listActive('bot', { unitId })).filter(
       (b) => !b.body.isOverseer && b.body.status === 'idle' && !b.body.halt,
     );
+    const mainEffort = await mainEffortMissionIds(this.record);
     for (const bot of bots.sort((a, b) =>
       a.body.callsign.localeCompare(b.body.callsign, undefined, { numeric: true }),
     )) {
-      for (const taskId of bot.body.queue) {
+      // The main effort's tasks go first; otherwise the queue keeps its order.
+      const queue = mainEffort.size
+        ? mainEffortFirst(
+            (
+              await Promise.all(bot.body.queue.map((id) => this.record.getActive('task', id)))
+            ).filter((t) => !!t),
+            mainEffort,
+          ).map((t) => t.entityId)
+        : bot.body.queue;
+      for (const taskId of queue) {
         if (this.runner.isRunning(taskId)) break;
         const task = await this.record.getActive('task', taskId);
         if (!task || task.body.status !== 'queued' || !task.body.autoStart) continue;

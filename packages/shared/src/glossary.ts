@@ -123,6 +123,12 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     meaning:
       'One unit disagrees with another about its work. HQ rules under their standing orders; if none settles it, you rule. Your ruling is final.',
   },
+  'main-effort': {
+    term: 'Main effort',
+    short: 'The operation that goes first',
+    meaning:
+      'The one operation the force puts first. Its tasks start before other work, and other work can pause (with a handover) to free a bot for it.',
+  },
   escalation: {
     term: 'Escalation',
     short: 'Sent up the chain',
