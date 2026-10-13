@@ -480,6 +480,8 @@ export class ChatService {
     const unit = await this.record.requireActive('unit', a.unitId);
     const u = unit.body.name;
     switch (a.kind) {
+      case 'recon':
+        return `Send ${u} on recon: “${a.question}”`;
       case 'budget-grant':
         return `Raise ${u}'s compute budget by ${a.units} units`;
       case 'supply-grant':

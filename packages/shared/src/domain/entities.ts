@@ -149,6 +149,9 @@ export const OperationBody = z.object({
   afterActionDocumentId: Id.nullable().default(null),
   /** Hard cap on what the whole operation may spend, in compute units; null = no cap. */
   budgetUnits: z.number().nonnegative().nullable().default(null),
+  /** HQ sends a unit to recon before planning; the plan takes the report into account. */
+  reconFirst: z.boolean().default(false),
+  reconTaskId: Id.nullable().default(null),
 });
 export type OperationBody = z.infer<typeof OperationBody>;
 
@@ -199,7 +202,8 @@ export const Workspace = z.object({
 });
 export type Workspace = z.infer<typeof Workspace>;
 
-export const TaskKind = z.enum(['work', 'fix', 'check', 'deploy']);
+/** `recon` is read-only: the bot surveys the code and files a report, changing nothing. */
+export const TaskKind = z.enum(['work', 'fix', 'check', 'deploy', 'recon']);
 export type TaskKind = z.infer<typeof TaskKind>;
 
 export const TaskApproval = z.object({
@@ -282,6 +286,8 @@ export const DocumentKind = z.enum([
   'handover',
   'after-action',
   'note',
+  /** A recon report: what a bot found surveying the code for a question. */
+  'recon',
 ]);
 export type DocumentKind = z.infer<typeof DocumentKind>;
 

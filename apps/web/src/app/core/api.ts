@@ -3,6 +3,7 @@ import { inject, Injectable } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import type {
   MainEffortView,
+  ReconRequest,
   StandDownRequest,
   StandDownView,
   ChatSendResult,
@@ -270,12 +271,13 @@ export class Api {
     return firstValueFrom(this.http.put<SettingsView>(apiUrl.settings(), body));
   }
 
-  createOperation(intent: string, name?: string, budgetUnits?: number | null) {
+  createOperation(intent: string, name?: string, budgetUnits?: number | null, reconFirst = false) {
     return firstValueFrom(
       this.http.post<OperationView>(`${API}/operations`, {
         intent,
         ...(name ? { name } : {}),
         ...(budgetUnits ? { budgetUnits } : {}),
+        ...(reconFirst ? { reconFirst } : {}),
       }),
     );
   }
@@ -306,6 +308,11 @@ export class Api {
     return firstValueFrom(
       this.http.post<unknown>(`${API}/escalations/${chainId}/resolve`, { note }),
     );
+  }
+
+  /** Send a unit on recon (a read-only survey that files a report). */
+  recon(req: ReconRequest) {
+    return firstValueFrom(this.http.post<TaskView>(`${API}/recon`, req));
   }
 
   /** Name the main effort (an operation), or clear it with null. */

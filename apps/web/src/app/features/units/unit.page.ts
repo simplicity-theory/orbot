@@ -25,6 +25,7 @@ import { AddBotDialog, type AddBotData } from './add-bot.dialog';
 import { ColdStartCard } from './coldstart-card';
 import { FieldManualTab } from './field-manual-tab';
 import { NewMissionDialog, type NewMissionData } from './new-mission.dialog';
+import { ReconDialog, type ReconData } from './recon.dialog';
 import { RulesTab } from './rules-tab';
 
 export const UNIT_SECTIONS = [
@@ -32,6 +33,7 @@ export const UNIT_SECTIONS = [
   { id: 'field-manual', label: 'Field Manual', term: 'field-manual' },
   { id: 'war-diary', label: 'War Diary', term: 'war-diary' },
   { id: 'handovers', label: 'Handovers', term: 'handover' },
+  { id: 'recon', label: 'Recon', term: 'recon' },
   { id: 'rules', label: 'Rules' },
   { id: 'supply', label: 'Supply', term: 'supply' },
 ] as const;
@@ -115,6 +117,26 @@ export class UnitPage {
       NewMissionDialog,
       { unitId: v.unit.id, unitName: v.unit.name },
       'New mission',
+    );
+  }
+
+  protected reconReports() {
+    return (this.view.value()?.documents ?? []).filter((d) => d.kind === 'recon');
+  }
+
+  protected orderRecon(): void {
+    const v = this.view.value()!;
+    openDialog<boolean, ReconData, ReconDialog>(
+      this.dialog,
+      ReconDialog,
+      {
+        unitId: v.unit.id,
+        unitName: v.unit.name,
+        repositories: v.supply
+          .filter((s) => s.spec.kind === 'repository' && s.connected)
+          .map((s) => ({ id: s.id, name: s.name })),
+      },
+      'Recon',
     );
   }
 

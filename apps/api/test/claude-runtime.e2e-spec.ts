@@ -214,6 +214,59 @@ describe('ClaudeRuntime (against a scripted API)', () => {
     expect(JSON.stringify(fake.requests[0])).toContain('raise_dispute');
   });
 
+  it('recon: no tool that changes the workspace; the report is filed with the unit', async () => {
+    const fake = new FakeClaude([
+      [toolUse('r1', 'write_file', { path: 'x.md', content: 'sneaky' })],
+      [
+        toolUse('r2', 'file_report', {
+          title: 'Recon: where logins are checked',
+          markdown: '# Findings\n\n- Only README.md exists.',
+        }),
+      ],
+      [
+        toolUse('r3', 'write_handover', {
+          state: 'Report filed.',
+          nextSteps: [],
+          triedAndFailed: [],
+          openProblems: [],
+          flagsForSuccessor: [],
+        }),
+      ],
+      [toolUse('r4', 'done', { summary: 'Recon complete.' })],
+    ]);
+    t.app
+      .get(RuntimeRegistry)
+      .register(new ClaudeRuntime(fake as unknown as ClaudeClient, { model: 'claude-opus-5-5' }));
+    // A unit of its own: the earlier bot is still blocked on its dispute.
+    const scouts = await makeUnitWithBot(t.app, {
+      name: 'Scouts',
+      prefix: 'S',
+      supplyIds: [repoId],
+    });
+    await t.agent
+      .put(`/api/bots/${scouts.bot.entityId}/runtime`)
+      .send({ runtime: 'claude', reason: 'Real recon' })
+      .expect(200);
+    await settled(t.app);
+    const task = (
+      await t.agent
+        .post('/api/recon')
+        .send({ unitId: scouts.unit.entityId, question: 'Where are logins checked?' })
+        .expect(201)
+    ).body;
+    await settled(t.app);
+    const first = fake.requests[0] as { tools: { name: string }[]; system: string };
+    const names = first.tools.map((x) => x.name);
+    expect(names).toContain('file_report');
+    expect(names).not.toContain('write_file');
+    expect(names).not.toContain('commit');
+    expect(first.system).toContain('This is a recon task: read-only.');
+    expect(JSON.stringify(fake.requests[1])).toContain('Recon is read-only');
+    const d: TaskDetailView = (await t.agent.get(`/api/tasks/${task.id}`).expect(200)).body;
+    expect(d.task.status).toBe('done');
+    expect(d.report?.title).toBe('Recon: where logins are checked');
+  });
+
   it('interprets chat through the model with structured output, validated by ORBOT', async () => {
     const fake = new FakeClaude([], {
       kinds: ['rule-change'],

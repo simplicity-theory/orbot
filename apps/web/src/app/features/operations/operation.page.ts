@@ -2,7 +2,7 @@ import { httpResource } from '@angular/common/http';
 import { Component, computed, effect, inject, input } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { marked } from 'marked';
-import type { OperationDetailView } from '@orbot/shared';
+import type { OperationDetailView, TaskDetailView } from '@orbot/shared';
 import { apiUrl } from '../../core/api';
 import { Breadcrumbs, ORBAT_CRUMB } from '../../core/breadcrumbs';
 import { reloadOnLive } from '../../core/live';
@@ -52,6 +52,22 @@ import { MissionChain } from './mission-chain';
             <p class="page-header__lede">
               <orb-term key="intent">Intent</orb-term>: {{ v.operation.intent }}
             </p>
+            @if (v.operation.reconTaskId) {
+              <p>
+                <orb-term key="recon">Recon</orb-term> first:
+                @if (recon.value()?.task; as r) {
+                  <a
+                    [routerLink]="
+                      r.botId
+                        ? ['/units', r.unitId, 'bots', r.botId, 'tasks', r.id]
+                        : ['/units', r.unitId, 'tasks', r.id]
+                    "
+                    >task #{{ r.number }}</a
+                  >
+                  <orb-status [status]="r.status" />
+                }
+              </p>
+            }
             @if (efforts.isOperation(v.operation.id)) {
               <p><orb-main-effort-badge /> Its tasks go first; other work makes way for it.</p>
             }
@@ -230,6 +246,11 @@ import { MissionChain } from './mission-chain';
 })
 export class OperationPage {
   protected readonly efforts = inject(MainEfforts);
+  /** The recon HQ ordered before planning, if any. */
+  protected readonly recon = httpResource<TaskDetailView>(() => {
+    const id = this.view.value()?.operation.reconTaskId;
+    return id ? apiUrl.task(id) : undefined;
+  });
   readonly operationId = input.required<string>();
   protected readonly view = httpResource<OperationDetailView>(() =>
     apiUrl.operation(this.operationId()),
@@ -265,7 +286,10 @@ export class OperationPage {
         (n.type === 'event' && n.event.operationId === this.operationId()) ||
         (n.type === 'version' &&
           ['operation', 'mission', 'task', 'backbrief', 'document'].includes(n.version.entityType)),
-      () => this.view.reload(),
+      () => {
+        this.view.reload();
+        if (this.view.value()?.operation.reconTaskId) this.recon.reload();
+      },
       200,
     );
   }

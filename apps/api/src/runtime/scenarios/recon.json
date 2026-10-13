@@ -1,0 +1,27 @@
+{
+  "id": "recon",
+  "description": "Recon: survey the code for the task's question and file a report. Read-only.",
+  "seed": 4417,
+  "script": [
+    {
+      "do": "step",
+      "action": "read-brief",
+      "detail": "Read the brief: recon for “{description}”.",
+      "outcome": "understood"
+    },
+    {
+      "do": "sitrep",
+      "text": "{callsign} on recon #{number}: surveying {branch}.",
+      "status": "working"
+    },
+    { "do": "survey" },
+    { "do": "cost", "units": 1 },
+    {
+      "do": "handover",
+      "state": "Recon #{number} complete: report filed with {unit}.",
+      "nextSteps": [],
+      "flagsForSuccessor": ["Read the recon report before planning work on this."]
+    },
+    { "do": "done", "summary": "Recon complete: report filed." }
+  ]
+}

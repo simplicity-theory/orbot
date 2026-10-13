@@ -115,6 +115,24 @@
       </section>
     }
 
+    @if (v.task.kind === 'recon') {
+      <section class="panel" aria-labelledby="report-h">
+        <h2 id="report-h" class="panel__title">
+          <span><orb-term key="recon">Recon</orb-term> report</span>
+          @if (v.report; as r) {
+            <a [routerLink]="['/units', v.unit.id, 'documents', r.id]"
+              ><orb-icon class="sm" name="file-text" /> Open document</a
+            >
+          }
+        </h2>
+        @if (v.report; as r) {
+          <div class="markdown" [innerHTML]="md(r.markdown)"></div>
+        } @else {
+          <p class="meta">Read-only: the bot surveys the code and files its report here.</p>
+        }
+      </section>
+    }
+
     <section class="panel" aria-labelledby="handover-h">
       <h2 id="handover-h" class="panel__title">
         <orb-term key="handover">Handover</orb-term>

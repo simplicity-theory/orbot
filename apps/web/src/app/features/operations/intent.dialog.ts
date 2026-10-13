@@ -42,6 +42,13 @@ import { Toasts } from '../../ui/toast';
         step="1"
         [(ngModel)]="budget"
       />
+      <label class="check"
+        ><input type="checkbox" name="reconFirst" [(ngModel)]="reconFirst" />
+        <span
+          ><orb-term key="recon">Recon</orb-term> first: the building unit surveys the code, and HQ
+          plans once its report is in</span
+        ></label
+      >
       @if (error(); as e) {
         <p role="alert" class="error">{{ e.message }} {{ e.action }}</p>
       }
@@ -57,6 +64,11 @@ import { Toasts } from '../../ui/toast';
     .error {
       color: var(--tone-danger);
     }
+    .check {
+      display: flex;
+      gap: var(--space-2);
+      align-items: baseline;
+    }
   `,
 })
 export class IntentDialog {
@@ -67,6 +79,7 @@ export class IntentDialog {
   protected intent = '';
   protected name = '';
   protected budget: number | null = null;
+  protected reconFirst = false;
   protected readonly busy = signal(false);
   protected readonly error = signal<UserFacingError | null>(null);
 
@@ -77,6 +90,7 @@ export class IntentDialog {
         this.intent.trim(),
         this.name.trim() || undefined,
         this.budget ? Math.round(this.budget) : null,
+        this.reconFirst,
       );
       this.toasts.show({
         tone: 'success',

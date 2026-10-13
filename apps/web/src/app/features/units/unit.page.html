@@ -13,6 +13,7 @@
         <orb-status [status]="v.status" />
         <orb-stand-down scope="unit" [targetId]="v.unit.id" [name]="v.unit.name" />
         <button type="button" class="btn" (click)="addBot()">Add bot</button>
+        <button type="button" class="btn" (click)="orderRecon()">Recon…</button>
         <button type="button" class="btn btn--primary" (click)="newMission()">New mission</button>
       </div>
     </header>
@@ -234,6 +235,33 @@
               </li>
             } @empty {
               <li class="meta">Each bot writes one at the end of every task.</li>
+            }
+          </ul>
+        </section>
+      }
+      @case ('recon') {
+        <section class="panel" aria-labelledby="recon-h">
+          <h2 id="recon-h" class="panel__title">
+            <span><orb-term key="recon">Recon</orb-term> reports</span>
+            <button type="button" class="btn btn--ghost" (click)="orderRecon()">Recon…</button>
+          </h2>
+          <ul class="list-reset rows">
+            @for (d of reconReports(); track d.id) {
+              <li>
+                <a [routerLink]="['/units', v.unit.id, 'documents', d.id]"
+                  ><orb-icon class="sm" name="search" /> {{ d.title }}</a
+                >
+                <span class="meta">
+                  <time [attr.datetime]="d.updatedAt" [attr.title]="full(d.updatedAt)">{{
+                    d.updatedAt | relativeTime
+                  }}</time>
+                </span>
+              </li>
+            } @empty {
+              <li class="meta">
+                No recon yet. Send a bot to find something out before you give it work: it reads the
+                code, changes nothing, and files a report here.
+              </li>
             }
           </ul>
         </section>

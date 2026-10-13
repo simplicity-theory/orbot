@@ -4,6 +4,7 @@ import type { ChatAction, ChatLink, TaskBody, TaskStatus } from '@orbot/shared';
 import { TaskRunner } from '../execution/task-runner.js';
 import { HqService } from '../overseer/hq.service.js';
 import { MainEffortService } from '../overseer/main-effort.service.js';
+import { ReconService } from '../overseer/recon.service.js';
 import { StandDownService } from '../overseer/stand-down.service.js';
 import { BudgetService } from '../overseer/budget.service.js';
 import { OverseerService } from '../overseer/overseer.service.js';
@@ -39,6 +40,7 @@ export class ActionsService {
     private readonly standDowns: StandDownService,
     private readonly budget: BudgetService,
     private readonly mainEffort: MainEffortService,
+    private readonly recon: ReconService,
   ) {}
 
   async run(action: ChatAction, ctx: WriteContext): Promise<ActionResult> {
@@ -323,6 +325,27 @@ export class ActionsService {
             : `Production deploy rejected for task #${t.body.number} (${u}).`,
           links: [{ label: `Task #${t.body.number}`, link: taskLink(t.body, t.entityId) }],
           inverse: null,
+          affects: [],
+        };
+      }
+      case 'recon': {
+        const task = await this.recon.order(
+          { unitId: action.unitId, question: action.question, repoSupplyId: action.repoSupplyId },
+          ctx.actor,
+          ctx.reason,
+        );
+        return {
+          summary: `${u} sent ${task.body.botId ? 'a bot ' : ''}on recon (task #${task.body.number}): “${action.question}”. Read-only; the report will be filed with ${u}.`,
+          links: [
+            { label: `Recon #${task.body.number}`, link: taskLink(task.body, task.entityId) },
+          ],
+          inverse: {
+            kind: 'frago',
+            unitId: action.unitId,
+            change: 'stand-down',
+            taskIds: [task.entityId],
+            note: 'Recon called off',
+          },
           affects: [],
         };
       }

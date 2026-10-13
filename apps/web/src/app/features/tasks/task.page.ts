@@ -1,6 +1,7 @@
 import { httpResource } from '@angular/common/http';
 import { Component, computed, effect, inject, input, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { marked } from 'marked';
 import type { TaskDetailView } from '@orbot/shared';
 import { Api, apiUrl } from '../../core/api';
 import { toUserError } from '../../core/api-error';
@@ -41,6 +42,11 @@ export class TaskPage {
   readonly taskId = input.required<string>();
   protected readonly view = httpResource<TaskDetailView>(() => apiUrl.task(this.taskId()));
   protected readonly full = fullDate;
+
+  /** Report Markdown, with headings demoted under the page's own. */
+  protected md(markdown: string): string {
+    return marked.parse(markdown.replace(/^(#{1,4}) /gm, '##$1 '), { async: false });
+  }
   private readonly api = inject(Api);
   private readonly toasts = inject(Toasts);
   protected readonly starting = signal(false);

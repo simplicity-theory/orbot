@@ -241,6 +241,14 @@ export function describeEvent(e: RecordEvent): EventSummary {
         text: `Cap ${String(b['from'] ?? 'none')} → ${String(b['to'] ?? 'none')}`,
         tone: 'info',
       };
+    case 'report.filed':
+      return {
+        icon: 'search',
+        label: 'Report filed',
+        term: 'recon',
+        text: s('title'),
+        tone: 'info',
+      };
     case 'main-effort':
       return {
         icon: 'crosshair',

@@ -22,6 +22,7 @@ import { RuntimeRegistry } from '../runtime/runtime.registry.js';
 import { WorkspaceManager } from '../runtime/workspace-manager.js';
 import { SupplyService } from '../supply/supply.service.js';
 import { OverseerService } from './overseer.service.js';
+import { ReconService } from './recon.service.js';
 import { HQ_ACTOR } from './overseers.js';
 
 export { HQ_ACTOR };
@@ -48,6 +49,7 @@ export class HqService implements OnApplicationBootstrap, OnModuleDestroy {
     private readonly workspaces: WorkspaceManager,
     private readonly supply: SupplyService,
     private readonly overseer: OverseerService,
+    private readonly recon: ReconService,
   ) {}
 
   /** HQ's staff thinks through the default runtime (HQ has no unit of its own). */
@@ -69,6 +71,20 @@ export class HqService implements OnApplicationBootstrap, OnModuleDestroy {
         }
       } else {
         const e = n.event;
+        // A recon HQ ordered before planning has finished (or failed): plan now.
+        if (e.kind === 'task.status' && e.taskId) {
+          const to = (e as RecordEvent<'task.status'>).body.to;
+          if (to === 'done' || to === 'failed') {
+            const taskId = e.taskId;
+            this.background.run('hq:recon', 'hq:recon-done', async () => {
+              const [op] = await this.record.listActive('operation', {
+                bodyContains: { reconTaskId: taskId },
+              });
+              if (op && op.body.phase === 'o-group')
+                this.enqueue(op.entityId, 'o-group', () => this.oGroup(op.entityId));
+            });
+          }
+        }
         if (!e.operationId) return;
         if (e.kind === 'task.status') {
           const s = (e as RecordEvent<'task.status'>).body;
@@ -100,12 +116,13 @@ export class HqService implements OnApplicationBootstrap, OnModuleDestroy {
     name: string | null,
     actor: string,
     budgetUnits: number | null = null,
+    reconFirst = false,
   ): Promise<RecordVersion<OperationBody>> {
     const opName = name ?? intent.split(/\s+/).slice(0, 3).join(' ');
     const op = await this.record.transaction(async (w) => {
       const created = await w.create(
         'operation',
-        { name: opName, intent, phase: 'intent', supplyIds: [], budgetUnits },
+        { name: opName, intent, phase: 'intent', supplyIds: [], budgetUnits, reconFirst },
         { actor, reason: 'Commander stated intent' },
       );
       const doc = await w.create(
@@ -143,6 +160,25 @@ export class HqService implements OnApplicationBootstrap, OnModuleDestroy {
     const op = await this.record.requireActive('operation', opId);
     await this.phase(opId, 'o-group', 'Planning missions');
     const units = (await this.record.listActive('unit')).filter((u) => u.body.overseerBotId);
+    // Recon first: the report must be in (or the recon over) before HQ plans.
+    let recon: { unit: string; title: string; markdown: string }[] = [];
+    if (op.body.reconFirst && op.body.reconTaskId) {
+      const task = await this.record.requireActive('task', op.body.reconTaskId);
+      if (task.body.status !== 'done' && task.body.status !== 'failed') return;
+      const report = await this.recon.reportFor(task.entityId);
+      const unit = units.find((u) => u.entityId === task.body.unitId);
+      if (report) {
+        recon = [
+          { unit: unit?.body.name ?? '', title: report.body.title, markdown: report.body.markdown },
+        ];
+      } else {
+        await this.hqSitrep(
+          null,
+          opId,
+          `Recon #${task.body.number} ended without a report (${task.body.status}). Planning without it.`,
+        );
+      }
+    }
     const plan = await this.staff.planOperation({
       name: op.body.name,
       intent: op.body.intent,
@@ -152,7 +188,41 @@ export class HqService implements OnApplicationBootstrap, OnModuleDestroy {
         role: u.body.role,
         standingMission: u.body.standingMission,
       })),
+      recon,
     });
+    if (op.body.reconFirst && !op.body.reconTaskId && plan.missions.length) {
+      // The unit that would build it looks first; HQ plans once its report is in.
+      const builder = units.find((u) => u.entityId === plan.missions[0]!.unitId)!;
+      try {
+        const task = await this.recon.order(
+          {
+            unitId: builder.entityId,
+            question: `What would it take to: ${op.body.intent.replace(/[.!]+$/, '')}?`,
+            repoSupplyId: null,
+          },
+          HQ_ACTOR,
+          `Recon before the O Group for Operation ${op.body.name}`,
+        );
+        await this.record.transaction(async (w) => {
+          await w.revise('operation', opId, (o) => ({ ...o, reconTaskId: task.entityId }), {
+            actor: HQ_ACTOR,
+            reason: 'Recon before planning',
+          });
+          await this.hqSitrep(
+            w,
+            opId,
+            `HQ sent ${builder.body.name} on recon (task #${task.body.number}) before planning Operation ${op.body.name}. The plan follows the report.`,
+          );
+        });
+        return;
+      } catch (err) {
+        await this.hqSitrep(
+          null,
+          opId,
+          `Could not send ${builder.body.name} on recon (${(err as Error).message}). Planning without it.`,
+        );
+      }
+    }
     if (!plan.missions.length) {
       await this.hqSitrep(
         null,

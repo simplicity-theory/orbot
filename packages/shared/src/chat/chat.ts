@@ -85,6 +85,13 @@ export const ChatAction = z.discriminatedUnion('kind', [
     targetId: Id.nullable(),
     reason: z.string().min(1),
   }),
+  /** Send a bot to survey the code and report back, changing nothing. */
+  z.object({
+    kind: z.literal('recon'),
+    unitId: Id,
+    question: z.string().min(1).max(1000),
+    repoSupplyId: Id.nullable(),
+  }),
   /** Through HQ: name the operation the force puts first (or, with null, none). */
   z.object({
     kind: z.literal('main-effort'),

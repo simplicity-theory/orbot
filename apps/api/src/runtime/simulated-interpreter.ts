@@ -26,6 +26,8 @@ const EVERYTHING =
   /\b(everything|everyone|everybody|all units|all bots|all work|all of you|whole force)\b/i;
 const SCOPE_WORDS = new Set(['unit', 'bots', 'team', 'all', 'order', 'tools', 'everyone', 'stop']);
 const REASON = /[,:;—-]?\s*\b(because|while|until|since|so that|so)\b\s+(.+)$/i;
+const RECON =
+  /^(recon|reconnoitre|reconnoiter|scout(?: out)?|survey|find out|look into)\b[:,]?\s*/i;
 const MAIN_EFFORT = /\bmain effort\b/i;
 const MAIN_EFFORT_CLEAR =
   /\b(no|clear|drop|end|cancel|lift|remove)\b.*\bmain effort\b|\bmain effort\b.*\b(is over|has ended|ended|cleared|lifted)\b/i;
@@ -102,7 +104,11 @@ export class SimulatedInterpreter {
       .filter(Boolean)) {
       const sentence = stripEnd(raw);
       const hedged = HEDGE.test(sentence);
-      const isQuestion = !hedged && (/\?\s*$/.test(raw) || QUESTION_START.test(sentence));
+      // "Recon …: how does X work?" is an order to find out, not a question to answer.
+      const isQuestion =
+        !hedged &&
+        !RECON.test(sentence.replace(/^[\w-]+,\s*/, '')) &&
+        (/\?\s*$/.test(raw) || QUESTION_START.test(sentence));
       const unit = this.targetUnit(sentence, input);
 
       if (isQuestion) {
@@ -333,6 +339,29 @@ export class SimulatedInterpreter {
     | null {
     // "Guard, review the…" → classify "review the…".
     sentence = sentence.replace(new RegExp(`^${unit.name},?\\s+`, 'i'), '');
+    // Recon: a read-only survey that answers a question.
+    const recon = RECON.exec(sentence);
+    if (recon) {
+      let q = sentence.slice(recon[0].length);
+      let repoSupplyId: string | null = null;
+      const named = /^(?:the\s+|our\s+)?([\w-]+)\s+(?:repo|repository)\b[:,;—-]?\s*/i.exec(q);
+      if (named) {
+        const repo = input.depot.find(
+          (d) =>
+            d.kind === 'repository' && d.name.toLowerCase().startsWith(named[1]!.toLowerCase()),
+        );
+        if (!repo || !repo.connected)
+          return { missing: { what: `a repository named “${named[1]}”`, kind: 'repository' } };
+        repoSupplyId = repo.id;
+        q = q.slice(named[0].length);
+      }
+      q = q.replace(/^(for|on|into|about)\s+/i, '').trim();
+      if (!q) return { unclear: `${sentence} — recon for what? Say what to find out.` };
+      return {
+        kind: 'order',
+        action: { kind: 'recon', unitId: unit.id, question: sentenceCase(q), repoSupplyId },
+      };
+    }
     // Production deploy rights (irreversible).
     if (DEPLOY_RIGHTS.test(sentence) && GRANT.test(sentence)) {
       const env = input.depot.find(

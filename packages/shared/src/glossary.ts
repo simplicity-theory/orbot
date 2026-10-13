@@ -123,6 +123,12 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     meaning:
       'One unit disagrees with another about its work. HQ rules under their standing orders; if none settles it, you rule. Your ruling is final.',
   },
+  recon: {
+    term: 'Recon',
+    short: 'Look before you leap',
+    meaning:
+      'A read-only survey: a bot studies the code to answer a question and files a report for its unit. It changes nothing.',
+  },
   'main-effort': {
     term: 'Main effort',
     short: 'The operation that goes first',

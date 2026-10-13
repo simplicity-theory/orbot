@@ -78,6 +78,11 @@ export const ScenarioStep = z.discriminatedUnion('do', [
     pattern: z.string(),
     sendBack: Text,
   }),
+  /**
+   * Recon: survey the tracked files for the task's question (its description) and file a
+   * report naming the files that bear on it. Reads only; changes nothing.
+   */
+  z.object({ do: z.literal('survey') }),
   /** Deploy the workspace head to an environment (moves `deploy/<environment>` to it). */
   z.object({ do: z.literal('deploy'), environment: z.string() }),
   /** Block unless the unit's live supply has an item whose name matches `pattern`. */

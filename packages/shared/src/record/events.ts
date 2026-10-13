@@ -129,6 +129,8 @@ export const RecordEventBodies = {
     allowed: z.boolean(),
     reason: z.string(),
   }),
+  /** A bot filed a report (recon findings) as a unit document. */
+  'report.filed': z.object({ documentId: z.string(), title: z.string() }),
   'redaction.applied': z.object({
     detectors: z.array(z.string()),
     where: z.string(),
@@ -140,6 +142,7 @@ export const RecordEventBodies = {
     handoverVersion: z.number().int().nullable(),
     fieldManualEntryIds: z.array(z.string()),
     diaryEventIds: z.array(z.string()),
+    reconDocumentIds: z.array(z.string()).default([]),
   }),
   'task.reassigned': z.object({
     fromBotId: z.string().nullable(),

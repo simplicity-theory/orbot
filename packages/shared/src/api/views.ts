@@ -155,6 +155,8 @@ export interface TaskDetailView {
   events: RecordEvent[];
   versions: VersionWithStatus[];
   handover: DocumentView | null;
+  /** For recon tasks: the report filed. */
+  report: DocumentView | null;
   /** Files this task changes that other active tasks change too (deconfliction). */
   overlaps: TouchOverlap[];
 }

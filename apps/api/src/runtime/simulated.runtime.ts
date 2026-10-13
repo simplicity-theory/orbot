@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, relative, resolve } from 'node:path';
 import {
   parseHandoverMarkdown,
@@ -339,6 +339,17 @@ export class SimulatedRuntime implements BotRuntime {
         }
         return false;
       }
+      case 'survey': {
+        const report = await survey(brief);
+        yield {
+          type: 'step',
+          action: 'survey',
+          detail: `Surveyed ${report.files} tracked file(s) for “${report.question}”.`,
+          outcome: report.hits.length ? `${report.hits.length} relevant` : 'nothing relevant',
+        };
+        yield { type: 'report', title: `Recon: ${report.question}`, markdown: report.markdown };
+        return false;
+      }
       case 'deploy': {
         const commit = await git(brief.workspace.path, ['rev-parse', 'HEAD']);
         const ref = `deploy/${step.environment}`;
@@ -455,4 +466,100 @@ function sleep(ms: number, signal: AbortSignal): Promise<void> {
       { once: true },
     );
   });
+}
+
+const STOP_WORDS = new Set([
+  'the',
+  'and',
+  'for',
+  'how',
+  'what',
+  'where',
+  'does',
+  'with',
+  'our',
+  'are',
+  'any',
+  'this',
+  'that',
+  'into',
+  'from',
+  'which',
+  'when',
+  'why',
+  'who',
+  'is',
+  'do',
+  'we',
+  'it',
+  'of',
+  'to',
+  'in',
+  'on',
+  'a',
+  'an',
+]);
+
+/** Read-only survey of the workspace for a recon question: which tracked files bear on it. */
+async function survey(brief: TaskBrief) {
+  const question = (brief.task.description || brief.task.title).trim().replace(/[?.!\s]+$/, '');
+  const terms = [
+    ...new Set(
+      question
+        .toLowerCase()
+        .split(/[^a-z0-9]+/)
+        .filter((w) => w.length > 2 && !STOP_WORDS.has(w)),
+    ),
+  ];
+  const files = (await git(brief.workspace.path, ['ls-files']))
+    .split('\n')
+    .filter((f) => f && !f.startsWith('orbot/'));
+  const hits: { file: string; terms: string[]; line: string | null }[] = [];
+  for (const file of files) {
+    let text = '';
+    try {
+      text = await readFile(resolve(brief.workspace.path, file), 'utf8');
+    } catch {
+      continue;
+    }
+    if (text.length > 200_000) text = text.slice(0, 200_000);
+    const lower = `${file.toLowerCase()}\n${text.toLowerCase()}`;
+    const found = terms.filter((t) => lower.includes(t));
+    if (!found.length) continue;
+    const line =
+      text
+        .split('\n')
+        .map((l) => l.trim())
+        .find((l) => l && found.some((t) => l.toLowerCase().includes(t))) ?? null;
+    hits.push({ file, terms: found, line });
+  }
+  hits.sort((a, b) => b.terms.length - a.terms.length || a.file.localeCompare(b.file));
+  const top = hits.slice(0, 10);
+  const markdown = [
+    `# Recon: ${question}`,
+    '',
+    `Surveyed by ${brief.bot.callsign} (${brief.unit.name}) on \`${brief.workspace.branch}\`. Read-only: nothing was changed.`,
+    '',
+    '## What I found',
+    top.length
+      ? top
+          .map(
+            (h) =>
+              `- \`${h.file}\` — mentions ${h.terms.join(', ')}${h.line ? `: “${h.line.slice(0, 120)}”` : ''}`,
+          )
+          .join('\n')
+      : '- Nothing in the tracked files bears on this.',
+    '',
+    '## Suggested approach',
+    top.length
+      ? `Start from \`${top[0]!.file}\`; ${top.length > 1 ? `check ${top.length - 1} related file(s) above before changing it.` : 'it is the only file that bears on this.'}`
+      : 'This is new ground: plan it from scratch, and say so in the backbrief.',
+    '',
+    '## Risks',
+    hits.length > 10
+      ? `- Wide footprint: ${hits.length} files mention it. Expect overlaps with other work.`
+      : '- None seen from the survey.',
+    '',
+  ].join('\n');
+  return { question, files: files.length, hits, markdown };
 }

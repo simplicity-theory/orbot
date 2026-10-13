@@ -452,6 +452,9 @@ export class TaskRunner {
             }
             break;
           }
+          case 'report':
+            await this.fileReport(task, ev.title, ev.markdown, refs, botActor);
+            break;
           case 'handover':
             await this.writeHandover(task, ev.note, refs, botActor);
             run.handoverWritten = true;
@@ -545,6 +548,41 @@ export class TaskRunner {
     const value = await this.secrets.reveal(name);
     await this.record.event('credential.used', { secretName: name, purpose }, refs, actorRef(bot));
     return fn(value);
+  }
+
+  /** A report (recon findings) becomes a unit document; a later report revises it. */
+  private async fileReport(
+    task: RecordVersion<TaskBody>,
+    title: string,
+    markdown: string,
+    refs: RecordEventRefs,
+    actor: string,
+  ) {
+    title = title.trim() || `Recon: task #${task.body.number}`;
+    const [existing] = await this.record.listActive('document', {
+      bodyContains: { kind: 'recon', taskId: task.entityId },
+    });
+    const doc = existing
+      ? await this.record.revise(
+          'document',
+          existing.entityId,
+          (d) => ({ ...d, title, markdown, botId: refs.botId ?? null }),
+          { actor, reason: 'Recon report revised' },
+        )
+      : await this.record.create(
+          'document',
+          {
+            kind: 'recon',
+            unitId: task.body.unitId,
+            title,
+            markdown,
+            taskId: task.entityId,
+            botId: refs.botId ?? null,
+            operationId: null,
+          },
+          { actor, reason: `Recon report for task #${task.body.number}` },
+        );
+    await this.record.event('report.filed', { documentId: doc.entityId, title }, refs, actor);
   }
 
   private async writeHandover(

@@ -220,6 +220,15 @@ export class SimulatedOverseer {
       },
     };
     const order = ['build', 'inspect', 'guard', 'deploy'] as const;
+    // A recon report shapes the build: the plan says what it found.
+    if (input.recon?.length) {
+      goals.build.dod = [
+        ...goals.build.dod,
+        ...input.recon.map(
+          (r) => `Accounts for the recon findings (${r.title.replace(/^Recon:\s*/, '')})`,
+        ),
+      ];
+    }
     const missions = order.flatMap((stage) => {
       const unit = input.units.find((u) => stageOf(u) === stage);
       return unit

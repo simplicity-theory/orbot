@@ -146,12 +146,22 @@ const TOOLS: Anthropic.Beta.BetaTool[] = [
     input_schema: obj({ reason: str }),
   },
   {
+    name: 'file_report',
+    description:
+      'File a report for your unit (recon findings): what you looked at, what you found, risks and a suggested approach. Markdown.',
+    input_schema: obj({ title: str, markdown: str }),
+  },
+  {
     name: 'raise_dispute',
     description:
       'You disagree with another unit (name it) about this work, e.g. its rules conflict with your brief. HQ rules under standing orders; you then follow the ruling.',
     input_schema: obj({ against: str, claim: str }),
   },
 ].map((t) => ({ ...t, strict: true }));
+
+/** Recon is read-only: no tool that changes the workspace. */
+const WRITE_TOOLS = new Set(['write_file', 'run_script', 'commit', 'send_back']);
+const RECON_TOOLS = TOOLS.filter((t) => !WRITE_TOOLS.has(t.name));
 
 const TERMINAL = new Set(['done', 'blocked', 'failed', 'send_back', 'stand_down', 'raise_dispute']);
 
@@ -189,7 +199,7 @@ export class ClaudeRuntime implements BotRuntime {
           model: this.opts.model,
           max_tokens: 16000,
           system,
-          tools: TOOLS,
+          tools: brief.task.kind === 'recon' ? RECON_TOOLS : TOOLS,
           messages,
           cache_control: { type: 'ephemeral' },
           output_config: { effort: 'high' },
@@ -289,7 +299,14 @@ export class ClaudeRuntime implements BotRuntime {
     ctx: RunContext,
   ): Promise<{ events: BotEvent[]; output: string }> {
     const s = (k: string) => String(input[k] ?? '');
+    if (brief.task.kind === 'recon' && WRITE_TOOLS.has(name))
+      throw new Error('Recon is read-only: this task may not change the workspace.');
     switch (name) {
+      case 'file_report':
+        return {
+          events: [{ type: 'report', title: s('title'), markdown: s('markdown') }],
+          output: 'Report filed with your unit.',
+        };
       case 'list_files': {
         const dir = this.safe(brief, s('path') || '.');
         const entries = await readdir(dir, { withFileTypes: true });
@@ -418,6 +435,9 @@ export class ClaudeRuntime implements BotRuntime {
       'You arrived today: everything you know about this work comes from the brief below (the unit’s documents). Act on it, and leave the unit better documented than you found it.',
       'Work only through your tools; you cannot reach anything outside the workspace. Record decisions and surprises in the War Diary as you go, send a sitrep at milestones, commit your changes, and always write a handover before you finish, block, fail, send back or stand down.',
       'If a check you are running fails because of the previous unit’s work, use send_back with a reason they can act on. If you need something only someone outside the unit can give (access, a decision), use blocked. If another unit’s rules conflict with your brief, use raise_dispute; once ruled on, follow the ruling.',
+      brief.task.kind === 'recon'
+        ? 'This is a recon task: read-only. Survey the code to answer the question, change nothing, and file_report your findings (what you looked at, what you found, risks, a suggested approach) before the handover and done.'
+        : '',
       brief.unit.standingOrders.length
         ? `Standing orders (always apply):\n${brief.unit.standingOrders.map((o) => `- ${o}`).join('\n')}`
         : '',
@@ -438,6 +458,9 @@ export class ClaudeRuntime implements BotRuntime {
         : '## Last handover\nNone: nobody has worked this before.',
       brief.fieldManual.length
         ? `## Field Manual\n${brief.fieldManual.map((e) => `### ${e.title}\n${e.body}`).join('\n\n')}`
+        : '',
+      brief.recon?.length
+        ? `## Recon reports\n${brief.recon.map((r) => `### ${r.title}\n${r.markdown}`).join('\n\n')}`
         : '',
       brief.recentDiary.length
         ? `## Recent War Diary\n${brief.recentDiary.map((d) => `- ${d.category}: ${d.text}`).join('\n')}`

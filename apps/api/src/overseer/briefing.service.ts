@@ -51,6 +51,7 @@ export class BriefingService {
     // Pick up any edits humans made to the unit's Markdown files first.
     await this.docs.sync(unit.entityId);
     const k = await this.knowledge(unit.entityId, task);
+    const recon = await this.reconReports(unit.entityId, task);
     await this.record.event(
       'task.briefed',
       {
@@ -59,6 +60,7 @@ export class BriefingService {
         handoverVersion: k.lastHandover?.version ?? null,
         fieldManualEntryIds: k.fieldManual.map((e) => e.entryId),
         diaryEventIds: k.recentDiary.map((d) => d.eventId),
+        reconDocumentIds: recon.map((r) => r.documentId),
       },
       {
         unitId: unit.entityId,
@@ -81,7 +83,29 @@ export class BriefingService {
       workspace,
       ...k,
       rulings: await this.rulings(task.entityId),
+      recon,
     };
+  }
+
+  /** The unit's recon reports that share the most words with this work (at most two). */
+  private async reconReports(
+    unitId: string,
+    task: RecordVersion<TaskBody>,
+  ): Promise<TaskBrief['recon']> {
+    const docs = (
+      await this.record.listActive('document', { unitId, bodyContains: { kind: 'recon' } })
+    ).filter((d) => d.body.taskId !== task.entityId);
+    const topic = words(`${task.body.title} ${task.body.description}`);
+    return docs
+      .map((d) => {
+        let score = 0;
+        for (const w of words(`${d.body.title} ${d.body.markdown}`)) if (topic.has(w)) score++;
+        return { d, score };
+      })
+      .filter((x) => x.score >= 2)
+      .sort((a, b) => b.score - a.score || b.d.createdAt.localeCompare(a.d.createdAt))
+      .slice(0, 2)
+      .map(({ d }) => ({ documentId: d.entityId, title: d.body.title, markdown: d.body.markdown }));
   }
 
   /** Rulings on disputes this task raised; the Commander's (final) ruling wins over HQ's. */

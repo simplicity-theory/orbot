@@ -49,6 +49,8 @@ import { Overseers } from './overseer/overseers.js';
 import { HqService } from './overseer/hq.service.js';
 import { OperationsController } from './overseer/operations.controller.js';
 import { MainEffortController } from './overseer/main-effort.controller.js';
+import { ReconController } from './overseer/recon.controller.js';
+import { ReconService } from './overseer/recon.service.js';
 import { MainEffortService } from './overseer/main-effort.service.js';
 import { StandDownController } from './overseer/stand-down.controller.js';
 import { StandDownService } from './overseer/stand-down.service.js';
@@ -89,6 +91,7 @@ export class AppModule {
         OperationsController,
         StandDownController,
         MainEffortController,
+        ReconController,
         EscalationController,
         DeconflictionController,
         DisputeController,
@@ -150,6 +153,7 @@ export class AppModule {
         HqService,
         StandDownService,
         MainEffortService,
+        ReconService,
         BudgetService,
         EscalationService,
         DeconflictionService,

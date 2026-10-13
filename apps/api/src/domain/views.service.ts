@@ -253,13 +253,14 @@ export class ViewsService {
 
   async task(id: string): Promise<TaskDetailView> {
     const t = await this.record.requireActive('task', id);
-    const [unit, bot, mission, events, versions, handovers] = await Promise.all([
+    const [unit, bot, mission, events, versions, handovers, reports] = await Promise.all([
       this.record.requireActive('unit', t.body.unitId),
       t.body.botId ? this.record.getActive('bot', t.body.botId) : null,
       t.body.missionId ? this.record.getActive('mission', t.body.missionId) : null,
       this.record.listEvents({ taskId: id, limit: 1000 }),
       this.record.history(id),
       this.record.listActive('document', { bodyContains: { kind: 'handover', taskId: id } }),
+      this.record.listActive('document', { bodyContains: { kind: 'recon', taskId: id } }),
     ]);
     return {
       task: toView(t),
@@ -269,6 +270,7 @@ export class ViewsService {
       events,
       versions,
       handover: handovers[0] ? toView(handovers[0]) : null,
+      report: reports[0] ? toView(reports[0]) : null,
       overlaps: await this.deconfliction.overlapsFor(id),
     };
   }

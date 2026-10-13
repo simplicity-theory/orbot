@@ -227,4 +227,30 @@ describe('SimulatedInterpreter', () => {
       expect(r.musings[0]).toMatchObject({ kind: 'main-effort', operationId: AUDIT });
     });
   });
+
+  describe('recon', () => {
+    it('sends the addressed unit on recon, with the repository named', () => {
+      expect(
+        i.interpret(input('Recon the payments repo: how are card numbers stored?')).actions,
+      ).toEqual([
+        {
+          kind: 'recon',
+          unitId: '00000000-0000-4000-8000-0000000000a1',
+          question: 'How are card numbers stored',
+          repoSupplyId: '00000000-0000-4000-8000-0000000000c1',
+        },
+      ]);
+      expect(i.interpret(input('Scout out how login is rate limited.')).actions[0]).toMatchObject({
+        kind: 'recon',
+        question: 'How login is rate limited',
+        repoSupplyId: null,
+      });
+    });
+
+    it('says what is missing when the repository is not connected', () => {
+      expect(i.interpret(input('Recon the billing repo for retries.')).missing).toEqual([
+        { what: 'a repository named “billing”', kind: 'repository' },
+      ]);
+    });
+  });
 });

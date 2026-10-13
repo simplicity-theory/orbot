@@ -55,6 +55,13 @@ export interface BriefFieldManualEntry {
   body: string;
 }
 
+/** A recon report the unit filed earlier, relevant to this work. */
+export interface BriefRecon {
+  documentId: string;
+  title: string;
+  markdown: string;
+}
+
 export interface BriefDiaryEntry {
   eventId: string;
   category: string;
@@ -78,6 +85,8 @@ export interface TaskBrief {
   recentDiary: BriefDiaryEntry[];
   /** Rulings on disputes this task raised: the bot follows them. */
   rulings: { disputeId: string; text: string }[];
+  /** The unit's recon reports that bear on this work. */
+  recon: BriefRecon[];
 }
 
 export interface RecordSearchResult {
@@ -135,6 +144,8 @@ export type BotEvent =
   /** A check failed: send the work back to the unit that handed it over. */
   | { type: 'send-back'; reason: string }
   | { type: 'cost'; units: number }
+  /** A report (recon findings): filed as a unit document. */
+  | { type: 'report'; title: string; markdown: string }
   | { type: 'blocked'; reason: string }
   /** The bot stops part-way (handed over) so another bot can pick the task up. */
   | { type: 'stood-down'; reason: string }
@@ -288,6 +299,8 @@ export interface InterpretInput {
 export interface OperationPlanInput {
   name: string;
   intent: string;
+  /** Recon reports filed for this operation before planning. */
+  recon?: { unit: string; title: string; markdown: string }[];
   units: { id: string; name: string; role: string; standingMission: string }[];
 }
 

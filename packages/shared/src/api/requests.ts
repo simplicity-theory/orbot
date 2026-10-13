@@ -132,6 +132,8 @@ export const CreateOperationRequest = z.object({
   name: z.string().trim().min(1).max(100).optional(),
   /** Hard cap on the operation's compute spend; omit for none. */
   budgetUnits: z.number().int().positive().max(1_000_000).nullable().optional(),
+  /** Send the building unit to recon first; HQ plans once the report is in. */
+  reconFirst: z.boolean().optional(),
 });
 export type CreateOperationRequest = z.input<typeof CreateOperationRequest>;
 
@@ -183,3 +185,12 @@ export const SetMainEffortRequest = z.object({
   reason: z.string().trim().min(1).max(500),
 });
 export type SetMainEffortRequest = z.input<typeof SetMainEffortRequest>;
+
+/** Send a unit on recon: a read-only survey of the code that answers a question. */
+export const ReconRequest = z.object({
+  unitId: Id,
+  question: z.string().trim().min(1).max(1000),
+  /** The repository to survey; omit for the unit's first. */
+  repoSupplyId: Id.nullable().default(null),
+});
+export type ReconRequest = z.input<typeof ReconRequest>;

@@ -42,6 +42,7 @@ export class OperationsController {
         body.name ?? null,
         actor,
         body.budgetUnits ?? null,
+        body.reconFirst ?? false,
       ),
     );
   }
