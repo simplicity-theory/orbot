@@ -163,6 +163,11 @@ describe('Disputes', () => {
     const item = approvals.attention.find((a) => a.kind === 'dispute');
     expect(item).toMatchObject({ entityId: dispute.id, link: `/disputes#dispute-${dispute.id}` });
     expect(item!.label).toContain('Dispute to rule on: Engineers v Guard');
+    // It replaces the plain "blocked" item for the same task, here and on the unit page.
+    expect(approvals.attention.filter((a) => a.link.endsWith(`/tasks/${x.id}`))).toEqual([]);
+    const unit = (await t.agent.get(`/api/units/${engId}`).expect(200)).body;
+    expect(unit.attention.map((a: { kind: string }) => a.kind)).toContain('dispute');
+    expect(unit.attention.some((a: { kind: string }) => a.kind === 'blocked-bot')).toBe(false);
 
     await t.agent
       .post(`/api/disputes/${dispute.id}/rule`)

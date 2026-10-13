@@ -18,6 +18,7 @@ import type {
   OrbatView,
   PaletteItem,
   RecordEvent,
+  DisputeBody,
   RecordVersion,
   Status,
   TaskDetailView,
@@ -87,23 +88,14 @@ export class ViewsService {
           botsByStatus,
           currentMission: um.find((m) => m.status !== 'done') ?? null,
           status: unitStatus(ub, ut, ubb, allHalted || !!u.body.halt),
-          attention: [
-            ...withEscalations(
-              attentionFor(u.entityId, ub, ut, ubb),
-              open.filter((e) => e.unitId === u.entityId),
-            ),
-            ...budgetAttention(u.body.name, `/units/${u.entityId}`, u.entityId, budget),
-            ...referred
-              .filter((d) => d.body.unitId === u.entityId)
-              .map((d): AttentionItem => ({
-                kind: 'dispute',
-                label: `Dispute to rule on: ${u.body.name} v ${
-                  units.find((x) => x.entityId === d.body.againstUnitId)?.body.name ?? '?'
-                } — ${d.body.claim}`,
-                link: `/disputes#dispute-${d.entityId}`,
-                entityId: d.entityId,
-              })),
-          ],
+          attention: unitAttention(
+            u,
+            attentionFor(u.entityId, ub, ut, ubb),
+            open.filter((e) => e.unitId === u.entityId),
+            budget,
+            referred.filter((d) => d.body.unitId === u.entityId),
+            units,
+          ),
           backbriefs: ubb,
           bots: ub
             .filter((b) => !b.isOverseer)
@@ -204,9 +196,19 @@ export class ViewsService {
       retiredEntries: toViews(retired),
       warDiary: [...warDiary].reverse(),
       supply: toViews(supply.filter((s) => u.body.supplyIds.includes(s.entityId))),
-      attention: withEscalations(
+      attention: unitAttention(
+        u,
         attentionFor(id, bv, tv, awaiting),
         await this.escalations.openChains({ unitId: id }),
+        unitBudget(
+          u.body.computeBudget,
+          await this.record.costOf({ unitId: id }),
+          settings?.budgetWarnAt ?? 0.8,
+        ),
+        await this.record.listActive('dispute', {
+          bodyContains: { status: 'referred', unitId: id },
+        }),
+        await this.record.listActive('unit'),
       ),
       backbriefs: awaiting,
       coldStart: (coldStart[0] as RecordEvent<'coldstart.check'> | undefined) ?? null,
@@ -505,6 +507,40 @@ function unitStatus(
   if (active.some((b) => b.status === 'working')) return 'working';
   if (bots.length && !active.length) return 'stood-down';
   return 'idle';
+}
+
+/**
+ * Everything in a unit that needs the Commander: the plain items (backbriefs, blocks,
+ * failures, deploys) plus escalations, budget warnings and disputes to rule on. An
+ * escalation or a dispute replaces the plain item for the same task: it says more.
+ */
+function unitAttention(
+  u: RecordVersion<UnitBody>,
+  items: AttentionItem[],
+  open: RecordEvent<'escalation'>[],
+  budget: BudgetView,
+  referred: RecordVersion<DisputeBody>[],
+  units: RecordVersion<UnitBody>[],
+): AttentionItem[] {
+  const disputed = new Set(referred.map((d) => d.body.taskId));
+  return [
+    ...withEscalations(
+      items.filter(
+        (i) =>
+          !(i.kind === 'blocked-bot' && [...disputed].some((t) => i.link.endsWith(`/tasks/${t}`))),
+      ),
+      open,
+    ),
+    ...budgetAttention(u.body.name, `/units/${u.entityId}`, u.entityId, budget),
+    ...referred.map((d): AttentionItem => ({
+      kind: 'dispute',
+      label: `Dispute to rule on: ${u.body.name} v ${
+        units.find((x) => x.entityId === d.body.againstUnitId)?.body.name ?? '?'
+      } — ${d.body.claim}`,
+      link: `/disputes#dispute-${d.entityId}`,
+      entityId: d.entityId,
+    })),
+  ];
 }
 
 /**
