@@ -73,6 +73,9 @@ export const apiUrl = {
   settings: () => `${API}/settings`,
   standDown: () => `${API}/stand-down`,
   mainEffort: () => `${API}/main-effort`,
+  dailyBrief: () => `${API}/daily-brief`,
+  alerts: () => `${API}/alerts`,
+  secrets: () => `${API}/supply/secrets`,
   deconfliction: () => `${API}/deconfliction`,
   disputes: () => `${API}/disputes`,
 };
@@ -259,6 +262,8 @@ export class Api {
     confirmationPhrase?: string;
     budgetWarnAt?: number;
     mainEffortYield?: boolean;
+    dailyBrief?: { enabled: boolean; at: string; timeZone: string };
+    alerts?: { enabled: boolean; credentialName: string | null; kinds: string[] };
     escalation?: {
       stallSeconds: number;
       timeoutSeconds: number;
@@ -307,6 +312,19 @@ export class Api {
   resolveEscalation(chainId: string, note: string) {
     return firstValueFrom(
       this.http.post<unknown>(`${API}/escalations/${chainId}/resolve`, { note }),
+    );
+  }
+
+  writeDailyBrief() {
+    return firstValueFrom(this.http.post<unknown>(`${API}/daily-brief`, {}));
+  }
+
+  testAlert() {
+    return firstValueFrom(
+      this.http.post<{ body: { delivered: boolean; error: string | null } }>(
+        `${API}/alerts/test`,
+        {},
+      ),
     );
   }
 

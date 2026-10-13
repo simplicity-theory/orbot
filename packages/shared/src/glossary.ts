@@ -123,6 +123,12 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     meaning:
       'One unit disagrees with another about its work. HQ rules under their standing orders; if none settles it, you rule. Your ruling is final.',
   },
+  'daily-brief': {
+    term: 'Daily brief',
+    short: 'HQ’s morning report to you',
+    meaning:
+      'Once a day HQ writes what happened, what is under way, what it cost, and what needs you. It is kept with every earlier brief.',
+  },
   'sand-table': {
     term: 'Sand table',
     short: 'Rehearse the plan',

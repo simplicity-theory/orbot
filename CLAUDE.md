@@ -50,6 +50,7 @@ Tests use the `orbot_test` / `orbot_secrets_test` databases and reset them; the 
     - `MainEffortService`: one operation goes first; supporting work makes way (moved to a free bot, or paused with a handover). `main-effort.ts` holds the dispatch-order helpers.
     - `ReconService`: read-only survey tasks that file a `recon` report with the unit (a policy rule keeps them read-only).
     - `SandTableService`: rehearses an operation's plan against the record (deterministic, changes nothing).
+    - `DailyBriefService` (HQ's dated daily brief document) and `AlertService` (phone alerts: POST to a push URL held in the secrets store by name; `alert.sent` events).
       Each registers its own `PolicyRule` and/or bus listener.
   - `policy/duties.service.ts` — separation of duties as a `RecordService` write guard: no bot approves its own work, changes its own rules or grants itself supply, by any path.
   - `chat/` — `ChatService` (message → `runtime.interpret` → actions/pending → orders log → read-back; undo; confirm/decline) and `ActionsService` (one executor per `ChatAction`, each returning its inverse).

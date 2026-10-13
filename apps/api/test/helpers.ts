@@ -25,6 +25,7 @@ export function testConfig(overrides: Record<string, string> = {}): AppConfig {
     ORBOT_SIM_SPEED: '0',
     ORBOT_COLDSTART_INTERVAL_MINUTES: '0',
     ORBOT_ESCALATION_SWEEP_SECONDS: '0',
+    ORBOT_DAILY_BRIEF_CHECK_SECONDS: '0',
     ORBOT_LOG_LEVEL: 'info',
     ORBOT_WORKSPACES_DIR: mkdtempSync(join(tmpdir(), 'orbot-test-ws-')),
     ...overrides,

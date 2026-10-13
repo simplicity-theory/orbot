@@ -38,6 +38,7 @@ const NAV: NavItem[] = [
   { label: 'ORBAT', link: '/', icon: 'grid', exact: true },
   { label: 'Operations', link: '/operations', icon: 'flag' },
   { label: 'Approvals', link: '/approvals', icon: 'stamp' },
+  { label: 'Daily brief', link: '/brief', icon: 'sun' },
   { label: 'Sitreps', link: '/sitreps', icon: 'radio' },
   { label: 'Chat', link: '/chat', icon: 'user' },
   { label: 'Orders log', link: '/orders', icon: 'book' },
@@ -62,6 +63,7 @@ const GO_TO: Record<string, string> = {
   l: '/orders',
   d: '/supply',
   x: '/deconfliction',
+  b: '/brief',
 };
 
 const isTyping = (t: EventTarget | null) =>

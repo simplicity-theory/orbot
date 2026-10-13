@@ -152,6 +152,19 @@ export const RecordEventBodies = {
     ),
     estimate: z.object({ tasks: z.number(), units: z.number() }),
   }),
+  /**
+   * An alert to the Commander's phone. The push URL is never recorded: only the name of
+   * the credential that holds it, and whether delivery worked.
+   */
+  'alert.sent': z.object({
+    kind: z.string(),
+    title: z.string(),
+    text: z.string(),
+    link: z.string(),
+    credentialName: z.string(),
+    delivered: z.boolean(),
+    error: z.string().nullable(),
+  }),
   /** A bot filed a report (recon findings) as a unit document. */
   'report.filed': z.object({ documentId: z.string(), title: z.string() }),
   'redaction.applied': z.object({

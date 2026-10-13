@@ -291,3 +291,11 @@ export type DisputeView = Versioned<DisputeBody> & {
   taskTitle: string;
   botCallsign: string | null;
 };
+
+/** The daily briefs: the latest in full, and the dates of earlier ones. */
+export interface DailyBriefView {
+  latest: DocumentView | null;
+  earlier: { id: string; title: string; createdAt: string }[];
+  /** When the next one is due (ISO), or null if switched off. */
+  nextAt: string | null;
+}

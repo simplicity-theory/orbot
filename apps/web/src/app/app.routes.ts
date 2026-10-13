@@ -50,6 +50,11 @@ export const routes: Routes = [
           import('./features/operations/operations.page').then((m) => m.OperationsPage),
       },
       {
+        path: 'brief',
+        title: 'Daily brief',
+        loadComponent: () => import('./features/brief/brief.page').then((m) => m.BriefPage),
+      },
+      {
         path: 'disputes',
         title: 'Disputes',
         loadComponent: () =>

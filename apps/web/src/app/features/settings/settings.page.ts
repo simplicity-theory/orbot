@@ -1,5 +1,7 @@
 import { httpResource } from '@angular/common/http';
-import { Component, effect, inject, signal } from '@angular/core';
+import { Component, computed, effect, inject, signal } from '@angular/core';
+import { RouterLink } from '@angular/router';
+import type { AlertKind, RecordEvent } from '@orbot/shared';
 import { FormsModule } from '@angular/forms';
 import { Api, apiUrl, type SettingsView } from '../../core/api';
 import { toUserError } from '../../core/api-error';
@@ -11,7 +13,7 @@ import { ThemeService } from '../../core/theme';
 
 @Component({
   selector: 'orb-settings-page',
-  imports: [FormsModule, Term],
+  imports: [FormsModule, Term, RouterLink],
   template: `
     <div class="page page--detail">
       <header class="page-header">
@@ -121,6 +123,87 @@ import { ThemeService } from '../../core/theme';
                 [(ngModel)]="failingBotRuns"
               />
             </fieldset>
+            <fieldset class="stack">
+              <legend><orb-term key="daily-brief">Daily brief</orb-term></legend>
+              <label class="check"
+                ><input type="checkbox" name="briefOn" [(ngModel)]="briefEnabled" /> HQ writes one
+                every day</label
+              >
+              <div class="pairs">
+                <label for="brief-at">At (local time)</label>
+                <input
+                  id="brief-at"
+                  name="briefAt"
+                  class="input"
+                  type="time"
+                  [(ngModel)]="briefAt"
+                />
+                <label for="brief-tz">Time zone</label>
+                <input
+                  id="brief-tz"
+                  name="briefTz"
+                  class="input"
+                  [(ngModel)]="briefTimeZone"
+                  placeholder="Europe/London"
+                />
+              </div>
+            </fieldset>
+            <fieldset class="stack">
+              <legend>Phone alerts</legend>
+              <p class="hint">
+                Install the ntfy app (or any service that takes an HTTP POST), subscribe to a
+                private topic, and store its URL as a credential in the
+                <a routerLink="/supply">Supply Depot</a>. The URL stays in the secrets store.
+              </p>
+              <label class="check"
+                ><input type="checkbox" name="alertsOn" [(ngModel)]="alertsEnabled" /> Alert my
+                phone when something needs me</label
+              >
+              <label for="alert-cred">Push URL (credential)</label>
+              <select id="alert-cred" name="alertCred" class="input" [(ngModel)]="alertCredential">
+                <option [ngValue]="null">None</option>
+                @for (c of credentials(); track c) {
+                  <option [ngValue]="c">{{ c }}</option>
+                }
+              </select>
+              <div class="alert-kinds" role="group" aria-label="Alert me about">
+                @for (k of alertKinds; track k.id) {
+                  <label
+                    ><input
+                      type="checkbox"
+                      [checked]="alertsFor().includes(k.id)"
+                      (change)="toggleAlert(k.id)"
+                    />
+                    {{ k.label }}</label
+                  >
+                }
+              </div>
+              <div>
+                <button
+                  type="button"
+                  class="btn"
+                  [disabled]="busy() || !st.alerts.credentialName"
+                  (click)="testAlert()"
+                >
+                  Send a test alert
+                </button>
+              </div>
+              @if (recentAlerts.value()?.length) {
+                <ul class="list-reset alerts" aria-label="Recent alerts">
+                  @for (a of recentAlerts.value(); track a.id) {
+                    <li>
+                      <span [class.failed]="!a.body.delivered">{{
+                        a.body.delivered ? 'Delivered' : 'Not delivered'
+                      }}</span>
+                      {{ a.body.title }}
+                      @if (a.body.error) {
+                        <span class="meta">— {{ a.body.error }}</span>
+                      }
+                    </li>
+                  }
+                </ul>
+              }
+            </fieldset>
             <label for="settings-reason">Why the change?</label>
             <input id="settings-reason" name="reason" class="input" [(ngModel)]="reason" required />
             <div class="actions">
@@ -179,6 +262,35 @@ import { ThemeService } from '../../core/theme';
     .kinds {
       flex-wrap: wrap;
     }
+    .stack {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: var(--space-3);
+    }
+    .pairs {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      align-items: center;
+      gap: var(--space-2) var(--space-3);
+    }
+    .alert-kinds {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-3) var(--space-5);
+    }
+    .alerts {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-1);
+      font-size: var(--font-size-sm);
+      .failed {
+        color: var(--tone-danger);
+      }
+    }
+    .hint a {
+      text-decoration: underline;
+    }
     .check {
       display: flex;
       gap: var(--space-2);
@@ -210,6 +322,30 @@ export class SettingsPage {
   protected repeatedFailures = 2;
   protected failingBotRuns = 3;
   protected mainEffortYield = true;
+  protected briefEnabled = true;
+  protected briefAt = '07:00';
+  protected briefTimeZone = 'UTC';
+  protected alertsEnabled = false;
+  protected alertCredential: string | null = null;
+  protected readonly alertsFor = signal<AlertKind[]>([]);
+  protected readonly alertKinds: { id: AlertKind; label: string }[] = [
+    { id: 'escalation', label: 'Escalations' },
+    { id: 'approval', label: 'Plans to approve' },
+    { id: 'deploy', label: 'Production deploys' },
+    { id: 'dispute', label: 'Disputes to rule on' },
+    { id: 'budget', label: 'Work held at a budget cap' },
+    { id: 'sand-table', label: 'Sand table no-go' },
+    { id: 'daily-brief', label: 'Daily brief ready' },
+  ];
+  private readonly secrets = httpResource<{ name: string; revoked: boolean }[]>(() =>
+    apiUrl.secrets(),
+  );
+  protected readonly credentials = computed(() =>
+    (this.secrets.value() ?? []).filter((s) => !s.revoked).map((s) => s.name),
+  );
+  protected readonly recentAlerts = httpResource<RecordEvent<'alert.sent'>[]>(() =>
+    apiUrl.alerts(),
+  );
   protected reason = '';
 
   constructor() {
@@ -221,6 +357,13 @@ export class SettingsPage {
       this.phrase = st.confirmationPhrase;
       this.warnAt = Math.round((st.budgetWarnAt ?? 0.8) * 100);
       this.mainEffortYield = st.mainEffortYield ?? true;
+      this.briefEnabled = st.dailyBrief?.enabled ?? true;
+      this.briefAt = st.dailyBrief?.at ?? '07:00';
+      this.briefTimeZone =
+        st.dailyBrief?.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
+      this.alertsEnabled = st.alerts?.enabled ?? false;
+      this.alertCredential = st.alerts?.credentialName ?? null;
+      this.alertsFor.set(st.alerts?.kinds ?? []);
       const esc = st.escalation;
       if (esc) {
         this.stallMinutes = Math.max(1, Math.round(esc.stallSeconds / 60));
@@ -229,6 +372,32 @@ export class SettingsPage {
         this.failingBotRuns = esc.failingBotRuns;
       }
     });
+  }
+
+  protected toggleAlert(kind: AlertKind): void {
+    this.alertsFor.update((c) => (c.includes(kind) ? c.filter((x) => x !== kind) : [...c, kind]));
+  }
+
+  protected async testAlert(): Promise<void> {
+    this.busy.set(true);
+    try {
+      const sent = await this.api.testAlert();
+      this.recentAlerts.reload();
+      this.toasts.show(
+        sent.body.delivered
+          ? { tone: 'success', message: 'Test alert sent. Check your phone.' }
+          : {
+              tone: 'danger',
+              message: 'The test alert was not delivered.',
+              detail: sent.body.error ?? undefined,
+            },
+      );
+    } catch (err) {
+      const e = toUserError(err);
+      this.toasts.show({ tone: 'danger', message: e.message, detail: e.action });
+    } finally {
+      this.busy.set(false);
+    }
   }
 
   protected toggle(kind: string): void {
@@ -249,6 +418,16 @@ export class SettingsPage {
           failingBotRuns: Math.max(2, Math.round(this.failingBotRuns)),
         },
         mainEffortYield: this.mainEffortYield,
+        dailyBrief: {
+          enabled: this.briefEnabled,
+          at: this.briefAt,
+          timeZone: this.briefTimeZone.trim(),
+        },
+        alerts: {
+          enabled: this.alertsEnabled,
+          credentialName: this.alertCredential,
+          kinds: this.alertsFor(),
+        },
         reason: this.reason.trim(),
         expectedVersion: version,
       });

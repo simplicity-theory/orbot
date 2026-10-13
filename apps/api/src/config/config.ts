@@ -47,6 +47,8 @@ const Env = z.object({
   ORBOT_COLDSTART_INTERVAL_MINUTES: z.coerce.number().min(0).default(360),
   /** How often stuck work is looked for (0 = never; tests call the sweep directly). */
   ORBOT_ESCALATION_SWEEP_SECONDS: z.coerce.number().min(0).default(30),
+  /** How often HQ checks whether the daily brief is due (0 = never; tests write it on demand). */
+  ORBOT_DAILY_BRIEF_CHECK_SECONDS: z.coerce.number().min(0).default(60),
   ORBOT_LOG_LEVEL: z
     .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
     .default('info'),
@@ -76,6 +78,7 @@ export interface AppConfig {
   anthropicApiKey: string;
   coldStartIntervalMs: number;
   escalationSweepMs: number;
+  dailyBriefCheckMs: number;
   logLevel: z.infer<typeof Env>['ORBOT_LOG_LEVEL'];
 }
 
@@ -118,6 +121,7 @@ export function loadConfig(overrides: Record<string, string | undefined> = {}): 
     anthropicApiKey: e.ANTHROPIC_API_KEY,
     coldStartIntervalMs: e.ORBOT_COLDSTART_INTERVAL_MINUTES * 60_000,
     escalationSweepMs: e.ORBOT_ESCALATION_SWEEP_SECONDS * 1000,
+    dailyBriefCheckMs: e.ORBOT_DAILY_BRIEF_CHECK_SECONDS * 1000,
     logLevel: e.ORBOT_LOG_LEVEL,
   };
 }

@@ -288,6 +288,8 @@ export const DocumentKind = z.enum([
   'note',
   /** A recon report: what a bot found surveying the code for a question. */
   'recon',
+  /** HQ's daily brief to the Commander. */
+  'daily-brief',
 ]);
 export type DocumentKind = z.infer<typeof DocumentKind>;
 
@@ -431,6 +433,54 @@ export const DEFAULT_ESCALATION: EscalationSettings = {
   failingBotRuns: 3,
 };
 
+/** When HQ writes the daily brief. */
+export const DailyBriefSettings = z.object({
+  enabled: z.boolean().default(true),
+  /** Local time of day, HH:MM. */
+  at: z
+    .string()
+    .regex(/^([01]\d|2[0-3]):[0-5]\d$/)
+    .default('07:00'),
+  /** IANA time zone the time is in, e.g. Europe/London. */
+  timeZone: z.string().min(1).default('UTC'),
+});
+export type DailyBriefSettings = z.infer<typeof DailyBriefSettings>;
+export const DEFAULT_DAILY_BRIEF: DailyBriefSettings = {
+  enabled: true,
+  at: '07:00',
+  timeZone: 'UTC',
+};
+
+/** What can alert the Commander's phone. */
+export const AlertKind = z.enum([
+  'escalation',
+  'approval',
+  'deploy',
+  'dispute',
+  'budget',
+  'sand-table',
+  'daily-brief',
+]);
+export type AlertKind = z.infer<typeof AlertKind>;
+
+/**
+ * Phone alerts go to an ntfy-style push URL. The URL is a secret (whoever has it can read
+ * the alerts), so only the name of the credential holding it is stored here.
+ */
+export const AlertSettings = z.object({
+  enabled: z.boolean().default(false),
+  credentialName: z.string().min(1).nullable().default(null),
+  kinds: z
+    .array(AlertKind)
+    .default(['escalation', 'approval', 'deploy', 'dispute', 'budget', 'daily-brief']),
+});
+export type AlertSettings = z.infer<typeof AlertSettings>;
+export const DEFAULT_ALERTS: AlertSettings = {
+  enabled: false,
+  credentialName: null,
+  kinds: ['escalation', 'approval', 'deploy', 'dispute', 'budget', 'daily-brief'],
+};
+
 export const SettingsBody = z.object({
   /** Chat action kinds that need a typed one-line confirmation before they run. */
   irreversibleActions: z.array(z.string()),
@@ -445,6 +495,8 @@ export const SettingsBody = z.object({
   mainEffort: MainEffort.nullable().default(null),
   /** Whether running supporting work pauses (with a handover) to free a bot for the main effort. */
   mainEffortYield: z.boolean().default(true),
+  dailyBrief: DailyBriefSettings.default(DEFAULT_DAILY_BRIEF),
+  alerts: AlertSettings.default(DEFAULT_ALERTS),
 });
 export type SettingsBody = z.infer<typeof SettingsBody>;
 
@@ -459,6 +511,8 @@ export const DEFAULT_SETTINGS: SettingsBody = {
   halt: null,
   mainEffort: null,
   mainEffortYield: true,
+  dailyBrief: DEFAULT_DAILY_BRIEF,
+  alerts: DEFAULT_ALERTS,
 };
 
 // ---------- Registry ----------

@@ -52,6 +52,9 @@ import { MainEffortController } from './overseer/main-effort.controller.js';
 import { ReconController } from './overseer/recon.controller.js';
 import { ReconService } from './overseer/recon.service.js';
 import { SandTableService } from './overseer/sand-table.service.js';
+import { AlertService } from './overseer/alert.service.js';
+import { DailyBriefController } from './overseer/daily-brief.controller.js';
+import { DailyBriefService } from './overseer/daily-brief.service.js';
 import { MainEffortService } from './overseer/main-effort.service.js';
 import { StandDownController } from './overseer/stand-down.controller.js';
 import { StandDownService } from './overseer/stand-down.service.js';
@@ -93,6 +96,7 @@ export class AppModule {
         StandDownController,
         MainEffortController,
         ReconController,
+        DailyBriefController,
         EscalationController,
         DeconflictionController,
         DisputeController,
@@ -156,6 +160,8 @@ export class AppModule {
         MainEffortService,
         ReconService,
         SandTableService,
+        DailyBriefService,
+        AlertService,
         BudgetService,
         EscalationService,
         DeconflictionService,

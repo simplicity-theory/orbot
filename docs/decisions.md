@@ -185,3 +185,16 @@ The refusal is a policy decision on the record ("Separation of duties: …", act
 **D79. The sand table is HQ rehearsing the plan against the record, with no model.** The build prompt names it without defining it. ORBOT takes it as a rehearsal: before the work is done for real, HQ walks the operation's handoff chain mission by mission. For each unit it checks bots that can work, stand-downs, the Overseer, work already queued, blocked tasks and standing orders that can hold work up. It also checks deploy rights for the deploy stage, the approvals you will be asked for, and the budgets. It lists blockers, risks and notes, each with what to do and a link. The checks are deterministic, so a rehearsal is free, repeatable and the same on every runtime. It changes nothing. Each rehearsal is kept as a `sand-table` event, so earlier ones stay on the record.
 
 **D80. HQ rehearses at the O Group and again when execution starts; the result advises, it doesn't stop.** A no-go appears in the operation's Needs you and as an HQ sitrep. The Commander decides whether to go ahead: the sand table never blocks an approval or holds work, because deciding is the Commander's job (chain of command). The cost estimate is the plan's tasks (or what's left of them) times the unit's average spend per finished task, or 4 units when the unit has no history. You can also rehearse from the operation page or in chat ("Rehearse Ledger on the sand table").
+
+**D81. The daily brief is a dated document HQ writes at a set time.** Settings hold the time and time zone (`dailyBrief`: on, 07:00, UTC by default). HQ checks every `ORBOT_DAILY_BRIEF_CHECK_SECONDS` (60) and writes the day's brief once it is past that local time. It covers the last 24 hours:
+
+- what needs you;
+- each operation (with the main effort marked);
+- a table of units: status, done, failed, blocked, spend against budget;
+- what happened: deploys, escalations to you, stand-downs, HQ sitreps;
+- what was learned: new Field Manual entries and recon reports;
+- what is queued.
+
+There is one `daily-brief` document per local date, so writing it again that day ("Write today's brief now") revises the same document, and every earlier brief is kept. It is composed from the record by rule, with no model, so it is free and always the same shape.
+
+**D82. Phone alerts are an HTTP push to a URL kept in the secrets store.** The build prompt asks for phone alerts. ORBOT sends them the way ntfy works: POST the text, with Title, Priority, Tags and Click (a deep link into ORBOT) headers. ntfy's free phone apps receive them, and any service that takes such a POST works too. Web Push was ruled out because it needs VAPID keys, a service worker and an installed app before the first alert. Whoever has a push topic URL can read the alerts, so the URL is a secret. It is stored as a credential and referenced in Settings by name only, and it appears in no record, log or response; `alert.sent` events keep the credential's name, the redacted text and whether delivery worked. You choose which kinds alert you: escalations reaching you, plans and production deploys waiting for approval, disputes referred to you, work held at a budget cap, a sand-table no-go, and the daily brief. Each event alerts once, and the alert text goes through the redaction layer.
