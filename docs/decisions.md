@@ -198,3 +198,13 @@ The refusal is a policy decision on the record ("Separation of duties: …", act
 There is one `daily-brief` document per local date, so writing it again that day ("Write today's brief now") revises the same document, and every earlier brief is kept. It is composed from the record by rule, with no model, so it is free and always the same shape.
 
 **D82. Phone alerts are an HTTP push to a URL kept in the secrets store.** The build prompt asks for phone alerts. ORBOT sends them the way ntfy works: POST the text, with Title, Priority, Tags and Click (a deep link into ORBOT) headers. ntfy's free phone apps receive them, and any service that takes such a POST works too. Web Push was ruled out because it needs VAPID keys, a service worker and an installed app before the first alert. Whoever has a push topic URL can read the alerts, so the URL is a secret. It is stored as a credential and referenced in Settings by name only, and it appears in no record, log or response; `alert.sent` events keep the credential's name, the redacted text and whether delivery worked. You choose which kinds alert you: escalations reaching you, plans and production deploys waiting for approval, disputes referred to you, work held at a budget cap, a sand-table no-go, and the daily brief. Each event alerts once, and the alert text goes through the redaction layer.
+
+**D83. A service record is worked out from the record; it is about conduct, never knowledge.** Each bot's page shows:
+
+- when it joined, and whom it replaced or was replaced by (`replacesBotId`, now set when a bot is replaced);
+- its runs and how they ended, success rate, average run length and compute spent;
+- what it wrote (handovers, diary entries, sitreps, reports), and its disputes, escalations and policy refusals;
+- **commendations**: Field Manual entries that came from its handovers;
+- a timeline of notable entries.
+
+It is computed on request from events and versions, so there is no second copy to drift. It never goes into a brief and no Overseer decision reads it. A bot's successor learns from the unit's documents, not from another bot's history (principle 3). A replaced bot's record stays on its page.

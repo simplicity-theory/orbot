@@ -6,6 +6,7 @@ import { ZodPipe } from '../common/zod.pipe.js';
 import { TaskRunner } from '../execution/task-runner.js';
 import { DocumentsService } from './documents.service.js';
 import { ForceService } from './force.service.js';
+import { ServiceRecordService } from './service-record.service.js';
 import { toView, toViews } from './view.js';
 import { ViewsService } from './views.service.js';
 import { WorkService } from './work.service.js';
@@ -25,6 +26,7 @@ export class DomainController {
     private readonly work: WorkService,
     private readonly documents: DocumentsService,
     private readonly runner: TaskRunner,
+    private readonly serviceRecords: ServiceRecordService,
   ) {}
 
   @Get('orbat')
@@ -45,6 +47,12 @@ export class DomainController {
   @Get('bots/:id')
   bot(@Param('id', Uuid) id: string) {
     return this.views.bot(id);
+  }
+
+  /** The bot's service record: what it has done and how. */
+  @Get('bots/:id/service-record')
+  serviceRecord(@Param('id', Uuid) id: string) {
+    return this.serviceRecords.forBot(id);
   }
 
   @Get('tasks')

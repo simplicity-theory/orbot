@@ -123,6 +123,17 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     meaning:
       'One unit disagrees with another about its work. HQ rules under their standing orders; if none settles it, you rule. Your ruling is final.',
   },
+  'service-record': {
+    term: 'Service record',
+    short: 'A bot’s history of service',
+    meaning:
+      'What a bot has done and how: runs, outcomes, spend, refusals, and the lessons it left its unit. Worked out from the record; it never goes into a brief, because knowledge belongs to the unit.',
+  },
+  commendation: {
+    term: 'Commendation',
+    short: 'A lesson it left the unit',
+    meaning: 'A Field Manual entry that came from this bot’s handover.',
+  },
   'daily-brief': {
     term: 'Daily brief',
     short: 'HQ’s morning report to you',

@@ -15,6 +15,7 @@ import { LoadError } from '../../ui/load-error';
 import { Skeleton } from '../../ui/skeleton';
 import { StandDownButton } from '../../ui/stand-down';
 import { MainEfforts } from '../../core/main-effort';
+import { ServiceRecord } from './service-record';
 import { MainEffortBadge } from '../../ui/main-effort';
 import { StatusBadge } from '../../ui/status-badge';
 import { Term } from '../../ui/term';
@@ -27,6 +28,7 @@ import { AddBotDialog, type AddBotData } from '../units/add-bot.dialog';
   selector: 'orb-bot-page',
   imports: [
     MainEffortBadge,
+    ServiceRecord,
     RouterLink,
     StatusBadge,
     StandDownButton,
@@ -168,6 +170,8 @@ import { AddBotDialog, type AddBotData } from '../units/add-bot.dialog';
           <h2 id="activity-h" class="panel__title">Working record (latest first)</h2>
           <orb-record-timeline [events]="v.recent" label="Recent working record" />
         </section>
+
+        <orb-service-record [botId]="v.bot.id" />
       </div>
       <ng-template #reassignControl let-t>
         @if (reassignable(t) && v.peers.length) {

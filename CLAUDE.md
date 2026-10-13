@@ -53,6 +53,7 @@ Tests use the `orbot_test` / `orbot_secrets_test` databases and reset them; the 
     - `DailyBriefService` (HQ's dated daily brief document) and `AlertService` (phone alerts: POST to a push URL held in the secrets store by name; `alert.sent` events).
       Each registers its own `PolicyRule` and/or bus listener.
   - `policy/duties.service.ts` — separation of duties as a `RecordService` write guard: no bot approves its own work, changes its own rules or grants itself supply, by any path.
+  - `domain/service-record.service.ts` — a bot's service record, computed from the record (conduct, not knowledge: never briefed).
   - `chat/` — `ChatService` (message → `runtime.interpret` → actions/pending → orders log → read-back; undo; confirm/decline) and `ActionsService` (one executor per `ChatAction`, each returning its inverse).
   - `settings/` — the versioned settings entity (irreversible action kinds, confirmation phrase).
   - `documents/` — `FieldManualService` (entries, render/parse), `UnitDocsService` + `UnitDocumentStore` (Markdown mirror in the unit's repo, import of human edits).

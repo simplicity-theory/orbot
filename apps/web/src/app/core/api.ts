@@ -74,6 +74,7 @@ export const apiUrl = {
   standDown: () => `${API}/stand-down`,
   mainEffort: () => `${API}/main-effort`,
   dailyBrief: () => `${API}/daily-brief`,
+  serviceRecord: (botId: string) => `${API}/bots/${botId}/service-record`,
   alerts: () => `${API}/alerts`,
   secrets: () => `${API}/supply/secrets`,
   deconfliction: () => `${API}/deconfliction`,

@@ -52,6 +52,7 @@ import { MainEffortController } from './overseer/main-effort.controller.js';
 import { ReconController } from './overseer/recon.controller.js';
 import { ReconService } from './overseer/recon.service.js';
 import { SandTableService } from './overseer/sand-table.service.js';
+import { ServiceRecordService } from './domain/service-record.service.js';
 import { AlertService } from './overseer/alert.service.js';
 import { DailyBriefController } from './overseer/daily-brief.controller.js';
 import { DailyBriefService } from './overseer/daily-brief.service.js';
@@ -160,6 +161,7 @@ export class AppModule {
         MainEffortService,
         ReconService,
         SandTableService,
+        ServiceRecordService,
         DailyBriefService,
         AlertService,
         BudgetService,

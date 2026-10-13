@@ -299,3 +299,35 @@ export interface DailyBriefView {
   /** When the next one is due (ISO), or null if switched off. */
   nextAt: string | null;
 }
+
+/** A bot's service record: what it has done and how, worked out from the permanent record. */
+export interface ServiceRecordView {
+  bot: BotView;
+  unitName: string;
+  enlisted: { at: string; by: string; reason: string };
+  replaces: { id: string; callsign: string } | null;
+  replacedBy: { id: string; callsign: string } | null;
+  stats: {
+    runs: number;
+    /** Runs by how they ended. */
+    outcomes: { done: number; failed: number; blocked: number; stopped: number };
+    tasksDone: number;
+    /** Share of finished runs that ended done (0-1), or null before any run ends. */
+    successRate: number | null;
+    /** Average run length in seconds, or null. */
+    averageRunSeconds: number | null;
+    unitsSpent: number;
+    handovers: number;
+    diaryEntries: number;
+    sitreps: number;
+    reports: number;
+    disputesRaised: number;
+    escalations: number;
+    /** Things policy refused it (rules of engagement, budgets, separation of duties…). */
+    refusals: number;
+  };
+  /** Field Manual entries that came from its handovers: lessons it left the unit. */
+  commendations: { entryId: string; title: string; at: string; retired: boolean }[];
+  /** Notable entries, newest first. */
+  entries: { at: string; kind: string; text: string; link: string | null }[];
+}

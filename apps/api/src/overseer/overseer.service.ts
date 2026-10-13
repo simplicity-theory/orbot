@@ -697,6 +697,7 @@ export class OverseerService implements OnApplicationBootstrap, OnModuleDestroy 
           currentTaskId: null,
           queue: [],
           runtime: old?.body.runtime ?? 'simulated',
+          replacesBotId: old?.entityId ?? null,
         },
         { actor, reason: old ? `Replaces ${old.body.callsign}: ${input.reason}` : input.reason },
       );

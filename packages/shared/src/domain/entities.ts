@@ -106,6 +106,8 @@ export const BotBody = z.object({
   runtime: z.string().min(1),
   /** Stand-down order on this bot (Phase 5). */
   halt: Halt.nullable().default(null),
+  /** The bot this one replaced, if any (its service record links to it). */
+  replacesBotId: Id.nullable().default(null),
 });
 export type BotBody = z.infer<typeof BotBody>;
 
