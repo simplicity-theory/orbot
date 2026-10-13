@@ -44,6 +44,17 @@ const iso = (s: string | Date) => new Date(s).toISOString();
 type VersionRow = typeof recordVersion.$inferSelect;
 type EventRow = typeof recordEvent.$inferSelect;
 
+/**
+ * Bodies are validated when written. A version written before a field was added lacks it, so
+ * reads fill in the schema's defaults (a version that no longer fits is returned as stored).
+ */
+export function withDefaults(type: string, body: unknown): unknown {
+  const schema = ENTITY_BODY_SCHEMAS[type as EntityType];
+  if (!schema) return body;
+  const parsed = schema.safeParse(body);
+  return parsed.success ? parsed.data : body;
+}
+
 function toVersion<B>(r: Omit<VersionRow, 'search'>): RecordVersion<B> {
   return {
     id: r.id,
@@ -51,7 +62,7 @@ function toVersion<B>(r: Omit<VersionRow, 'search'>): RecordVersion<B> {
     entityId: r.entityId,
     version: r.version,
     unitId: r.unitId,
-    body: r.body as B,
+    body: withDefaults(r.entityType, r.body) as B,
     actor: r.actor,
     reason: r.reason,
     createdAt: iso(r.createdAt),

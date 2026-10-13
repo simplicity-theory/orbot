@@ -225,3 +225,5 @@ It is computed on request from events and versions, so there is no second copy t
 - **Issue tracker.** Open issues are listed on the Connections page. Taking one on makes a mission: the issue title is the goal, and its checklist (or "Issue #N is resolved") is the definition of done. This also works in chat ("Take on issue #7"). When the mission is done, HQ comments on the issue and closes it (a per-connection setting). Issue text from outside is redacted before it is recorded.
 
 **D89. Connecting and disconnecting are the Commander's; using a connection follows rank.** Opening a task's pull request and taking an issue on for a unit need command of that unit. Checking pipelines needs any order-giving officer.
+
+**D90. Reads fill in defaults for fields added since a version was written.** Bodies are validated on write. Without this, a database from an earlier phase would return settings without `alerts`, operations without `pullRequest`, and so on. Reads now run each body through its schema to apply defaults. A version that no longer fits the schema is returned exactly as stored. Nothing is rewritten, so the record stays append-only (principle 4).
