@@ -23,6 +23,7 @@ import { WorkspaceManager } from '../runtime/workspace-manager.js';
 import { SupplyService } from '../supply/supply.service.js';
 import { OverseerService } from './overseer.service.js';
 import { ReconService } from './recon.service.js';
+import { SandTableService } from './sand-table.service.js';
 import { HQ_ACTOR } from './overseers.js';
 
 export { HQ_ACTOR };
@@ -50,6 +51,7 @@ export class HqService implements OnApplicationBootstrap, OnModuleDestroy {
     private readonly supply: SupplyService,
     private readonly overseer: OverseerService,
     private readonly recon: ReconService,
+    private readonly sandTables: SandTableService,
   ) {}
 
   /** HQ's staff thinks through the default runtime (HQ has no unit of its own). */
@@ -294,6 +296,8 @@ export class HqService implements OnApplicationBootstrap, OnModuleDestroy {
     });
     await this.phase(opId, 'backbrief', 'Missions issued; units are briefing back');
     await this.renderRecord(opId);
+    // Rehearse the plan on the sand table while it can still be put right.
+    await this.sandTables.rehearse(opId, HQ_ACTOR);
   }
 
   /** Once every mission's backbrief is approved, execution starts. */
@@ -313,6 +317,8 @@ export class HqService implements OnApplicationBootstrap, OnModuleDestroy {
       if (briefs.every((b) => b?.body.status === 'approved')) {
         await this.phase(opId, 'execution', 'Every backbrief approved');
         await this.renderRecord(opId);
+        // A last rehearsal with the approved plans' tasks.
+        await this.sandTables.rehearse(opId, HQ_ACTOR);
       }
     });
   }

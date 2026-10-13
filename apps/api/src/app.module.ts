@@ -51,6 +51,7 @@ import { OperationsController } from './overseer/operations.controller.js';
 import { MainEffortController } from './overseer/main-effort.controller.js';
 import { ReconController } from './overseer/recon.controller.js';
 import { ReconService } from './overseer/recon.service.js';
+import { SandTableService } from './overseer/sand-table.service.js';
 import { MainEffortService } from './overseer/main-effort.service.js';
 import { StandDownController } from './overseer/stand-down.controller.js';
 import { StandDownService } from './overseer/stand-down.service.js';
@@ -154,6 +155,7 @@ export class AppModule {
         StandDownService,
         MainEffortService,
         ReconService,
+        SandTableService,
         BudgetService,
         EscalationService,
         DeconflictionService,

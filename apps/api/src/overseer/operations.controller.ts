@@ -5,6 +5,7 @@ import { Actor } from '../auth/auth.guard.js';
 import { ZodPipe } from '../common/zod.pipe.js';
 import { toView } from '../domain/view.js';
 import { ViewsService } from '../domain/views.service.js';
+import { SandTableService } from './sand-table.service.js';
 import { BudgetService } from './budget.service.js';
 import { HqService } from './hq.service.js';
 import { OverseerService } from './overseer.service.js';
@@ -19,6 +20,7 @@ export class OperationsController {
     private readonly overseer: OverseerService,
     private readonly views: ViewsService,
     private readonly budgets: BudgetService,
+    private readonly sandTables: SandTableService,
   ) {}
 
   @Get('operations')
@@ -48,6 +50,13 @@ export class OperationsController {
   }
 
   /** Set the operation's compute budget cap (null = none); work held at the old cap resumes. */
+  /** Rehearse the plan on the sand table (changes nothing; the result is kept). */
+  @Post('operations/:id/sand-table')
+  async rehearse(@Param('id', Uuid) id: string, @Actor() actor: string) {
+    await this.sandTables.rehearse(id, actor);
+    return this.views.operation(id);
+  }
+
   @Put('operations/:id/budget')
   async budget(
     @Param('id', Uuid) id: string,

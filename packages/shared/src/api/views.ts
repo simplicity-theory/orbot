@@ -49,7 +49,13 @@ export interface MissionProgress {
 }
 
 export type AttentionKind =
-  'blocked-bot' | 'failed-task' | 'awaiting-approval' | 'escalation' | 'budget' | 'dispute';
+  | 'blocked-bot'
+  | 'failed-task'
+  | 'awaiting-approval'
+  | 'escalation'
+  | 'budget'
+  | 'dispute'
+  | 'sand-table';
 
 /** A compute budget and what has been spent against it. */
 export interface BudgetView {
@@ -249,6 +255,8 @@ export interface OperationDetailView extends OperationSummary {
   timeline: RecordEvent[];
   record: DocumentView | null;
   afterAction: DocumentView | null;
+  /** The latest sand-table rehearsal of the plan, if any. */
+  sandTable: RecordEvent<'sand-table'> | null;
 }
 
 /** The main effort, for the ORBAT strip, the operations board and task badges. */

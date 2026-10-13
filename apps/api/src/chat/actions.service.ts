@@ -5,6 +5,7 @@ import { TaskRunner } from '../execution/task-runner.js';
 import { HqService } from '../overseer/hq.service.js';
 import { MainEffortService } from '../overseer/main-effort.service.js';
 import { ReconService } from '../overseer/recon.service.js';
+import { SandTableService } from '../overseer/sand-table.service.js';
 import { StandDownService } from '../overseer/stand-down.service.js';
 import { BudgetService } from '../overseer/budget.service.js';
 import { OverseerService } from '../overseer/overseer.service.js';
@@ -41,6 +42,7 @@ export class ActionsService {
     private readonly budget: BudgetService,
     private readonly mainEffort: MainEffortService,
     private readonly recon: ReconService,
+    private readonly sandTables: SandTableService,
   ) {}
 
   async run(action: ChatAction, ctx: WriteContext): Promise<ActionResult> {
@@ -49,6 +51,19 @@ export class ActionsService {
       return {
         summary: `Operation ${op.body.name} launched: HQ is holding the O Group and will issue missions to the units.`,
         links: [{ label: `Operation ${op.body.name}`, link: `/operations/${op.entityId}` }],
+        inverse: null,
+        affects: [],
+      };
+    }
+    if (action.kind === 'rehearse') {
+      const e = await this.sandTables.rehearse(action.operationId, ctx.actor);
+      const op = await this.record.requireActive('operation', action.operationId);
+      const blockers = e.body.findings.filter((f) => f.severity === 'blocker');
+      return {
+        summary: `Sand table for Operation ${op.body.name}: ${
+          e.body.verdict === 'go' ? 'go' : `no-go — ${blockers.map((b) => b.text).join(' ')}`
+        }`,
+        links: [{ label: 'Sand table', link: `/operations/${op.entityId}#sand-table` }],
         inverse: null,
         affects: [],
       };

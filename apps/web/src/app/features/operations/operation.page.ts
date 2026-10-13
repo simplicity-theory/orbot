@@ -19,6 +19,7 @@ import { RecordTimeline } from '../tasks/record-timeline';
 import { MainEfforts } from '../../core/main-effort';
 import { MainEffortBadge, MainEffortButton } from '../../ui/main-effort';
 import { MissionChain } from './mission-chain';
+import { SandTable } from './sand-table';
 
 @Component({
   selector: 'orb-operation-page',
@@ -36,6 +37,7 @@ import { MissionChain } from './mission-chain';
     MissionChain,
     MainEffortBadge,
     MainEffortButton,
+    SandTable,
   ],
   template: `
     @if (view.error(); as err) {
@@ -82,6 +84,11 @@ import { MissionChain } from './mission-chain';
         <section class="panel" aria-label="Phase">
           <orb-phase-stepper [phase]="v.operation.phase" />
         </section>
+        <orb-sand-table
+          [operationId]="v.operation.id"
+          [result]="v.sandTable"
+          (rehearsed)="view.reload()"
+        />
         <section class="panel" aria-labelledby="op-budget-h">
           <h2 id="op-budget-h" class="panel__title">Compute budget</h2>
           <orb-budget-control

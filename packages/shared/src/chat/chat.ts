@@ -85,6 +85,8 @@ export const ChatAction = z.discriminatedUnion('kind', [
     targetId: Id.nullable(),
     reason: z.string().min(1),
   }),
+  /** Through HQ: rehearse an operation's plan on the sand table (changes nothing). */
+  z.object({ kind: z.literal('rehearse'), unitId: Id.nullable(), operationId: Id }),
   /** Send a bot to survey the code and report back, changing nothing. */
   z.object({
     kind: z.literal('recon'),

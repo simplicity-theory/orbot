@@ -30,6 +30,7 @@ import { APP_CONFIG, type AppConfig } from '../config/config.js';
 import { mainEffortFirst, mainEffortMissionIds } from '../overseer/main-effort.js';
 import { FieldManualService } from '../documents/field-manual.service.js';
 import { UnitDocsService } from '../documents/unit-docs.service.js';
+import { SandTableService } from '../overseer/sand-table.service.js';
 import { DeconflictionService } from '../overseer/deconfliction.service.js';
 import { EscalationService } from '../overseer/escalation.service.js';
 import { RecordService } from '../record/record.service.js';
@@ -50,6 +51,7 @@ export class ViewsService {
     private readonly docs: UnitDocsService,
     private readonly escalations: EscalationService,
     private readonly deconfliction: DeconflictionService,
+    private readonly sandTables: SandTableService,
   ) {}
 
   async orbat(): Promise<OrbatView> {
@@ -354,6 +356,17 @@ export class ViewsService {
       (await this.record.getActive('settings', SETTINGS_ID))?.body.budgetWarnAt ?? 0.8,
     );
     needsYou.push(...budgetAttention(`Operation ${op.body.name}`, `/operations/${id}`, id, budget));
+    // A rehearsal that found blockers, while the plan can still be put right.
+    const sand = await this.sandTables.latest(id);
+    if (sand?.body.verdict === 'no-go' && !['after-action', 'closed'].includes(op.body.phase)) {
+      const n = sand.body.findings.filter((f) => f.severity === 'blocker').length;
+      needsYou.push({
+        kind: 'sand-table',
+        label: `Sand table: no-go for Operation ${op.body.name} (${n} blocker${n === 1 ? '' : 's'})`,
+        link: `/operations/${id}#sand-table`,
+        entityId: id,
+      });
+    }
     return { operation: toView(op), budget, missions: rows, needsYou };
   }
 
@@ -383,6 +396,7 @@ export class ViewsService {
       timeline,
       record: record ? toView(record) : null,
       afterAction: aar ? toView(aar) : null,
+      sandTable: await this.sandTables.latest(id),
     };
   }
 

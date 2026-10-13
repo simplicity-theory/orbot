@@ -16,6 +16,7 @@ const ATTENTION_ICON = {
   escalation: 'arrow-right',
   budget: 'coins',
   dispute: 'users',
+  'sand-table': 'activity',
 } as const;
 
 /** A unit at a glance, with an attention strip of everything that needs the Commander. */

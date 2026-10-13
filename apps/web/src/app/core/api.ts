@@ -310,6 +310,13 @@ export class Api {
     );
   }
 
+  /** Rehearse an operation's plan on the sand table. */
+  rehearse(operationId: string) {
+    return firstValueFrom(
+      this.http.post<unknown>(`${API}/operations/${operationId}/sand-table`, {}),
+    );
+  }
+
   /** Send a unit on recon (a read-only survey that files a report). */
   recon(req: ReconRequest) {
     return firstValueFrom(this.http.post<TaskView>(`${API}/recon`, req));

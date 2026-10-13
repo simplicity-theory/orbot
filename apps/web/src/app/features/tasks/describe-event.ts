@@ -241,6 +241,14 @@ export function describeEvent(e: RecordEvent): EventSummary {
         text: `Cap ${String(b['from'] ?? 'none')} → ${String(b['to'] ?? 'none')}`,
         tone: 'info',
       };
+    case 'sand-table':
+      return {
+        icon: 'activity',
+        label: 'Sand table',
+        term: 'sand-table',
+        text: b['verdict'] === 'go' ? 'Rehearsal: go.' : 'Rehearsal: no-go.',
+        tone: b['verdict'] === 'go' ? 'success' : 'danger',
+      };
     case 'report.filed':
       return {
         icon: 'search',

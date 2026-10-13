@@ -253,4 +253,16 @@ describe('SimulatedInterpreter', () => {
       ]);
     });
   });
+
+  it('rehearses an operation on the sand table, never as a musing', () => {
+    const ops = {
+      channelUnitId: null,
+      operations: [
+        { id: '00000000-0000-4000-8000-0000000000e1', name: 'Ledger', phase: 'backbrief' },
+      ],
+    };
+    expect(i.interpret(input('Rehearse Ledger on the sand table.', ops)).actions).toEqual([
+      { kind: 'rehearse', unitId: null, operationId: '00000000-0000-4000-8000-0000000000e1' },
+    ]);
+  });
 });

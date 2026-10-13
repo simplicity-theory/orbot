@@ -28,6 +28,7 @@ const SCOPE_WORDS = new Set(['unit', 'bots', 'team', 'all', 'order', 'tools', 'e
 const REASON = /[,:;—-]?\s*\b(because|while|until|since|so that|so)\b\s+(.+)$/i;
 const RECON =
   /^(recon|reconnoitre|reconnoiter|scout(?: out)?|survey|find out|look into)\b[:,]?\s*/i;
+const REHEARSE = /\b(rehearse|rehearsal|sand ?table|walk (me )?through the plan|war-?game)\b/i;
 const MAIN_EFFORT = /\bmain effort\b/i;
 const MAIN_EFFORT_CLEAR =
   /\b(no|clear|drop|end|cancel|lift|remove)\b.*\bmain effort\b|\bmain effort\b.*\b(is over|has ended|ended|cleared|lifted)\b/i;
@@ -133,6 +134,15 @@ export class SimulatedInterpreter {
         }
         continue;
       }
+      const rehearse = this.rehearse(sentence, input);
+      if (rehearse) {
+        if ('unclear' in rehearse) out.unclear.push(rehearse.unclear);
+        else {
+          kinds.add('order');
+          out.actions.push(rehearse);
+        }
+        continue;
+      }
       const effort = this.mainEffort(sentence, input);
       if (effort) {
         if ('unclear' in effort) {
@@ -213,6 +223,25 @@ export class SimulatedInterpreter {
     out.kinds = [...kinds];
     out.answer = answers.length ? answers.join(' ') : null;
     return out;
+  }
+
+  /** "Rehearse Gatekeeper on the sand table": changes nothing, so never a musing. */
+  private rehearse(
+    sentence: string,
+    input: InterpretInput,
+  ): Extract<ChatAction, { kind: 'rehearse' }> | { unclear: string } | null {
+    if (!REHEARSE.test(sentence)) return null;
+    const open = input.operations.filter((o) => o.phase !== 'closed');
+    if (!open.length) return { unclear: `${sentence} — there is no operation to rehearse.` };
+    const best = open
+      .map((o) => ({ o, score: overlap(topic(o.name), sentence) }))
+      .sort((a, b) => b.score - a.score)[0]!;
+    const op = best.score >= 0.5 ? best.o : open.length === 1 ? open[0]! : null;
+    if (!op)
+      return {
+        unclear: `${sentence} — which operation? Under way: ${open.map((o) => o.name).join(', ')}.`,
+      };
+    return { kind: 'rehearse', unitId: null, operationId: op.id };
   }
 
   /**

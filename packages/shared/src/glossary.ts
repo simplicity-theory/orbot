@@ -123,6 +123,12 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     meaning:
       'One unit disagrees with another about its work. HQ rules under their standing orders; if none settles it, you rule. Your ruling is final.',
   },
+  'sand-table': {
+    term: 'Sand table',
+    short: 'Rehearse the plan',
+    meaning:
+      'HQ walks an operation’s plan, mission by mission, against the units’ bots, orders, supply and budgets, and lists what would stop it before the work starts.',
+  },
   recon: {
     term: 'Recon',
     short: 'Look before you leap',

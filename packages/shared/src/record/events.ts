@@ -129,6 +129,29 @@ export const RecordEventBodies = {
     allowed: z.boolean(),
     reason: z.string(),
   }),
+  /**
+   * HQ rehearsed an operation's plan on the sand table: walked each mission against the
+   * units' orders, bots, supply and budgets, before the work is done for real.
+   */
+  'sand-table': z.object({
+    verdict: z.enum(['go', 'no-go']),
+    findings: z.array(
+      z.object({
+        severity: z.enum(['blocker', 'risk', 'note']),
+        unitId: z.string().nullable(),
+        missionId: z.string().nullable(),
+        text: z.string(),
+        /** What to do about it, and where. */
+        fix: z.string().nullable(),
+        link: z.string().nullable(),
+      }),
+    ),
+    /** HQ's estimate: tasks and compute units per mission, and in total. */
+    missions: z.array(
+      z.object({ missionId: z.string(), unitId: z.string(), tasks: z.number(), units: z.number() }),
+    ),
+    estimate: z.object({ tasks: z.number(), units: z.number() }),
+  }),
   /** A bot filed a report (recon findings) as a unit document. */
   'report.filed': z.object({ documentId: z.string(), title: z.string() }),
   'redaction.applied': z.object({

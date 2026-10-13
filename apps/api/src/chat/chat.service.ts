@@ -463,6 +463,10 @@ export class ChatService {
   /** A one-line, human description of an action that has not run yet. */
   private async describe(a: ChatAction): Promise<string> {
     if (a.kind === 'create-operation') return `Launch Operation ${a.name}: “${a.intent}”`;
+    if (a.kind === 'rehearse') {
+      const op = await this.record.requireActive('operation', a.operationId);
+      return `Rehearse Operation ${op.body.name} on the sand table`;
+    }
     if (a.kind === 'main-effort') {
       if (!a.operationId) return 'Clear the main effort';
       const op = await this.record.requireActive('operation', a.operationId);
