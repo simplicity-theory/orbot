@@ -1,3 +1,4 @@
+import { Auth } from '../core/auth';
 import { Component, computed, inject, input, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import type { BackbriefView, ProposedTask } from '@orbot/shared';
@@ -128,7 +129,7 @@ let seq = 0;
         </ul>
       }
 
-      @if (bb.status === 'awaiting-approval') {
+      @if (bb.status === 'awaiting-approval' && auth.can(bb.unitId)) {
         @if (mode() === 'view') {
           <div class="actions">
             <button type="button" class="btn btn--primary" [disabled]="busy()" (click)="approve()">
@@ -263,6 +264,7 @@ let seq = 0;
   `,
 })
 export class Backbrief {
+  protected readonly auth = inject(Auth);
   private readonly api = inject(Api);
   private readonly toasts = inject(Toasts);
   private readonly needsYou = inject(NeedsYou);

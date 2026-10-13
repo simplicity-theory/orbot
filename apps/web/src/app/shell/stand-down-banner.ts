@@ -38,7 +38,12 @@ import { StandDownButton } from '../ui/stand-down';
               >
               stood down: {{ b.halt.reason }}
               <span class="meta">· {{ b.halt.at | relativeTime }}</span>
-              <orb-stand-down scope="bot" [targetId]="b.id" [name]="b.callsign" />
+              <orb-stand-down
+                scope="bot"
+                [targetId]="b.id"
+                [unitId]="b.unitId"
+                [name]="b.callsign"
+              />
             </li>
           }
         </ul>

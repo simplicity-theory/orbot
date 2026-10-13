@@ -1,3 +1,4 @@
+import { Authority, unitOf } from '../officers/authority.js';
 import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Put } from '@nestjs/common';
 import { CreateOperationRequest, DeployDecisionRequest, SetBudgetRequest } from '@orbot/shared';
 import type { z } from 'zod';
@@ -51,6 +52,7 @@ export class OperationsController {
 
   /** Set the operation's compute budget cap (null = none); work held at the old cap resumes. */
   /** Rehearse the plan on the sand table (changes nothing; the result is kept). */
+  @Authority({ level: 'officer' })
   @Post('operations/:id/sand-table')
   async rehearse(@Param('id', Uuid) id: string, @Actor() actor: string) {
     await this.sandTables.rehearse(id, actor);
@@ -79,6 +81,7 @@ export class OperationsController {
   }
 
   /** Approve (or reject) a production deploy waiting on the Commander. */
+  @Authority({ level: 'unit', units: unitOf('task', 'param') })
   @Post('tasks/:id/deploy-decision')
   @HttpCode(200)
   async decide(

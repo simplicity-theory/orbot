@@ -1,3 +1,4 @@
+import { OFFICER_SECRET_PREFIX } from '../officers/officers.service.js';
 import { Body, Controller, Get, HttpCode, Post } from '@nestjs/common';
 import { ConnectRepositoryRequest, StoreCredentialRequest } from '@orbot/shared';
 import { z } from 'zod';
@@ -85,7 +86,8 @@ export class SupplyController {
 
   /** Names and dates only. */
   @Get('secrets')
-  listSecrets() {
-    return this.secrets.list();
+  async listSecrets() {
+    // Officers' password hashes live in the secrets store too; they are not supply.
+    return (await this.secrets.list()).filter((s) => !s.name.startsWith(OFFICER_SECRET_PREFIX));
   }
 }

@@ -1,3 +1,4 @@
+import { Can } from '../../ui/can';
 import { Dialog } from '@angular/cdk/dialog';
 import { httpResource } from '@angular/common/http';
 import { Component, computed, effect, inject, input } from '@angular/core';
@@ -42,6 +43,7 @@ export type UnitSection = (typeof UNIT_SECTIONS)[number]['id'];
 @Component({
   selector: 'orb-unit-page',
   imports: [
+    Can,
     MainEffortBadge,
     RouterLink,
     StatusBadge,

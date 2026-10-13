@@ -2,6 +2,10 @@ import { HttpClient } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import type {
+  AppointOfficerRequest,
+  MeView,
+  OfficerView,
+  UpdateOfficerRequest,
   MainEffortView,
   ReconRequest,
   StandDownRequest,
@@ -74,6 +78,7 @@ export const apiUrl = {
   standDown: () => `${API}/stand-down`,
   mainEffort: () => `${API}/main-effort`,
   dailyBrief: () => `${API}/daily-brief`,
+  officers: () => `${API}/officers`,
   serviceRecord: (botId: string) => `${API}/bots/${botId}/service-record`,
   alerts: () => `${API}/alerts`,
   secrets: () => `${API}/supply/secrets`,
@@ -109,9 +114,12 @@ export type {
 export class Api {
   private readonly http = inject(HttpClient);
 
-  login(passphrase: string) {
+  login(passphrase: string, login?: string) {
     return firstValueFrom(
-      this.http.post<{ principal: Principal }>(`${API}/auth/login`, { passphrase }),
+      this.http.post<{ principal: Principal }>(`${API}/auth/login`, {
+        passphrase,
+        ...(login ? { login } : {}),
+      }),
     );
   }
 
@@ -120,7 +128,19 @@ export class Api {
   }
 
   me() {
-    return firstValueFrom(this.http.get<{ principal: Principal }>(apiUrl.me()));
+    return firstValueFrom(this.http.get<MeView>(apiUrl.me()));
+  }
+
+  appointOfficer(req: AppointOfficerRequest) {
+    return firstValueFrom(this.http.post<OfficerView>(`${API}/officers`, req));
+  }
+
+  updateOfficer(id: string, req: UpdateOfficerRequest) {
+    return firstValueFrom(this.http.put<OfficerView>(`${API}/officers/${id}`, req));
+  }
+
+  setOfficerPassword(id: string, password: string) {
+    return firstValueFrom(this.http.post<void>(`${API}/officers/${id}/password`, { password }));
   }
 
   meta() {

@@ -1,3 +1,4 @@
+import { OFFICER_SECRET_PREFIX } from '../officers/officers.service.js';
 import { randomUUID } from 'node:crypto';
 import { BadRequestException, ConflictException, Inject, Injectable } from '@nestjs/common';
 import {
@@ -534,7 +535,7 @@ export class TaskRunner {
     bot: Principal,
     refs: RecordEventRefs,
   ): Promise<T> {
-    if (!task.credentialNames.includes(name)) {
+    if (name.startsWith(OFFICER_SECRET_PREFIX) || !task.credentialNames.includes(name)) {
       throw new Error(`Credential "${name}" was not issued to task #${task.number}.`);
     }
     const d = await this.policy.check({

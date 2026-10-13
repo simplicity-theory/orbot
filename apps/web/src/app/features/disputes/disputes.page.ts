@@ -1,3 +1,4 @@
+import { Auth } from '../../core/auth';
 import { httpResource } from '@angular/common/http';
 import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -93,7 +94,9 @@ const STATUS_LABEL: Record<DisputeView['status'], string> = {
                     </h3>
                     <p>{{ r.reasoning }}</p>
                   </section>
-                } @else if (d.status === 'ruled' || d.status === 'referred') {
+                } @else if (
+                  (d.status === 'ruled' || d.status === 'referred') && auth.isCommander()
+                ) {
                   <form class="form decide" (ngSubmit)="$event.preventDefault()">
                     <label [for]="'why-' + d.id">Your reasoning</label>
                     <input
@@ -175,6 +178,7 @@ const STATUS_LABEL: Record<DisputeView['status'], string> = {
   `,
 })
 export class DisputesPage {
+  protected readonly auth = inject(Auth);
   protected readonly list = httpResource<DisputeView[]>(() => apiUrl.disputes());
   private readonly api = inject(Api);
   private readonly toasts = inject(Toasts);

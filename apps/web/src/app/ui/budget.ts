@@ -1,3 +1,4 @@
+import { Can } from './can';
 import { DIALOG_DATA, Dialog, DialogRef } from '@angular/cdk/dialog';
 import { Component, computed, inject, input, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -168,11 +169,11 @@ export class SetBudgetDialog {
 /** The meter plus a "Set budget…" button. */
 @Component({
   selector: 'orb-budget-control',
-  imports: [BudgetMeter],
+  imports: [BudgetMeter, Can],
   template: `
     <div class="row">
       <orb-budget [budget]="budget()" [label]="'Compute budget of ' + name()" />
-      <button type="button" class="btn" (click)="open()">Set budget…</button>
+      <button *orbCan="null" type="button" class="btn" (click)="open()">Set budget…</button>
     </div>
   `,
   styles: `

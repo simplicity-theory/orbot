@@ -85,9 +85,19 @@ import { scrollToFragment } from './scroll-to-fragment';
                   <span class="meta">{{ a.unitName }}</span>
                   <a [routerLink]="a.link | url">{{ a.label }}</a>
                   @if (a.action === 'approve-deploy') {
-                    <orb-deploy-approval class="inline" [taskId]="a.entityId" [label]="a.label" />
+                    <orb-deploy-approval
+                      class="inline"
+                      [taskId]="a.entityId"
+                      [unitId]="a.unitId"
+                      [label]="a.label"
+                    />
                   } @else if (a.action === 'acknowledge' && a.chainId) {
-                    <orb-acknowledge class="inline" [chainId]="a.chainId" [label]="a.label" />
+                    <orb-acknowledge
+                      class="inline"
+                      [chainId]="a.chainId"
+                      [unitId]="a.unitId"
+                      [label]="a.label"
+                    />
                   }
                 </li>
               }

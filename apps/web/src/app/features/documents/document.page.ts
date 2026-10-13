@@ -1,3 +1,4 @@
+import { Can } from '../../ui/can';
 import { httpResource } from '@angular/common/http';
 import { Component, computed, effect, inject, input, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -26,7 +27,7 @@ const KIND_TERM: Record<string, string> = {
 /** One unit document: rendered, editable (a new version each time), with its history a click away. */
 @Component({
   selector: 'orb-document-page',
-  imports: [FormsModule, RouterLink, Icon, LoadError, Skeleton, Term, RelativeTimePipe],
+  imports: [Can, FormsModule, RouterLink, Icon, LoadError, Skeleton, Term, RelativeTimePipe],
   template: `
     @if (doc.error(); as err) {
       <div class="page"><orb-load-error [error]="err" (retry)="doc.reload()" /></div>
@@ -62,7 +63,14 @@ const KIND_TERM: Record<string, string> = {
                 >Edit entries</a
               >
             } @else if (!editing()) {
-              <button type="button" class="btn btn--primary" (click)="startEdit(d)">Edit</button>
+              <button
+                *orbCan="unitId()"
+                type="button"
+                class="btn btn--primary"
+                (click)="startEdit(d)"
+              >
+                Edit
+              </button>
             }
           </div>
         </header>

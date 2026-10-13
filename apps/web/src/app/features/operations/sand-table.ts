@@ -1,3 +1,4 @@
+import { Can } from '../../ui/can';
 import { Component, inject, input, output, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import type { RecordEvent } from '@orbot/shared';
@@ -18,12 +19,18 @@ const SEVERITY = {
 /** The latest sand-table rehearsal of an operation's plan, and a button to rehearse again. */
 @Component({
   selector: 'orb-sand-table',
-  imports: [RouterLink, Icon, Term, RelativeTimePipe, UrlPipe],
+  imports: [Can, RouterLink, Icon, Term, RelativeTimePipe, UrlPipe],
   template: `
-    <section class="panel" id="sand-table" aria-labelledby="sand-h">
+    <section class="panel" id="sand-table" aria-label="Sand table">
       <h2 id="sand-h" class="panel__title">
         <span><orb-term key="sand-table">Sand table</orb-term></span>
-        <button type="button" class="btn btn--ghost" [disabled]="busy()" (click)="rehearse()">
+        <button
+          *orbCan="'officer'"
+          type="button"
+          class="btn btn--ghost"
+          [disabled]="busy()"
+          (click)="rehearse()"
+        >
           <orb-icon name="activity" /> {{ result() ? 'Rehearse again' : 'Rehearse the plan' }}
         </button>
       </h2>

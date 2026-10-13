@@ -12,9 +12,11 @@
       <div class="header-actions">
         <orb-status [status]="v.status" />
         <orb-stand-down scope="unit" [targetId]="v.unit.id" [name]="v.unit.name" />
-        <button type="button" class="btn" (click)="addBot()">Add bot</button>
-        <button type="button" class="btn" (click)="orderRecon()">Recon…</button>
-        <button type="button" class="btn btn--primary" (click)="newMission()">New mission</button>
+        <ng-container *orbCan="v.unit.id">
+          <button type="button" class="btn" (click)="addBot()">Add bot</button>
+          <button type="button" class="btn" (click)="orderRecon()">Recon…</button>
+          <button type="button" class="btn btn--primary" (click)="newMission()">New mission</button>
+        </ng-container>
       </div>
     </header>
 
@@ -240,10 +242,12 @@
         </section>
       }
       @case ('recon') {
-        <section class="panel" aria-labelledby="recon-h">
+        <section class="panel" aria-label="Recon reports">
           <h2 id="recon-h" class="panel__title">
             <span><orb-term key="recon">Recon</orb-term> reports</span>
-            <button type="button" class="btn btn--ghost" (click)="orderRecon()">Recon…</button>
+            <button *orbCan="v.unit.id" type="button" class="btn btn--ghost" (click)="orderRecon()">
+              Recon…
+            </button>
           </h2>
           <ul class="list-reset rows">
             @for (d of reconReports(); track d.id) {

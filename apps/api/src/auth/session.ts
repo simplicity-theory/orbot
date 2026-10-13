@@ -50,7 +50,7 @@ export function passphraseMatches(expected: string, given: string): boolean {
   return timingSafeEqual(a, b);
 }
 
-/** The single Commander for now. Additional officers with ranks come later. */
+/** The Commander: signs in with the passphrase. Other officers sign in with their login. */
 export const COMMANDER: Principal = {
   kind: 'commander',
   id: 'commander',

@@ -1,3 +1,4 @@
+import { Authority } from '../officers/authority.js';
 import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
 import { ChatChannel, ConfirmPendingRequest, SendChatRequest } from '@orbot/shared';
 import { z } from 'zod';
@@ -19,6 +20,7 @@ export class ChatController {
     return this.chat.view(channel);
   }
 
+  @Authority({ level: 'read' })
   @Post('chat/:channel')
   send(
     @Param('channel', Channel) channel: string,
@@ -28,6 +30,7 @@ export class ChatController {
     return this.chat.send(channel, body.text, actor);
   }
 
+  @Authority({ level: 'read' })
   @Post('pending/:id/confirm')
   @HttpCode(200)
   confirm(
@@ -38,6 +41,7 @@ export class ChatController {
     return this.chat.confirm(id, body.phrase, actor);
   }
 
+  @Authority({ level: 'read' })
   @Post('pending/:id/decline')
   @HttpCode(200)
   decline(@Param('id', Uuid) id: string, @Actor() actor: string) {
@@ -49,6 +53,7 @@ export class ChatController {
     return this.chat.ordersLog(q);
   }
 
+  @Authority({ level: 'read' })
   @Post('orders/:id/undo')
   @HttpCode(200)
   undo(@Param('id', Uuid) id: string, @Actor() actor: string) {

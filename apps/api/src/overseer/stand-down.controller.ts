@@ -1,3 +1,4 @@
+import { Authority, standDownUnits } from '../officers/authority.js';
 import { Body, Controller, Get, HttpCode, Post } from '@nestjs/common';
 import { StandDownRequest } from '@orbot/shared';
 import type { z } from 'zod';
@@ -17,6 +18,7 @@ export class StandDownController {
     return this.standDown.view();
   }
 
+  @Authority({ level: 'unit', units: standDownUnits })
   @Post()
   @HttpCode(200)
   async order(@Body(new ZodPipe(StandDownRequest)) body: Req, @Actor() actor: string) {
@@ -24,6 +26,7 @@ export class StandDownController {
     return this.standDown.view();
   }
 
+  @Authority({ level: 'unit', units: standDownUnits })
   @Post('lift')
   @HttpCode(200)
   async lift(@Body(new ZodPipe(StandDownRequest)) body: Req, @Actor() actor: string) {

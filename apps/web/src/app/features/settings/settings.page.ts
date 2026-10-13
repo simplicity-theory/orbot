@@ -1,3 +1,5 @@
+import { Auth } from '../../core/auth';
+import { Can } from '../../ui/can';
 import { httpResource } from '@angular/common/http';
 import { Component, computed, effect, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
@@ -13,7 +15,7 @@ import { ThemeService } from '../../core/theme';
 
 @Component({
   selector: 'orb-settings-page',
-  imports: [FormsModule, Term, RouterLink],
+  imports: [Can, FormsModule, Term, RouterLink],
   template: `
     <div class="page page--detail">
       <header class="page-header">
@@ -180,6 +182,7 @@ import { ThemeService } from '../../core/theme';
               </div>
               <div>
                 <button
+                  *orbCan="null"
                   type="button"
                   class="btn"
                   [disabled]="busy() || !st.alerts.credentialName"
@@ -206,7 +209,10 @@ import { ThemeService } from '../../core/theme';
             </fieldset>
             <label for="settings-reason">Why the change?</label>
             <input id="settings-reason" name="reason" class="input" [(ngModel)]="reason" required />
-            <div class="actions">
+            @if (!auth.isCommander()) {
+              <p class="hint">Only a Commander changes settings.</p>
+            }
+            <div class="actions" *orbCan="null">
               <button
                 type="submit"
                 class="btn btn--primary"
@@ -308,6 +314,7 @@ import { ThemeService } from '../../core/theme';
   `,
 })
 export class SettingsPage {
+  protected readonly auth = inject(Auth);
   protected readonly theme = inject(ThemeService);
   protected readonly meta = inject(Meta);
   private readonly api = inject(Api);

@@ -1,3 +1,4 @@
+import { Authority, escalationUnits } from '../officers/authority.js';
 import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post } from '@nestjs/common';
 import { ResolveEscalationRequest } from '@orbot/shared';
 import type { z } from 'zod';
@@ -15,6 +16,7 @@ export class EscalationController {
     return this.escalations.openChains();
   }
 
+  @Authority({ level: 'unit', units: escalationUnits })
   @Post(':chainId/resolve')
   @HttpCode(200)
   resolve(

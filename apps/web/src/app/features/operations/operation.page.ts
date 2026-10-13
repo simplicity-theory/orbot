@@ -1,3 +1,4 @@
+import { Can } from '../../ui/can';
 import { httpResource } from '@angular/common/http';
 import { Component, computed, effect, inject, input } from '@angular/core';
 import { RouterLink } from '@angular/router';
@@ -24,6 +25,7 @@ import { SandTable } from './sand-table';
 @Component({
   selector: 'orb-operation-page',
   imports: [
+    Can,
     RouterLink,
     Backbrief,
     DeployApproval,
@@ -76,6 +78,7 @@ import { SandTable } from './sand-table';
           </div>
           @if (v.operation.phase !== 'closed') {
             <orb-main-effort-button
+              *orbCan="null"
               [operationId]="v.operation.id"
               [name]="'Operation ' + v.operation.name"
             />
@@ -113,6 +116,7 @@ import { SandTable } from './sand-table';
                   {{ d.title }}
                 </p>
                 <orb-deploy-approval
+                  [unitId]="d.unitId"
                   [taskId]="d.id"
                   [label]="'deploy #' + d.number"
                   (decided)="view.reload()"

@@ -19,14 +19,14 @@ test('order a recon, read the report, and find it with the unit', async ({ page 
   await expect(
     page.getByRole('heading', { level: 1, name: 'Recon: How is the login endpoint tested?' }),
   ).toBeVisible();
-  const report = page.getByRole('region', { name: 'Recon report' });
+  const report = page.getByRole('region', { name: 'Recon report', exact: true });
   await expect(report).toContainText('What I found', { timeout: 15_000 });
   await expect(report).toContainText('Read-only: nothing was changed.');
   await expectAccessible(page, 'recon task with report');
 
   await page.getByRole('link', { name: 'Engineers', exact: true }).first().click();
   await page.getByRole('link', { name: 'Recon', exact: true }).click();
-  await expect(page.getByRole('region', { name: 'Recon reports' })).toContainText(
+  await expect(page.getByRole('region', { name: 'Recon reports', exact: true })).toContainText(
     'Recon: How is the login endpoint tested',
   );
   await expectAccessible(page, 'unit recon reports');

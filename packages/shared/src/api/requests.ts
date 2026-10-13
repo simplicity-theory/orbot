@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { Rank } from '../domain/principal.js';
 import { DocumentKind, Id, ProposedTask } from '../domain/entities.js';
 
 /** Request bodies shared by the API (validation) and the web app (typing). */
@@ -194,3 +195,34 @@ export const ReconRequest = z.object({
   repoSupplyId: Id.nullable().default(null),
 });
 export type ReconRequest = z.input<typeof ReconRequest>;
+
+/** Appoint an officer. The password is write-only: it goes to the secrets store, hashed. */
+export const AppointOfficerRequest = z.object({
+  name: z.string().trim().min(1).max(100),
+  login: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .regex(/^[a-z][a-z0-9._-]{1,39}$/, {
+      message:
+        'Use 2-40 lowercase letters, digits, dots, dashes or underscores, starting with a letter.',
+    }),
+  rank: Rank,
+  unitIds: z.array(Id).default([]),
+  password: z.string().min(12, { message: 'Use at least 12 characters.' }).max(200),
+});
+export type AppointOfficerRequest = z.input<typeof AppointOfficerRequest>;
+
+/** Change an officer's rank or units, or retire them. */
+export const UpdateOfficerRequest = z.object({
+  rank: Rank.optional(),
+  unitIds: z.array(Id).optional(),
+  retired: z.boolean().optional(),
+  reason: z.string().trim().min(1).max(500),
+});
+export type UpdateOfficerRequest = z.input<typeof UpdateOfficerRequest>;
+
+export const ResetPasswordRequest = z.object({
+  password: z.string().min(12, { message: 'Use at least 12 characters.' }).max(200),
+});
+export type ResetPasswordRequest = z.input<typeof ResetPasswordRequest>;

@@ -1,3 +1,4 @@
+import { Authority, unitOf } from '../officers/authority.js';
 import { Body, Controller, Post } from '@nestjs/common';
 import { ReconRequest } from '@orbot/shared';
 import type { z } from 'zod';
@@ -11,6 +12,7 @@ import { ReconService } from './recon.service.js';
 export class ReconController {
   constructor(private readonly recon: ReconService) {}
 
+  @Authority({ level: 'unit', units: unitOf('unit', 'body') })
   @Post()
   async order(
     @Body(new ZodPipe(ReconRequest)) body: z.output<typeof ReconRequest>,

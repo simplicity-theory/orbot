@@ -54,6 +54,7 @@ Tests use the `orbot_test` / `orbot_secrets_test` databases and reset them; the 
       Each registers its own `PolicyRule` and/or bus listener.
   - `policy/duties.service.ts` — separation of duties as a `RecordService` write guard: no bot approves its own work, changes its own rules or grants itself supply, by any path.
   - `domain/service-record.service.ts` — a bot's service record, computed from the record (conduct, not knowledge: never briefed).
+  - `officers/` — `OfficersService` (officer entities; passwords hashed in the secrets store as `officer-login.<id>`), `AuthorityService` + `AuthorityGuard` (rank checks on every write).
   - `chat/` — `ChatService` (message → `runtime.interpret` → actions/pending → orders log → read-back; undo; confirm/decline) and `ActionsService` (one executor per `ChatAction`, each returning its inverse).
   - `settings/` — the versioned settings entity (irreversible action kinds, confirmation phrase).
   - `documents/` — `FieldManualService` (entries, render/parse), `UnitDocsService` + `UnitDocumentStore` (Markdown mirror in the unit's repo, import of human edits).
@@ -68,7 +69,8 @@ Tests use the `orbot_test` / `orbot_secrets_test` databases and reset them; the 
 ## Conventions
 
 - **Append-only:** never write UPDATE/DELETE against the record. Use `RecordService.revise()` (new version + supersession stamp) or `.event()`. The DB enforces it (privileges + triggers) and `test/append-only.e2e-spec.ts` proves it.
-- **Every write has an actor and a reason.** Actors are `commander:<id>`, `bot:<id>`, `system:<name>`.
+- **Every write has an actor and a reason.** Actors are `commander:<id>`, `officer:<id>`, `bot:<id>`, `system:<name>`.
+- **Ranks (officers):** every write route is the Commander's alone unless it declares `@Authority({ level: 'read' | 'officer' | 'unit', units })` (`officers/authority.ts`). Chat orders are checked per action in `ChatService`. In the web, hide what someone can't order with `*orbCan` (the server enforces it either way).
 - **Secrets by name only.** Bots get values only via `RunContext.withCredential(name, purpose, fn)`, which records the use by name. Never log, return or store a value; the redaction layer is a backstop, not permission.
 - **Bot work goes through `BotRuntime`.** Nothing outside `runtime/` may know which runtime is in use.
 - **Validation:** request bodies use shared zod schemas via `ZodPipe`. Entity bodies are validated on every write.

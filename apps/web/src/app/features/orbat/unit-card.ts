@@ -92,7 +92,7 @@ const ATTENTION_ICON = {
                 } @else {
                   <a [routerLink]="a.link | url">{{ a.label }}</a>
                   @if (a.action === 'acknowledge' && a.chainId) {
-                    <orb-acknowledge [chainId]="a.chainId" [label]="a.label" />
+                    <orb-acknowledge [chainId]="a.chainId" [unitId]="u.unit.id" [label]="a.label" />
                   }
                 }
               </li>

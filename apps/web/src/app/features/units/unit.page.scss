@@ -97,8 +97,9 @@
   .chip {
     margin-left: var(--space-2);
   }
-  .muted {
-    opacity: 0.6;
+  // A stood-down bot: muted text, not faded (fading fails contrast).
+  .muted td {
+    color: var(--color-text-muted);
   }
 }
 

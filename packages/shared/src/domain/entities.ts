@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { Rank } from './principal.js';
 import { BotStatus, TaskStatus } from '../status/status.js';
 
 /**
@@ -18,6 +19,7 @@ export const ENTITY_TYPES = [
   'fm-entry',
   'settings',
   'dispute',
+  'officer',
 ] as const;
 export const EntityType = z.enum(ENTITY_TYPES);
 export type EntityType = z.infer<typeof EntityType>;
@@ -517,6 +519,23 @@ export const DEFAULT_SETTINGS: SettingsBody = {
   alerts: DEFAULT_ALERTS,
 };
 
+// ---------- Officer ----------
+
+/**
+ * Another officer who can sign in. Their password is never on the record: it is hashed and
+ * kept in the secrets store. Officers are never deleted; an officer who leaves is retired.
+ */
+export const OfficerBody = z.object({
+  name: z.string().trim().min(1).max(100),
+  /** What they sign in with: lowercase, unique. */
+  login: z.string().regex(/^[a-z][a-z0-9._-]{1,39}$/),
+  rank: Rank,
+  /** For Captains: the units they command. */
+  unitIds: z.array(Id).default([]),
+  retired: z.boolean().default(false),
+});
+export type OfficerBody = z.infer<typeof OfficerBody>;
+
 // ---------- Registry ----------
 
 export const ENTITY_BODY_SCHEMAS = {
@@ -531,6 +550,7 @@ export const ENTITY_BODY_SCHEMAS = {
   'fm-entry': FmEntryBody,
   settings: SettingsBody,
   dispute: DisputeBody,
+  officer: OfficerBody,
 } as const satisfies Record<EntityType, z.ZodType>;
 
 export interface EntityBodyMap {
@@ -545,6 +565,7 @@ export interface EntityBodyMap {
   'fm-entry': FmEntryBody;
   settings: SettingsBody;
   dispute: DisputeBody;
+  officer: OfficerBody;
 }
 
 /** What a write may supply: defaulted fields are optional and filled in by the schema. */

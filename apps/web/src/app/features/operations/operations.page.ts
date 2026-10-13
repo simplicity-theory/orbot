@@ -1,3 +1,4 @@
+import { Can } from '../../ui/can';
 import { Dialog } from '@angular/cdk/dialog';
 import { httpResource } from '@angular/common/http';
 import { Component, inject } from '@angular/core';
@@ -21,6 +22,7 @@ import { MissionChain } from './mission-chain';
 @Component({
   selector: 'orb-operations-page',
   imports: [
+    Can,
     RouterLink,
     EmptyState,
     LoadError,
@@ -39,7 +41,9 @@ import { MissionChain } from './mission-chain';
             Each operation runs from your intent through HQ to every unit involved.
           </p>
         </div>
-        <button type="button" class="btn btn--primary" (click)="stateIntent()">State intent</button>
+        <button *orbCan="null" type="button" class="btn btn--primary" (click)="stateIntent()">
+          State intent
+        </button>
       </header>
       @if (ops.error(); as err) {
         <orb-load-error [error]="err" (retry)="ops.reload()" />
@@ -73,7 +77,12 @@ import { MissionChain } from './mission-chain';
               State your <orb-term key="intent">intent</orb-term> to launch one: what you want
               achieved and why. HQ will split it into missions for the units involved.
               <div actions>
-                <button type="button" class="btn btn--primary" (click)="stateIntent()">
+                <button
+                  *orbCan="null"
+                  type="button"
+                  class="btn btn--primary"
+                  (click)="stateIntent()"
+                >
                   State intent
                 </button>
               </div>

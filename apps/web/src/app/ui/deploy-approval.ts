@@ -1,3 +1,4 @@
+import { Auth } from '../core/auth';
 import { Component, inject, input, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Api } from '../core/api';
@@ -10,32 +11,34 @@ import { Toasts } from './toast';
   selector: 'orb-deploy-approval',
   imports: [FormsModule],
   template: `
-    <div class="row" role="group" [attr.aria-label]="'Decision on ' + label()">
-      <button type="button" class="btn btn--primary" [disabled]="busy()" (click)="decide(true)">
-        Approve deploy
-      </button>
-      @if (rejecting()) {
-        <label class="visually-hidden" [for]="id">Why reject?</label>
-        <input class="input" [id]="id" [(ngModel)]="note" placeholder="Why reject?" />
-        <button
-          type="button"
-          class="btn"
-          [disabled]="busy() || !note.trim()"
-          (click)="decide(false)"
-        >
-          Reject
+    @if (auth.can(unitId())) {
+      <div class="row" role="group" [attr.aria-label]="'Decision on ' + label()">
+        <button type="button" class="btn btn--primary" [disabled]="busy()" (click)="decide(true)">
+          Approve deploy
         </button>
-      } @else {
-        <button
-          type="button"
-          class="btn btn--ghost"
-          [disabled]="busy()"
-          (click)="rejecting.set(true)"
-        >
-          Reject…
-        </button>
-      }
-    </div>
+        @if (rejecting()) {
+          <label class="visually-hidden" [for]="id">Why reject?</label>
+          <input class="input" [id]="id" [(ngModel)]="note" placeholder="Why reject?" />
+          <button
+            type="button"
+            class="btn"
+            [disabled]="busy() || !note.trim()"
+            (click)="decide(false)"
+          >
+            Reject
+          </button>
+        } @else {
+          <button
+            type="button"
+            class="btn btn--ghost"
+            [disabled]="busy()"
+            (click)="rejecting.set(true)"
+          >
+            Reject…
+          </button>
+        }
+      </div>
+    }
   `,
   styles: `
     .row {
@@ -47,10 +50,13 @@ import { Toasts } from './toast';
   `,
 })
 export class DeployApproval {
+  protected readonly auth = inject(Auth);
   private readonly api = inject(Api);
   private readonly toasts = inject(Toasts);
   private readonly needsYou = inject(NeedsYou);
   readonly taskId = input.required<string>();
+  /** The unit whose work it is: its Captain (or the Commander) may decide. */
+  readonly unitId = input<string | null>(null);
   readonly label = input('production deploy');
   readonly decided = output<void>();
   protected readonly busy = signal(false);

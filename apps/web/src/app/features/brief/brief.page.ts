@@ -1,3 +1,4 @@
+import { Can } from '../../ui/can';
 import { httpResource } from '@angular/common/http';
 import { Component, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
@@ -18,7 +19,7 @@ import { Toasts } from '../../ui/toast';
 /** HQ's daily brief to the Commander: today's in full, and every earlier one. */
 @Component({
   selector: 'orb-brief-page',
-  imports: [RouterLink, EmptyState, Icon, LoadError, RelativeTimePipe, Skeleton, Term],
+  imports: [Can, RouterLink, EmptyState, Icon, LoadError, RelativeTimePipe, Skeleton, Term],
   template: `
     <div class="page">
       <header class="page-header">
@@ -36,7 +37,13 @@ import { Toasts } from '../../ui/toast';
             }
           </p>
         </div>
-        <button type="button" class="btn btn--primary" [disabled]="busy()" (click)="writeNow()">
+        <button
+          *orbCan="null"
+          type="button"
+          class="btn btn--primary"
+          [disabled]="busy()"
+          (click)="writeNow()"
+        >
           Write today's brief now
         </button>
       </header>

@@ -1,3 +1,4 @@
+import { Can } from '../../ui/can';
 import { Component, inject, input, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import type { UnitDetailView } from '@orbot/shared';
@@ -17,7 +18,7 @@ const GATES: Record<string, string> = {
 /** Standing orders (editable, versioned), rules of engagement and the approval gate. */
 @Component({
   selector: 'orb-rules-tab',
-  imports: [FormsModule, Term],
+  imports: [Can, FormsModule, Term],
   template: `
     @let u = view().unit;
     <section class="panel" aria-labelledby="so-h">
@@ -47,7 +48,9 @@ const GATES: Record<string, string> = {
             <li class="meta">None.</li>
           }
         </ul>
-        <button type="button" class="btn" (click)="startEdit()">Edit standing orders</button>
+        <button *orbCan="view().unit.id" type="button" class="btn" (click)="startEdit()">
+          Edit standing orders
+        </button>
       }
     </section>
 

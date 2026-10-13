@@ -1,3 +1,4 @@
+import { Authority, unitOf } from '../officers/authority.js';
 import { randomUUID } from 'node:crypto';
 import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Put } from '@nestjs/common';
 import {
@@ -53,6 +54,7 @@ export class OverseerController {
     private readonly runtimes: RuntimeRegistry,
   ) {}
 
+  @Authority({ level: 'unit', units: unitOf('unit', 'body') })
   @Post('missions')
   async createMission(
     @Body(new ZodPipe(CreateMissionRequest)) body: z.output<typeof CreateMissionRequest>,
@@ -71,6 +73,7 @@ export class OverseerController {
     return this.views.backbrief(id);
   }
 
+  @Authority({ level: 'unit', units: unitOf('backbrief', 'param') })
   @Post('backbriefs/:id/approve')
   @HttpCode(200)
   async approve(
@@ -82,6 +85,7 @@ export class OverseerController {
     return this.views.backbrief(id);
   }
 
+  @Authority({ level: 'unit', units: unitOf('backbrief', 'param') })
   @Post('backbriefs/:id/amend')
   @HttpCode(200)
   async amend(
@@ -93,6 +97,7 @@ export class OverseerController {
     return this.views.backbrief(id);
   }
 
+  @Authority({ level: 'unit', units: unitOf('backbrief', 'param') })
   @Post('backbriefs/:id/reject')
   @HttpCode(200)
   async reject(
@@ -104,6 +109,7 @@ export class OverseerController {
     return this.views.backbrief(id);
   }
 
+  @Authority({ level: 'unit', units: unitOf('task', 'param') })
   @Post('tasks/:id/reassign')
   @HttpCode(200)
   async reassign(
@@ -114,6 +120,7 @@ export class OverseerController {
     return toView(await this.overseer.reassign(id, body, actor));
   }
 
+  @Authority({ level: 'unit', units: unitOf('unit', 'param') })
   @Post('units/:id/bots')
   async addBot(
     @Param('id', Uuid) id: string,
@@ -138,6 +145,7 @@ export class OverseerController {
     );
   }
 
+  @Authority({ level: 'unit', units: unitOf('unit', 'param') })
   @Post('units/:id/coldstart')
   @HttpCode(200)
   runColdStart(@Param('id', Uuid) id: string) {
@@ -145,12 +153,14 @@ export class OverseerController {
   }
 
   /** Import edits humans made to the unit's Markdown files in the repository. */
+  @Authority({ level: 'unit', units: unitOf('unit', 'param') })
   @Post('units/:id/documents/sync')
   @HttpCode(200)
   async sync(@Param('id', Uuid) id: string) {
     return { imported: await this.docs.sync(id) };
   }
 
+  @Authority({ level: 'unit', units: unitOf('unit', 'param') })
   @Put('units/:id/standing-orders')
   async standingOrders(
     @Param('id', Uuid) id: string,
@@ -170,6 +180,7 @@ export class OverseerController {
     );
   }
 
+  @Authority({ level: 'unit', units: unitOf('unit', 'param') })
   @Post('units/:id/field-manual')
   async createEntry(
     @Param('id', Uuid) id: string,
@@ -191,6 +202,7 @@ export class OverseerController {
     return toView(entry);
   }
 
+  @Authority({ level: 'unit', units: unitOf('fm-entry', 'param') })
   @Post('fm-entries/:id/versions')
   async reviseEntry(
     @Param('id', Uuid) id: string,
@@ -210,6 +222,7 @@ export class OverseerController {
     return toView(entry);
   }
 
+  @Authority({ level: 'unit', units: unitOf('fm-entry', 'param') })
   @Post('fm-entries/:id/retire')
   @HttpCode(200)
   async retireEntry(
@@ -233,6 +246,7 @@ export class OverseerController {
     return toView(entry);
   }
 
+  @Authority({ level: 'unit', units: unitOf('fm-entry', 'param') })
   @Post('fm-entries/:id/reinstate')
   @HttpCode(200)
   async reinstateEntry(
@@ -257,6 +271,7 @@ export class OverseerController {
   }
 
   /** Switch which runtime drives a bot (e.g. from simulated to Claude). */
+  @Authority({ level: 'unit', units: unitOf('bot', 'param') })
   @Put('bots/:id/runtime')
   async setRuntime(
     @Param('id', Uuid) id: string,

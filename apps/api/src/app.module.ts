@@ -53,6 +53,9 @@ import { ReconController } from './overseer/recon.controller.js';
 import { ReconService } from './overseer/recon.service.js';
 import { SandTableService } from './overseer/sand-table.service.js';
 import { ServiceRecordService } from './domain/service-record.service.js';
+import { AuthorityGuard, AuthorityService } from './officers/authority.js';
+import { OfficersController } from './officers/officers.controller.js';
+import { OfficersService } from './officers/officers.service.js';
 import { AlertService } from './overseer/alert.service.js';
 import { DailyBriefController } from './overseer/daily-brief.controller.js';
 import { DailyBriefService } from './overseer/daily-brief.service.js';
@@ -97,6 +100,7 @@ export class AppModule {
         StandDownController,
         MainEffortController,
         ReconController,
+        OfficersController,
         DailyBriefController,
         EscalationController,
         DeconflictionController,
@@ -161,6 +165,8 @@ export class AppModule {
         MainEffortService,
         ReconService,
         SandTableService,
+        OfficersService,
+        AuthorityService,
         ServiceRecordService,
         DailyBriefService,
         AlertService,
@@ -172,6 +178,7 @@ export class AppModule {
         ChatService,
         EventsGateway,
         { provide: APP_GUARD, useClass: AuthGuard },
+        { provide: APP_GUARD, useClass: AuthorityGuard },
         { provide: APP_INTERCEPTOR, useClass: RedactionInterceptor },
         { provide: APP_FILTER, useClass: ErrorFilter },
         PoolCloser,

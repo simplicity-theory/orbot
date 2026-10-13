@@ -3,6 +3,7 @@ import { Component, computed, inject, input, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import type { StandDownScope } from '@orbot/shared';
 import { Api } from '../core/api';
+import { Auth } from '../core/auth';
 import { toUserError, type UserFacingError } from '../core/api-error';
 import { StandDowns } from '../core/stand-down';
 import { openDialog } from './dialog';
@@ -83,7 +84,7 @@ export class StandDownDialog {
   selector: 'orb-stand-down',
   imports: [Icon],
   template: `
-    @if (order()) {
+    @if (allowed() && order()) {
       <button
         type="button"
         [class]="compact() ? 'btn btn--ghost' : 'btn'"
@@ -94,7 +95,7 @@ export class StandDownDialog {
         <orb-icon name="activity" />
         <span class="label">Resume work</span>
       </button>
-    } @else {
+    } @else if (allowed()) {
       <button
         type="button"
         [class]="compact() ? 'btn btn--ghost' : 'btn'"
@@ -126,11 +127,26 @@ export class StandDownButton {
   readonly name = input.required<string>();
   /** Header style: ghost button. */
   readonly compact = input(false);
+  /** For a bot: its unit (who may order it). */
+  readonly unitId = input<string | null>(null);
+  private readonly authz = inject(Auth);
+  protected readonly allowed = computed(() =>
+    this.authz.can(
+      this.scope() === 'all'
+        ? null
+        : this.scope() === 'unit'
+          ? this.targetId()
+          : (this.unitId() ??
+            this.standDownsView().find((b) => b.id === this.targetId())?.unitId ??
+            null),
+    ),
+  );
 
   private readonly dialog = inject(Dialog);
   private readonly api = inject(Api);
   private readonly toasts = inject(Toasts);
   private readonly standDowns = inject(StandDowns);
+  private readonly standDownsView = computed(() => this.standDowns.bots());
   protected readonly busy = signal(false);
   protected readonly order = computed(() => this.standDowns.orderOn(this.scope(), this.targetId()));
 

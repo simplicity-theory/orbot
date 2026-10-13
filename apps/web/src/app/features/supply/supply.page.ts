@@ -1,3 +1,4 @@
+import { Can } from '../../ui/can';
 import { httpResource } from '@angular/common/http';
 import { Component, computed, inject, input, signal, type OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -19,7 +20,7 @@ type Form = 'repository' | 'credential' | 'environment';
 /** Only what the Commander has connected exists. Connect it here, then issue it to units. */
 @Component({
   selector: 'orb-supply-page',
-  imports: [FormsModule, RouterLink, EmptyState, Icon, LoadError, Skeleton, Term],
+  imports: [Can, FormsModule, RouterLink, EmptyState, Icon, LoadError, Skeleton, Term],
   template: `
     <div class="page page--detail">
       <header class="page-header">
@@ -42,7 +43,7 @@ type Form = 'repository' | 'credential' | 'environment';
         </p>
       }
 
-      <section class="panel" aria-labelledby="connect-h">
+      <section *orbCan="null" class="panel" aria-labelledby="connect-h">
         <h2 id="connect-h" class="panel__title">Connect</h2>
         <div class="tabs" role="group" aria-label="What to connect">
           @for (f of forms; track f) {

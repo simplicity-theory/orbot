@@ -10,6 +10,7 @@ import type { Subscription } from 'rxjs';
 import { APP_CONFIG, type AppConfig } from '../config/config.js';
 import { cookieValue, SESSION_COOKIE, verifySession } from '../auth/session.js';
 import { RecordBus } from '../record/record-bus.js';
+import { RecordService } from '../record/record.service.js';
 import { RedactionService } from '../redaction/redaction.service.js';
 
 export const WS_RECORD_EVENT = 'record';
@@ -27,6 +28,7 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnModu
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     private readonly bus: RecordBus,
     private readonly redaction: RedactionService,
+    private readonly record: RecordService,
   ) {}
 
   afterInit(): void {
@@ -35,9 +37,14 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnModu
     });
   }
 
-  handleConnection(client: Socket): void {
+  async handleConnection(client: Socket): Promise<void> {
     const token = cookieValue(client.handshake.headers.cookie, SESSION_COOKIE);
-    if (!verifySession(this.config.sessionSecret, token)) {
+    const p = verifySession(this.config.sessionSecret, token);
+    // A retired officer's session ends at once, here as on every request.
+    const retired =
+      p?.kind === 'officer' &&
+      !((await this.record.getActive('officer', p.id))?.body.retired === false);
+    if (!p || retired) {
       client.emit('error', {
         code: 'unauthenticated',
         message: 'You are not signed in.',

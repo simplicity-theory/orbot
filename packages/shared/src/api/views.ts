@@ -5,6 +5,7 @@ import type {
   FmEntryBody,
   Halt,
   MainEffort,
+  OfficerBody,
   DocumentBody,
   MissionBody,
   OperationBody,
@@ -15,6 +16,7 @@ import type {
 import type { RecordEvent } from '../record/events.js';
 import type { VersionWithStatus } from '../record/record.js';
 import type { BotStatus, Status } from '../status/status.js';
+import type { Principal, Rank } from '../domain/principal.js';
 
 /** The current version of an entity, flattened for the UI. */
 export type Versioned<B> = B & {
@@ -129,7 +131,7 @@ export interface UnitDetailView {
 
 export interface ApprovalsView {
   backbriefs: BackbriefView[];
-  attention: (AttentionItem & { unitName: string })[];
+  attention: (AttentionItem & { unitName: string; unitId: string })[];
 }
 
 export interface PaletteItem {
@@ -330,4 +332,14 @@ export interface ServiceRecordView {
   commendations: { entryId: string; title: string; at: string; retired: boolean }[];
   /** Notable entries, newest first. */
   entries: { at: string; kind: string; text: string; link: string | null }[];
+}
+
+export type OfficerView = Versioned<OfficerBody>;
+
+/** Who is signed in, and what they may command. */
+export interface MeView {
+  principal: Principal;
+  rank: Rank;
+  /** Units a Captain commands; every unit for the Commander; none for an Observer. */
+  unitIds: string[] | 'all';
 }

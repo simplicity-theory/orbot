@@ -1,3 +1,4 @@
+import { Authority, unitOf } from '../officers/authority.js';
 import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
 import { CreateDocumentRequest, CreateTaskRequest, ReviseDocumentRequest } from '@orbot/shared';
 import { z } from 'zod';
@@ -65,6 +66,7 @@ export class DomainController {
     return this.views.task(id);
   }
 
+  @Authority({ level: 'unit', units: unitOf('unit', 'body') })
   @Post('tasks')
   async createTask(
     @Body(new ZodPipe(CreateTaskRequest)) body: z.output<typeof CreateTaskRequest>,
@@ -74,6 +76,7 @@ export class DomainController {
   }
 
   /** Starts the task in the background; progress arrives over the WebSocket and in the record. */
+  @Authority({ level: 'unit', units: unitOf('task', 'param') })
   @Post('tasks/:id/run')
   @HttpCode(202)
   async runTask(@Param('id', Uuid) id: string, @Actor() actor: string) {
@@ -91,6 +94,7 @@ export class DomainController {
     return toView(await this.documents.get(id));
   }
 
+  @Authority({ level: 'unit', units: unitOf('unit', 'body') })
   @Post('documents')
   async createDocument(
     @Body(new ZodPipe(CreateDocumentRequest)) body: z.output<typeof CreateDocumentRequest>,
@@ -100,6 +104,7 @@ export class DomainController {
   }
 
   /** A rewrite: inserts a new version and archives the old one. */
+  @Authority({ level: 'unit', units: unitOf('document', 'param') })
   @Post('documents/:id/versions')
   async reviseDocument(
     @Param('id', Uuid) id: string,

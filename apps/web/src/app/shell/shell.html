@@ -32,7 +32,7 @@
       }}</span>
     </span>
     @if (!standDowns.all()) {
-      <orb-stand-down scope="all" name="all units" [compact]="true" />
+      <orb-stand-down *orbCan="null" scope="all" name="all units" [compact]="true" />
     }
     <button
       type="button"
@@ -116,6 +116,14 @@
     >
       <orb-icon [name]="theme.theme() === 'dark' ? 'sun' : 'moon'" />
     </button>
+    @if (principal(); as p) {
+      @if (p.kind === 'officer') {
+        <span class="who" [attr.title]="'Signed in as ' + auth.rankLabel() + ' ' + p.displayName">
+          <span class="label">{{ p.displayName }}</span>
+          <span class="chip">{{ auth.rankLabel() }}</span>
+        </span>
+      }
+    }
     <button
       type="button"
       class="btn btn--ghost btn--icon"
@@ -166,6 +174,12 @@
 }
 
 <main id="main" tabindex="-1">
+  @if (auth.isObserver()) {
+    <p class="observer" role="note">
+      <orb-icon name="info" /> You are signed in as an Observer: you can read everything and ask
+      questions in chat, but not give orders.
+    </p>
+  }
   <orb-stand-down-banner />
   <router-outlet />
 </main>

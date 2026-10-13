@@ -1,3 +1,4 @@
+import { Auth } from '../../core/auth';
 import { httpResource } from '@angular/common/http';
 import { Dialog } from '@angular/cdk/dialog';
 import { NgTemplateOutlet } from '@angular/common';
@@ -61,6 +62,7 @@ import { AddBotDialog, type AddBotData } from '../units/add-bot.dialog';
                 id="runtime"
                 class="input runtime"
                 [value]="v.bot.runtime"
+                [disabled]="!auth.can(v.bot.unitId)"
                 (change)="switchRuntime($any($event.target).value)"
               >
                 @for (r of meta.runtimes(); track r) {
@@ -72,7 +74,12 @@ import { AddBotDialog, type AddBotData } from '../units/add-bot.dialog';
           <div class="header-actions">
             <orb-status [status]="v.bot.status" />
             @if (!v.bot.isOverseer && v.bot.status !== 'stood-down') {
-              <orb-stand-down scope="bot" [targetId]="v.bot.id" [name]="v.bot.callsign" />
+              <orb-stand-down
+                scope="bot"
+                [targetId]="v.bot.id"
+                [unitId]="v.bot.unitId"
+                [name]="v.bot.callsign"
+              />
               <button
                 type="button"
                 class="btn"
@@ -174,7 +181,7 @@ import { AddBotDialog, type AddBotData } from '../units/add-bot.dialog';
         <orb-service-record [botId]="v.bot.id" />
       </div>
       <ng-template #reassignControl let-t>
-        @if (reassignable(t) && v.peers.length) {
+        @if (reassignable(t) && v.peers.length && auth.can(v.bot.unitId)) {
           @if (reassigning()?.taskId === t.id) {
             <form class="form reassign" (ngSubmit)="reassign(t)">
               <label [for]="'to-' + t.id">Reassign #{{ t.number }} to</label>
@@ -262,6 +269,7 @@ import { AddBotDialog, type AddBotData } from '../units/add-bot.dialog';
   `,
 })
 export class BotPage {
+  protected readonly auth = inject(Auth);
   protected readonly efforts = inject(MainEfforts);
   readonly unitId = input.required<string>();
   readonly botId = input.required<string>();

@@ -1,3 +1,5 @@
+import { Auth } from '../../core/auth';
+import { Officers } from '../../core/officers';
 import { httpResource } from '@angular/common/http';
 import {
   afterRenderEffect,
@@ -72,13 +74,17 @@ const CHAT_KINDS = new Set(['chat.message', 'chat.readback', 'orders.log', 'pend
                 [class.relay]="m.body.from === 'hq'"
                 [class.highlight]="highlight() === item.id"
                 [attr.aria-label]="
-                  m.body.from === 'commander' ? 'You' : m.body.from === 'hq' ? 'HQ' : 'Overseer'
+                  m.body.from === 'commander'
+                    ? sender(item.actor)
+                    : m.body.from === 'hq'
+                      ? 'HQ'
+                      : 'Overseer'
                 "
               >
                 <p class="who">
                   {{
                     m.body.from === 'commander'
-                      ? 'You'
+                      ? sender(item.actor)
                       : m.body.from === 'hq'
                         ? 'HQ (relay)'
                         : v.label
@@ -199,6 +205,13 @@ const CHAT_KINDS = new Set(['chat.message', 'chat.readback', 'orders.log', 'pend
   `,
 })
 export class ChatPanel {
+  private readonly auth = inject(Auth);
+  private readonly officers = inject(Officers);
+  /** "You" for your own messages; otherwise who sent it (several officers may share a channel). */
+  protected sender(actor: string): string {
+    return actor === this.auth.actor() ? 'You' : (this.officers.name(actor) ?? 'You');
+  }
+
   private readonly api = inject(Api);
   private readonly toasts = inject(Toasts);
   readonly channel = input.required<string>();

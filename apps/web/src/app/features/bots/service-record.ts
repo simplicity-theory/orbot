@@ -29,7 +29,7 @@ const ICON: Record<string, IconName> = {
   selector: 'orb-service-record',
   imports: [RouterLink, Icon, LoadError, RelativeTimePipe, Skeleton, Term, UrlPipe],
   template: `
-    <section class="panel" aria-labelledby="service-h">
+    <section class="panel" aria-label="Service record">
       <h2 id="service-h" class="panel__title">
         <orb-term key="service-record">Service record</orb-term>
       </h2>

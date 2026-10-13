@@ -1,3 +1,4 @@
+import { OFFICER_SECRET_PREFIX } from '../officers/officers.service.js';
 import { BadRequestException, Body, Controller, Get, Put } from '@nestjs/common';
 import {
   AlertSettings,
@@ -46,7 +47,11 @@ export class SettingsController {
   ) {
     const { reason, expectedVersion, ...patch } = body;
     const name = patch.alerts?.credentialName;
-    if (name && !(await this.secrets.list()).some((s) => s.name === name && !s.revoked)) {
+    if (
+      name &&
+      (name.startsWith(OFFICER_SECRET_PREFIX) ||
+        !(await this.secrets.list()).some((s) => s.name === name && !s.revoked))
+    ) {
       throw new BadRequestException({
         message: `No credential named “${name}” is stored.`,
         action: 'Store the push URL in the Supply Depot first, then choose it here.',

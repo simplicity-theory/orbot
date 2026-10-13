@@ -1,3 +1,4 @@
+import { Can } from '../../ui/can';
 import { Component, inject, input, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
@@ -13,7 +14,7 @@ type Editing = { id: string; title: string; body: string; reason: string } | nul
 /** The unit's Field Manual: entries with provenance; add, edit and retire (never delete). */
 @Component({
   selector: 'orb-field-manual-tab',
-  imports: [FormsModule, RouterLink, Icon, Term],
+  imports: [Can, FormsModule, RouterLink, Icon, Term],
   template: `
     @let v = view();
     <section class="panel" aria-labelledby="fm-h">
@@ -39,7 +40,13 @@ type Editing = { id: string; title: string; body: string; reason: string } | nul
           Kept as Markdown in <span class="mono">{{ m.repository }}</span
           >, branch <span class="mono">{{ m.branch }}</span
           >, <span class="mono">{{ m.path }}/</span>.
-          <button type="button" class="btn btn--ghost inline" [disabled]="busy()" (click)="sync()">
+          <button
+            *orbCan="v.unit.id"
+            type="button"
+            class="btn btn--ghost inline"
+            [disabled]="busy()"
+            (click)="sync()"
+          >
             Import edits from the repository
           </button>
         }
@@ -135,7 +142,7 @@ type Editing = { id: string; title: string; body: string; reason: string } | nul
                   </div>
                 </form>
               }
-              <div class="row-actions">
+              <div class="row-actions" *orbCan="v.unit.id">
                 <button
                   type="button"
                   class="btn btn--ghost"
@@ -194,7 +201,9 @@ type Editing = { id: string; title: string; body: string; reason: string } | nul
           </div>
         </form>
       } @else {
-        <button type="button" class="btn" (click)="adding.set(true)">Add an entry</button>
+        <button *orbCan="v.unit.id" type="button" class="btn" (click)="adding.set(true)">
+          Add an entry
+        </button>
       }
     </section>
 

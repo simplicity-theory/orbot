@@ -1,8 +1,10 @@
+import { AuthorityService } from '../officers/authority.js';
 import {
   BadRequestException,
   ConflictException,
   Inject,
   Injectable,
+  ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
 import {
@@ -35,6 +37,16 @@ type ReadbackItem = Readback['items'][number];
  * (through its runtime), and turned into typed actions that run through the same
  * services the UI uses. Every change goes in the orders log and is read back.
  */
+/** Orders about supply, budgets, operations and the main effort are the Commander's alone. */
+const COMMANDER_ONLY: ChatAction['kind'][] = [
+  'supply-grant',
+  'supply-revoke',
+  'budget-grant',
+  'grant-deploy-rights',
+  'create-operation',
+  'main-effort',
+];
+
 @Injectable()
 export class ChatService {
   constructor(
@@ -45,7 +57,30 @@ export class ChatService {
     private readonly actions: ActionsService,
     private readonly overseer: OverseerService,
     private readonly settings: SettingsService,
+    private readonly authority: AuthorityService,
   ) {}
+
+  /** Why this person may not give this order, or null if they may (by rank and units). */
+  private async refusal(action: ChatAction, actor: string): Promise<string | null> {
+    // Rehearsing changes nothing: any officer may ask for one.
+    if (action.kind === 'rehearse') return this.authority.refusal(actor, null, true);
+    const units = COMMANDER_ONLY.includes(action.kind)
+      ? null
+      : action.unitId
+        ? [action.unitId]
+        : null;
+    return this.authority.refusal(actor, units);
+  }
+
+  private async mayOrder(action: ChatAction, actor: string): Promise<void> {
+    const why = await this.refusal(action, actor);
+    if (why) {
+      throw new ForbiddenException({
+        message: why,
+        action: 'Ask the Commander, or an officer who commands that unit.',
+      });
+    }
+  }
 
   async send(channel: string, text: string, actor: string): Promise<ChatSendResult> {
     const unitId = await this.channelUnit(channel);
@@ -64,7 +99,15 @@ export class ChatService {
 
     const items: ReadbackItem[] = [];
     const pending: Readback['pending'] = [];
+    // Orders this officer may not give are read back as not done; nothing changes.
+    const refused: string[] = [];
+    const allowed = async (action: ChatAction) => {
+      const why = await this.refusal(action, actor);
+      if (why) refused.push(`Not done: ${await this.describe(action)} — ${why}`);
+      return !why;
+    };
     for (const action of interpretation.actions) {
+      if (!(await allowed(action))) continue;
       if (settings.irreversibleActions.includes(action.kind)) {
         pending.push(
           await this.hold(
@@ -85,6 +128,7 @@ export class ChatService {
       }
     }
     for (const action of interpretation.musings) {
+      if (!(await allowed(action))) continue;
       pending.push(await this.hold(action, message, channel, 'musing', null, overseerActor));
     }
 
@@ -94,12 +138,12 @@ export class ChatService {
         channel,
         replyTo: message.id,
         kinds: interpretation.kinds,
-        text: this.headline(interpretation, items, pending),
+        text: this.headline(interpretation, items, pending, refused.length > 0),
         answer: interpretation.answer,
         items,
         pending,
         missing: interpretation.missing.map((m) => m.what),
-        unclear: interpretation.unclear,
+        unclear: [...refused, ...interpretation.unclear],
       },
       { unitId },
       overseerActor,
@@ -190,6 +234,7 @@ export class ChatService {
     actor: string,
   ): Promise<ChatSendResult['readback']> {
     const p = await this.pending(pendingId);
+    await this.mayOrder(p.body.action, actor);
     if (p.body.reason === 'irreversible') {
       const want = p.body.phrase ?? (await this.settings.get()).confirmationPhrase;
       if ((phrase ?? '').trim().toLowerCase() !== want.toLowerCase()) {
@@ -276,6 +321,7 @@ export class ChatService {
         message: 'That change has already been undone.',
         action: 'See the orders log for the reversing entry.',
       });
+    await this.mayOrder(e.body.inverse, actor);
     const item = await this.execute(e.body.inverse, null, e.body.channel, actor, {
       reason: `Undo: ${e.body.summary}`,
       reverses: entryId,
@@ -487,7 +533,7 @@ export class ChatService {
       case 'recon':
         return `Send ${u} on recon: “${a.question}”`;
       case 'budget-grant':
-        return `Raise ${u}'s compute budget by ${a.units} units`;
+        return `Raise ${u}${u.endsWith('s') ? "'" : "'s"} compute budget by ${a.units} units`;
       case 'supply-grant':
       case 'grant-deploy-rights': {
         const s = await this.record.requireActive('supply', a.supplyId);
@@ -506,8 +552,14 @@ export class ChatService {
     }
   }
 
-  private headline(i: Interpretation, items: ReadbackItem[], pending: Readback['pending']): string {
+  private headline(
+    i: Interpretation,
+    items: ReadbackItem[],
+    pending: Readback['pending'],
+    refused = false,
+  ): string {
     if (items.length) return 'Wilco.';
+    if (refused && !pending.length) return 'Not done: that order is outside your command.';
     if (pending.some((p) => p.reason === 'irreversible'))
       return 'That cannot be undone. Confirm and I will act.';
     if (pending.length) return 'Did you mean that as an order?';

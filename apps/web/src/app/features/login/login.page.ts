@@ -13,8 +13,29 @@ import { Meta } from '../../core/meta';
     <main class="wrap">
       <form class="panel" (ngSubmit)="submit()">
         <p class="eyebrow">{{ meta.productName() }}</p>
-        <h1>Sign in, Commander</h1>
-        <label for="passphrase">Passphrase</label>
+        <h1>Sign in</h1>
+        <fieldset class="who">
+          <legend>Who are you?</legend>
+          <label
+            ><input type="radio" name="who" value="commander" [(ngModel)]="who" /> The
+            Commander</label
+          >
+          <label
+            ><input type="radio" name="who" value="officer" [(ngModel)]="who" /> An officer</label
+          >
+        </fieldset>
+        @if (who === 'officer') {
+          <label for="login">Login</label>
+          <input
+            id="login"
+            name="login"
+            class="input"
+            autocomplete="username"
+            required
+            [(ngModel)]="login"
+          />
+        }
+        <label for="passphrase">{{ who === 'officer' ? 'Password' : 'Passphrase' }}</label>
         <input
           id="passphrase"
           name="passphrase"
@@ -27,7 +48,11 @@ import { Meta } from '../../core/meta';
           [attr.aria-describedby]="error() ? 'login-error' : 'login-hint'"
         />
         <p id="login-hint" class="meta">
-          Set by <code>ORBOT_COMMANDER_PASSPHRASE</code> in your <code>.env</code>.
+          @if (who === 'officer') {
+            The Commander appointed you and set your first password.
+          } @else {
+            Set by <code>ORBOT_COMMANDER_PASSPHRASE</code> in your <code>.env</code>.
+          }
         </p>
         @if (error(); as e) {
           <p id="login-error" class="error" role="alert">{{ e.message }} {{ e.action }}</p>
@@ -64,6 +89,23 @@ import { Meta } from '../../core/meta';
     label {
       font-weight: var(--font-weight-medium);
     }
+    .who {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-2) var(--space-5);
+      margin: 0;
+      padding: 0;
+      border: 0;
+      legend {
+        margin-bottom: var(--space-2);
+        color: var(--color-text-muted);
+      }
+      label {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-2);
+      }
+    }
     .error {
       color: var(--tone-danger);
     }
@@ -77,6 +119,8 @@ export class LoginPage {
   readonly returnUrl = input<string>('/');
 
   protected passphrase = '';
+  protected login = '';
+  protected who: 'commander' | 'officer' = 'commander';
   protected readonly busy = signal(false);
   protected readonly error = signal<UserFacingError | null>(null);
 
@@ -84,7 +128,10 @@ export class LoginPage {
     this.busy.set(true);
     this.error.set(null);
     try {
-      await this.auth.login(this.passphrase);
+      await this.auth.login(
+        this.passphrase,
+        this.who === 'officer' ? this.login.trim() : undefined,
+      );
       this.live.connect();
       await this.router.navigateByUrl(this.returnUrl() || '/');
     } catch (err) {

@@ -1,3 +1,4 @@
+import { Can } from '../ui/can';
 import { Dialog } from '@angular/cdk/dialog';
 import { CdkTrapFocus } from '@angular/cdk/a11y';
 import {
@@ -46,6 +47,7 @@ const NAV: NavItem[] = [
   { label: 'Deconfliction', link: '/deconfliction', icon: 'git-branch' },
   { label: 'Supply Depot', link: '/supply', icon: 'key' },
   { label: 'Archive', link: '/archive', icon: 'archive' },
+  { label: 'Officers', link: '/officers', icon: 'users' },
   { label: 'Settings', link: '/settings', icon: 'sliders' },
 ];
 
@@ -89,6 +91,7 @@ const POPOVER: ConnectedPosition[] = [
     StandDownBanner,
     StandDownButton,
     UrlPipe,
+    Can,
   ],
   templateUrl: './shell.html',
   styleUrl: './shell.scss',
@@ -104,7 +107,7 @@ export class Shell {
   protected readonly live = inject(Live);
   protected readonly needsYou = inject(NeedsYou);
   protected readonly standDowns = inject(StandDowns);
-  private readonly auth = inject(Auth);
+  protected readonly auth = inject(Auth);
   private readonly router = inject(Router);
   private readonly dialog = inject(Dialog);
   protected readonly chat = inject(ChatLauncher);

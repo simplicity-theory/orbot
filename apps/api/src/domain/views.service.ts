@@ -119,7 +119,7 @@ export class ViewsService {
     return {
       backbriefs: orbat.units.flatMap((u) => u.backbriefs),
       attention: orbat.units.flatMap((u) =>
-        u.attention.map((a) => ({ ...a, unitName: u.unit.name })),
+        u.attention.map((a) => ({ ...a, unitName: u.unit.name, unitId: u.unit.id })),
       ),
     };
   }

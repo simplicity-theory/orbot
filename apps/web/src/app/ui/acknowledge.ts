@@ -1,3 +1,4 @@
+import { Auth } from '../core/auth';
 import { Component, inject, input, signal } from '@angular/core';
 import { Api } from '../core/api';
 import { toUserError } from '../core/api-error';
@@ -8,19 +9,24 @@ import { Toasts } from './toast';
 @Component({
   selector: 'orb-acknowledge',
   template: `
-    <button
-      type="button"
-      class="btn btn--ghost"
-      [attr.aria-label]="'Acknowledge: ' + label()"
-      [disabled]="busy()"
-      (click)="acknowledge()"
-    >
-      Acknowledge
-    </button>
+    @if (auth.can(unitId())) {
+      <button
+        type="button"
+        class="btn btn--ghost"
+        [attr.aria-label]="'Acknowledge: ' + label()"
+        [disabled]="busy()"
+        (click)="acknowledge()"
+      >
+        Acknowledge
+      </button>
+    }
   `,
 })
 export class Acknowledge {
+  protected readonly auth = inject(Auth);
   readonly chainId = input.required<string>();
+  /** The unit whose work it is: its Captain (or the Commander) may decide. */
+  readonly unitId = input<string | null>(null);
   readonly label = input.required<string>();
   private readonly api = inject(Api);
   private readonly toasts = inject(Toasts);

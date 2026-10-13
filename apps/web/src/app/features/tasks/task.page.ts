@@ -1,3 +1,4 @@
+import { Auth } from '../../core/auth';
 import { httpResource } from '@angular/common/http';
 import { Component, computed, effect, inject, input, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
@@ -36,6 +37,7 @@ import { RecordTimeline } from './record-timeline';
   styleUrl: './task.page.scss',
 })
 export class TaskPage {
+  protected readonly auth = inject(Auth);
   protected readonly efforts = inject(MainEfforts);
   readonly unitId = input.required<string>();
   readonly botId = input<string>();
@@ -53,7 +55,11 @@ export class TaskPage {
   protected readonly canStart = computed(() => {
     const t = this.view.value()?.task;
     return (
-      !!t && !!t.botId && !!t.repoSupplyId && ['queued', 'blocked', 'stood-down'].includes(t.status)
+      !!t &&
+      !!t.botId &&
+      !!t.repoSupplyId &&
+      ['queued', 'blocked', 'stood-down'].includes(t.status) &&
+      this.auth.can(t.unitId)
     );
   });
   protected readonly statusHistory = computed(() => {

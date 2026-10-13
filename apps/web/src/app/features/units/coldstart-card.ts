@@ -1,3 +1,4 @@
+import { Can } from '../../ui/can';
 import { Component, inject, input, output, signal } from '@angular/core';
 import type { RecordEvent } from '@orbot/shared';
 import { Api } from '../../core/api';
@@ -10,12 +11,18 @@ import { Toasts } from '../../ui/toast';
 /** Latest cold-start check: could a fresh bot continue from the unit's documents alone? */
 @Component({
   selector: 'orb-coldstart-card',
-  imports: [Icon, Term, RelativeTimePipe],
+  imports: [Can, Icon, Term, RelativeTimePipe],
   template: `
     <section class="panel" aria-labelledby="cs-h">
       <h2 id="cs-h" class="panel__title">
         <orb-term key="cold-start">Cold-start check</orb-term>
-        <button type="button" class="btn btn--ghost run" [disabled]="busy()" (click)="run()">
+        <button
+          *orbCan="unitId()"
+          type="button"
+          class="btn btn--ghost run"
+          [disabled]="busy()"
+          (click)="run()"
+        >
           <orb-icon class="sm" name="activity" /> {{ busy() ? 'Checking…' : 'Run check now' }}
         </button>
       </h2>
