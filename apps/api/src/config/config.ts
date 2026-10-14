@@ -43,6 +43,16 @@ const Env = z.object({
   ORBOT_CLAUDE_MODEL: z.string().default('claude-opus-5-5'),
   /** Enables the Claude runtime. Kept out of every record by the redactor. */
   ANTHROPIC_API_KEY: z.string().default(''),
+  /**
+   * Enables the claude-code runtime: bots run with Claude Code, signed in with your own
+   * Claude plan (`claude` login on this machine). Also on when ORBOT_RUNTIME=claude-code.
+   */
+  ORBOT_CLAUDE_CODE: z
+    .enum(['on', 'off'])
+    .default('off')
+    .transform((v) => v === 'on'),
+  /** A `claude` binary to use instead of the one bundled with the Agent SDK. */
+  ORBOT_CLAUDE_CODE_PATH: z.string().default(''),
   /** How often each Overseer runs its cold-start check (0 = only on demand). */
   ORBOT_COLDSTART_INTERVAL_MINUTES: z.coerce.number().min(0).default(360),
   /** How often stuck work is looked for (0 = never; tests call the sweep directly). */
@@ -78,6 +88,8 @@ export interface AppConfig {
   workspacesDir: string;
   claudeModel: string;
   anthropicApiKey: string;
+  claudeCode: boolean;
+  claudeCodePath: string;
   coldStartIntervalMs: number;
   escalationSweepMs: number;
   dailyBriefCheckMs: number;
@@ -122,6 +134,8 @@ export function loadConfig(overrides: Record<string, string | undefined> = {}): 
     workspacesDir: resolve(REPO_ROOT, e.ORBOT_WORKSPACES_DIR),
     claudeModel: e.ORBOT_CLAUDE_MODEL,
     anthropicApiKey: e.ANTHROPIC_API_KEY,
+    claudeCode: e.ORBOT_CLAUDE_CODE || e.ORBOT_RUNTIME === 'claude-code',
+    claudeCodePath: e.ORBOT_CLAUDE_CODE_PATH,
     coldStartIntervalMs: e.ORBOT_COLDSTART_INTERVAL_MINUTES * 60_000,
     escalationSweepMs: e.ORBOT_ESCALATION_SWEEP_SECONDS * 1000,
     dailyBriefCheckMs: e.ORBOT_DAILY_BRIEF_CHECK_SECONDS * 1000,

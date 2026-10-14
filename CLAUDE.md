@@ -40,7 +40,9 @@ Tests use the `orbot_test` / `orbot_secrets_test` databases and reset them; the 
   - `runtime/` — `RuntimeRegistry`, `SimulatedRuntime` + `scenarios/*.json`, `WorkspaceManager` (git worktree per task).
   - `overseer/` — `OverseerService` (missions → backbriefs → tasks, dispatch, unit sitreps, reassign, replace bots), `BriefingService` (handover + Field Manual + War Diary → `TaskBrief`, `task.briefed` event), `CurationService`, `ColdStartService`.
   - `overseer/hq.service.ts` — `HqService` (actor `system:hq`): operation → O Group plan → chained missions on an integration branch → backbriefs → execution → handoffs/send-backs → deploy approval → After Action review → closed; renders the operation's shared record document.
-  - `runtime/claude.runtime.ts` — `ClaudeRuntime` (Messages API tool loop confined to the worktree; structured outputs for Overseer/HQ). Registered only if `ANTHROPIC_API_KEY` is set; tests use a scripted fake client.
+  - `runtime/claude-common.ts` — `ClaudeFamilyRuntime`: the bot tools, prompts and Overseer/HQ structured outputs shared by both Claude runtimes.
+  - `runtime/claude.runtime.ts` — `ClaudeRuntime` (`claude`: Messages API tool loop confined to the worktree). Registered only if `ANTHROPIC_API_KEY` is set; tests use a scripted fake client.
+  - `runtime/claude-code.runtime.ts` — `ClaudeCodeRuntime` (`claude-code`: Claude Agent SDK on the Commander's own Claude plan via the `claude` login; only ORBOT's tools over in-process MCP, allow-listed env with no API key). Registered when `ORBOT_CLAUDE_CODE=on` or `ORBOT_RUNTIME=claude-code`; tests use a scripted fake SDK.
   - Phase 5 command services in `overseer/`:
     - `StandDownService`: halt orders on a bot, a unit or everything; running work pauses with a handover.
     - `BudgetService`: hard caps per unit, operation and task, with a warning first.

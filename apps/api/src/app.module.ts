@@ -28,6 +28,7 @@ import { RedactionService } from './redaction/redaction.service.js';
 import { RuntimeRegistry } from './runtime/runtime.registry.js';
 import Anthropic from '@anthropic-ai/sdk';
 import { ClaudeRuntime } from './runtime/claude.runtime.js';
+import { ClaudeCodeRuntime } from './runtime/claude-code.runtime.js';
 import { SimulatedRuntime } from './runtime/simulated.runtime.js';
 import { WorkspaceManager } from './runtime/workspace-manager.js';
 import { createSecretsPool, SECRETS_POOL, SecretsService } from './secrets/secrets.service.js';
@@ -140,6 +141,15 @@ export class AppModule {
               r.register(
                 new ClaudeRuntime(new Anthropic({ apiKey: c.anthropicApiKey }), {
                   model: c.claudeModel,
+                }),
+              );
+            }
+            // Claude Code on the Commander's own Claude plan, when turned on.
+            if (c.claudeCode) {
+              r.register(
+                new ClaudeCodeRuntime({
+                  model: c.claudeModel,
+                  executable: c.claudeCodePath || undefined,
                 }),
               );
             }

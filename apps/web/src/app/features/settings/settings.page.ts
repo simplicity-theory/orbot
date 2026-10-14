@@ -235,19 +235,46 @@ import { ThemeService } from '../../core/theme';
           <dt>Runtimes installed</dt>
           <dd>
             <span class="mono">{{ meta.runtimes().join(', ') }}</span>
-            @if (!meta.runtimes().includes('claude')) {
+            @if (!meta.runtimes().includes('claude') && !meta.runtimes().includes('claude-code')) {
               <span class="meta">
-                — set ANTHROPIC_API_KEY to enable the Claude runtime ({{
-                  meta.claudeModel()
-                }}).</span
+                — set ORBOT_CLAUDE_CODE=on to run bots on your own Claude plan, or ANTHROPIC_API_KEY
+                to use the API ({{ meta.claudeModel() }}).</span
               >
             }
           </dd>
         </dl>
+        <form class="runtime-all" *orbCan="null" (ngSubmit)="switchAll()">
+          <label for="runtime-all">Run every bot on</label>
+          <select id="runtime-all" name="runtimeAll" class="input" [(ngModel)]="runtimeAll">
+            @for (r of meta.runtimes(); track r) {
+              <option [value]="r">{{ r }}</option>
+            }
+          </select>
+          <button type="submit" class="btn" [disabled]="busy() || !runtimeAll">
+            Switch all bots
+          </button>
+          @if (runtimeAll === 'claude-code') {
+            <p class="meta">
+              Bots run with Claude Code on your own Claude plan. For your use only: while other
+              officers give orders, use the API runtime instead.
+            </p>
+          }
+        </form>
       </section>
     </div>
   `,
   styles: `
+    .runtime-all {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--space-2);
+      margin-top: var(--space-4);
+    }
+    .runtime-all p {
+      flex-basis: 100%;
+      margin: 0;
+    }
     fieldset {
       display: flex;
       gap: var(--space-4);
@@ -354,9 +381,13 @@ export class SettingsPage {
     apiUrl.alerts(),
   );
   protected reason = '';
+  protected runtimeAll = '';
 
   constructor() {
     inject(Breadcrumbs).set([ORBAT_CRUMB, { label: 'Settings' }]);
+    effect(() => {
+      if (!this.runtimeAll) this.runtimeAll = this.meta.runtime();
+    });
     effect(() => {
       const st = this.settings.value();
       if (!st) return;
@@ -379,6 +410,26 @@ export class SettingsPage {
         this.failingBotRuns = esc.failingBotRuns;
       }
     });
+  }
+
+  protected async switchAll(): Promise<void> {
+    this.busy.set(true);
+    const runtime = this.runtimeAll;
+    try {
+      const r = await this.api.setAllBotsRuntime(runtime, `Every bot onto ${runtime}`);
+      this.toasts.show({
+        tone: 'success',
+        message: r.switched
+          ? `${r.switched} bot${r.switched === 1 ? '' : 's'} now run on ${runtime}.`
+          : `Every bot already runs on ${runtime}.`,
+        detail: 'Work already running finishes on the runtime it started on.',
+      });
+    } catch (err) {
+      const e = toUserError(err);
+      this.toasts.show({ tone: 'danger', message: e.message, detail: e.action });
+    } finally {
+      this.busy.set(false);
+    }
   }
 
   protected toggleAlert(kind: AlertKind): void {

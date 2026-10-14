@@ -270,6 +270,27 @@ export class OverseerController {
     return toView(entry);
   }
 
+  /** Switch every bot in the force to one runtime (e.g. onto the Commander's Claude plan). */
+  @Put('bots/runtime')
+  async setRuntimeForAll(
+    @Body(new ZodPipe(SetRuntime)) body: z.infer<typeof SetRuntime>,
+    @Actor() actor: string,
+  ): Promise<{ switched: number }> {
+    this.runtimes.get(body.runtime);
+    const bots = (await this.record.listActive('bot')).filter(
+      (b) => b.body.runtime !== body.runtime,
+    );
+    await this.record.transaction(async (w) => {
+      for (const b of bots) {
+        await w.revise('bot', b.entityId, (x) => ({ ...x, runtime: body.runtime }), {
+          actor,
+          reason: body.reason,
+        });
+      }
+    });
+    return { switched: bots.length };
+  }
+
   /** Switch which runtime drives a bot (e.g. from simulated to Claude). */
   @Authority({ level: 'unit', units: unitOf('bot', 'param') })
   @Put('bots/:id/runtime')

@@ -405,6 +405,12 @@ export class Api {
     );
   }
 
+  setAllBotsRuntime(runtime: string, reason: string) {
+    return firstValueFrom(
+      this.http.put<{ switched: number }>(`${API}/bots/runtime`, { runtime, reason }),
+    );
+  }
+
   setBotRuntime(botId: string, runtime: string, reason: string) {
     return firstValueFrom(
       this.http.put<BotView>(`${API}/bots/${botId}/runtime`, { runtime, reason }),
