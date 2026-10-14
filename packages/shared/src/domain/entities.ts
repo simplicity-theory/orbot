@@ -299,10 +299,31 @@ export const CredentialSupply = z.object({
   secretName: z.string().min(1),
 });
 
+/**
+ * A server bots log in to over SSH. The private key is a credential, used by name; the host
+ * keys seen when it was connected are pinned, so ORBOT talks to no other machine.
+ */
+export const ServerAccess = z.object({
+  host: z.string().min(1),
+  port: z.number().int().min(1).max(65535).default(22),
+  user: z.string().min(1),
+  /** The SSH private key, in the secrets store. */
+  credentialName: z.string().min(1),
+  /** known_hosts lines captured when the server was connected. */
+  hostKeys: z.array(z.string()).min(1),
+  /** The host key fingerprints, for the Commander to compare. */
+  fingerprints: z.array(z.string()),
+  /** Where the service on it can be seen, if anywhere. */
+  url: z.string().nullable().default(null),
+});
+export type ServerAccess = z.infer<typeof ServerAccess>;
+
 export const GenericSupply = z.object({
   kind: z.enum(['environment', 'tool', 'compute']),
   /** For environments: `tier` is `staging` or `production` (production deploy rights are irreversible). */
   details: z.record(z.string(), z.string()),
+  /** For environments that are servers: how bots log in. */
+  server: ServerAccess.nullable().default(null),
 });
 
 /**

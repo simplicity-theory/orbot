@@ -19,6 +19,10 @@ const config = loadConfig({
   ORBOT_COMMANDER_PASSPHRASE: 'test-commander-passphrase',
   ORBOT_SESSION_SECRET: 'test-session-secret-test-session-secret',
   ORBOT_SIM_SPEED: '0',
+  // Never the Commander's real runtime from .env: tests run on the simulator alone.
+  ORBOT_RUNTIME: 'simulated',
+  ORBOT_CLAUDE_CODE: 'off',
+  ANTHROPIC_API_KEY: '',
   ORBOT_COLDSTART_INTERVAL_MINUTES: '0',
   ORBOT_ESCALATION_SWEEP_SECONDS: '1',
   ORBOT_DAILY_BRIEF_CHECK_SECONDS: '0',

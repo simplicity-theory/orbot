@@ -17,6 +17,7 @@ import {
   type TaskStatus,
 } from '@orbot/shared';
 import { APP_CONFIG, type AppConfig } from '../config/config.js';
+import { ServersService } from '../servers/servers.service.js';
 import { BriefingService } from '../overseer/briefing.service.js';
 import { PolicyService } from '../policy/policy.service.js';
 import { RecordService, type RecordWriter } from '../record/record.service.js';
@@ -72,6 +73,7 @@ export class TaskRunner {
     private readonly redaction: RedactionService,
     private readonly logger: RedactingLogger,
     private readonly briefing: BriefingService,
+    private readonly servers: ServersService,
   ) {}
 
   isRunning(taskId: string): boolean {
@@ -290,6 +292,25 @@ export class TaskRunner {
         searchRecord: (q) => this.briefing.search(t.unitId, q),
         orders: () => this.liveOrders(t.unitId),
         waitForFrago: (ms) => this.waitForFrago(run, ms),
+        servers: () => this.servers.list(t.unitId),
+        serverRun: async (server, command) =>
+          this.servers.run(
+            await this.record.requireActive('task', taskId),
+            botPrincipal,
+            refs,
+            server,
+            command,
+            run.abort.signal,
+          ),
+        serverUpload: async (server, path) =>
+          this.servers.upload(
+            await this.record.requireActive('task', taskId),
+            botPrincipal,
+            refs,
+            server,
+            path,
+            run.abort.signal,
+          ),
       };
 
       const finished = this.drive(runtime.run(brief, ctx), run, task, botPrincipal, refs).finally(

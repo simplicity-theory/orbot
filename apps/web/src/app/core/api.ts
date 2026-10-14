@@ -3,6 +3,7 @@ import { inject, Injectable } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import type {
   AppointOfficerRequest,
+  ConnectServerRequest,
   ConnectServiceRequest,
   MeView,
   OfficerView,
@@ -269,6 +270,16 @@ export class Api {
 
   storeCredential(name: string, value: string) {
     return firstValueFrom(this.http.post<SupplyView>(`${API}/supply/credentials`, { name, value }));
+  }
+
+  connectServer(req: ConnectServerRequest) {
+    return firstValueFrom(this.http.post<SupplyView>(`${API}/supply/servers`, req));
+  }
+
+  checkServer(id: string) {
+    return firstValueFrom(
+      this.http.post<{ ok: boolean; output: string }>(`${API}/supply/servers/${id}/check`, {}),
+    );
   }
 
   connectEnvironment(name: string, tier: 'staging' | 'production') {

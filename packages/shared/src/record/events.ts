@@ -124,6 +124,15 @@ export const RecordEventBodies = {
   }),
   cost: z.object({ units: z.number().nonnegative(), total: z.number().nonnegative() }),
   'credential.used': z.object({ secretName: z.string(), purpose: z.string() }),
+  /** A bot ran a command on a server over SSH (or copied its work there). Output is redacted. */
+  'server.command': z.object({
+    supplyId: z.string(),
+    server: z.string(),
+    command: z.string(),
+    exitCode: z.number().int().nullable(),
+    output: z.string(),
+    durationMs: z.number().int().nonnegative(),
+  }),
   'policy.check': z.object({
     action: z.string(),
     allowed: z.boolean(),

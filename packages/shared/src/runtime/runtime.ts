@@ -114,6 +114,25 @@ export interface RunContext {
   orders(): Promise<LiveOrders>;
   /** Wait up to `ms` (real time) for a frago; resolves null on timeout or abort. */
   waitForFrago(ms: number): Promise<FragoNote | null>;
+  /** Servers the unit holds (environments bots can log in to over SSH). */
+  servers(): Promise<ServerInfo[]>;
+  /** Run a shell command on a server the unit holds. Policy-checked and recorded. */
+  serverRun(server: string, command: string): Promise<ServerResult>;
+  /** Copy the task's committed work (HEAD of its branch) into a directory on a server. */
+  serverUpload(server: string, remotePath: string): Promise<ServerResult>;
+}
+
+export interface ServerInfo {
+  name: string;
+  tier: string;
+  host: string;
+  user: string;
+  url: string | null;
+}
+
+export interface ServerResult {
+  exitCode: number | null;
+  output: string;
 }
 
 export interface LiveOrders {

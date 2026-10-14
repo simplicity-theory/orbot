@@ -19,6 +19,24 @@ export const CreateTaskRequest = z.object({
 });
 export type CreateTaskRequest = z.input<typeof CreateTaskRequest>;
 
+/** Connect a server bots log in to over SSH, as an environment. */
+export const ConnectServerRequest = z.object({
+  name: z.string().trim().min(1).max(100),
+  tier: z.enum(['staging', 'production']),
+  host: z
+    .string()
+    .trim()
+    .regex(/^[A-Za-z0-9.:_-]+$/, { message: 'A host name or IP address, without user or port.' }),
+  port: z.number().int().min(1).max(65535).default(22),
+  user: z
+    .string()
+    .trim()
+    .regex(/^[a-z_][a-z0-9_.-]{0,31}$/i, { message: 'A Linux user name.' }),
+  credentialName: z.string().trim().min(1),
+  url: z.string().trim().max(500).nullable().default(null),
+});
+export type ConnectServerRequest = z.input<typeof ConnectServerRequest>;
+
 export const ConnectRepositoryRequest = z.object({
   name: z.string().trim().min(1).max(100),
   /** Local path to a git repository, or a clone URL (without embedded credentials). */

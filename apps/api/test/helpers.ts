@@ -23,6 +23,10 @@ export function testConfig(overrides: Record<string, string> = {}): AppConfig {
     ORBOT_COMMANDER_PASSPHRASE: TEST_PASSPHRASE,
     ORBOT_SESSION_SECRET: 'test-session-secret-test-session-secret',
     ORBOT_SIM_SPEED: '0',
+    // Never the Commander's real runtime from .env: tests run on the simulator alone.
+    ORBOT_RUNTIME: 'simulated',
+    ORBOT_CLAUDE_CODE: 'off',
+    ANTHROPIC_API_KEY: '',
     ORBOT_COLDSTART_INTERVAL_MINUTES: '0',
     ORBOT_ESCALATION_SWEEP_SECONDS: '0',
     ORBOT_DAILY_BRIEF_CHECK_SECONDS: '0',

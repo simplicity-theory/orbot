@@ -79,6 +79,16 @@ export function describeEvent(e: RecordEvent): EventSummary {
         text: `+${s('units')} units (total ${s('total')})`,
         tone: 'neutral',
       };
+    case 'server.command': {
+      const code = b['exitCode'];
+      const last = s('output').trim().split('\n').pop() ?? '';
+      return {
+        icon: 'terminal',
+        label: 'Server',
+        text: `${s('server')}: ${s('command')} → ${code === null ? 'stopped' : `exit ${String(code)}`}${last ? ` — ${last.slice(0, 160)}` : ''}`,
+        tone: code === 0 ? 'neutral' : 'warning',
+      };
+    }
     case 'credential.used':
       return {
         icon: 'key',

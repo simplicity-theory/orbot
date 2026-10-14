@@ -143,6 +143,24 @@ export const TOOLS: BotTool[] = [
     input_schema: obj({ title: str, markdown: str }),
   },
   {
+    name: 'list_servers',
+    description:
+      'List the servers your unit holds (environments you can log in to over SSH): name, tier, user@host, URL.',
+    input_schema: obj({}),
+  },
+  {
+    name: 'server_run',
+    description:
+      'Run a shell command on one of your unit’s servers over SSH, as its configured user (non-interactive: no prompts, no TTY; use `sudo -n` where needed). Returns the exit code and output. Production servers only inside an approved deploy task.',
+    input_schema: obj({ server: str, command: str }),
+  },
+  {
+    name: 'server_upload',
+    description:
+      'Copy your committed work (HEAD of your branch, as git archive) into a directory on one of your unit’s servers, creating it if needed. Commit first. Recorded as a deployment to that server.',
+    input_schema: obj({ server: str, path: str }),
+  },
+  {
     name: 'raise_dispute',
     description:
       'You disagree with another unit (name it) about this work, e.g. its rules conflict with your brief. HQ rules under standing orders; you then follow the ruling.',
@@ -151,7 +169,14 @@ export const TOOLS: BotTool[] = [
 ];
 
 /** Recon is read-only: no tool that changes the workspace. */
-const WRITE_TOOLS = new Set(['write_file', 'run_script', 'commit', 'send_back']);
+const WRITE_TOOLS = new Set([
+  'write_file',
+  'run_script',
+  'commit',
+  'send_back',
+  'server_run',
+  'server_upload',
+]);
 export const RECON_TOOLS = TOOLS.filter((t) => !WRITE_TOOLS.has(t.name));
 
 export const TERMINAL = new Set([
@@ -218,6 +243,31 @@ export abstract class ClaudeFamilyRuntime implements BotRuntime {
           events: [{ type: 'report', title: s('title'), markdown: s('markdown') }],
           output: 'Report filed with your unit.',
         };
+      case 'list_servers': {
+        const list = await ctx.servers();
+        return {
+          events: [],
+          output: list.length
+            ? list
+                .map(
+                  (x) => `- ${x.name} (${x.tier}): ${x.user}@${x.host}${x.url ? `, ${x.url}` : ''}`,
+                )
+                .join('\n')
+            : 'Your unit holds no servers.',
+        };
+      }
+      case 'server_run':
+      case 'server_upload': {
+        // The servers service puts the command and its redacted output on the record.
+        const r =
+          name === 'server_run'
+            ? await ctx.serverRun(s('server'), s('command'))
+            : await ctx.serverUpload(s('server'), s('path'));
+        return {
+          events: [],
+          output: `exit ${r.exitCode ?? 'none (stopped)'}\n${r.output}`,
+        };
+      }
       case 'list_files': {
         const dir = this.safe(brief, s('path') || '.');
         const entries = await readdir(dir, { withFileTypes: true });
@@ -346,6 +396,7 @@ export abstract class ClaudeFamilyRuntime implements BotRuntime {
       'You arrived today: everything you know about this work comes from the brief below (the unit’s documents). Act on it, and leave the unit better documented than you found it.',
       'Work only through your tools; you cannot reach anything outside the workspace. Record decisions and surprises in the War Diary as you go, send a sitrep at milestones, commit your changes, and always write a handover before you finish, block, fail, send back or stand down.',
       'If a check you are running fails because of the previous unit’s work, use send_back with a reason they can act on. If you need something only someone outside the unit can give (access, a decision), use blocked. If another unit’s rules conflict with your brief, use raise_dispute; once ruled on, follow the ruling.',
+      'If your unit holds servers (list_servers), you may log in to them with server_run and set them up as the task needs; copy committed work there with server_upload. Leave each server documented: what you installed, where, how to restart it, in the War Diary and your handover, so a successor can carry on.',
       brief.task.kind === 'recon'
         ? 'This is a recon task: read-only. Survey the code to answer the question, change nothing, and file_report your findings (what you looked at, what you found, risks, a suggested approach) before the handover and done.'
         : '',

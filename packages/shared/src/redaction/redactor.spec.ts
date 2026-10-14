@@ -57,6 +57,18 @@ describe('Redactor', () => {
       );
     });
 
+    it('leaves SSH public keys and fingerprints alone (they are public)', () => {
+      const hostKey =
+        '[127.0.0.1]:2222 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBx8kQ2mN7pL4vR9tY3wB6cF1hJ5gD0sAx9PqZz';
+      const print = '256 SHA256:Zx8kQ2mN7pL4vR9tY3wB6cF1hJ5gD0sAx9PqWw3e5r [host] (ED25519)';
+      expect(r.redactString(hostKey).value).toBe(hostKey);
+      expect(r.redactString(print).value).toBe(print);
+      // The same blob anywhere else is still masked.
+      expect(r.redactString('token Zx8kQ2mN7pL4vR9tY3wB6cF1hJ5gD0sAx9PqWw3e5r').value).toContain(
+        '[REDACTED:high-entropy]',
+      );
+    });
+
     it('leaves ordinary content alone', () => {
       const benign = [
         'Implemented rate limiting on /api/login; see commit 9fceb02d0ae598e95dc970b74767f19372d61af8',

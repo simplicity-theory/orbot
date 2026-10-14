@@ -99,16 +99,34 @@ type Form = 'repository' | 'credential' | 'environment' | 'service';
                 [(ngModel)]="cred.name"
                 placeholder="payments-deploy-token"
               />
+              <label class="check"
+                ><input type="checkbox" name="multiline" [(ngModel)]="cred.multiline" /> It’s
+                several lines (an SSH private key)</label
+              >
               <label for="cred-value">Value</label>
-              <input
-                id="cred-value"
-                name="value"
-                class="input"
-                type="password"
-                autocomplete="off"
-                required
-                [(ngModel)]="cred.value"
-              />
+              @if (cred.multiline) {
+                <textarea
+                  id="cred-value"
+                  name="value"
+                  class="input mono key"
+                  rows="6"
+                  autocomplete="off"
+                  spellcheck="false"
+                  required
+                  [(ngModel)]="cred.value"
+                  placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"
+                ></textarea>
+              } @else {
+                <input
+                  id="cred-value"
+                  name="value"
+                  class="input"
+                  type="password"
+                  autocomplete="off"
+                  required
+                  [(ngModel)]="cred.value"
+                />
+              }
               <p class="hint">
                 Write-only. The value goes to the encrypted secrets store and is never shown again;
                 everything else refers to it by name.
@@ -213,9 +231,70 @@ type Form = 'repository' | 'credential' | 'environment' | 'service';
                   production (issuing it = deploy rights; cannot be undone)
                 </option>
               </select>
+              <label class="check"
+                ><input type="checkbox" name="isServer" [(ngModel)]="env.isServer" /> It’s a server
+                bots log in to over SSH</label
+              >
+              @if (env.isServer) {
+                <div class="server-fields">
+                  <label for="env-host">Host</label>
+                  <input
+                    id="env-host"
+                    name="host"
+                    class="input"
+                    required
+                    [(ngModel)]="env.host"
+                    placeholder="203.0.113.10 or app.example.com"
+                  />
+                  <label for="env-port">Port</label>
+                  <input
+                    id="env-port"
+                    name="port"
+                    class="input"
+                    type="number"
+                    min="1"
+                    max="65535"
+                    [(ngModel)]="env.port"
+                  />
+                  <label for="env-user">User</label>
+                  <input
+                    id="env-user"
+                    name="user"
+                    class="input"
+                    required
+                    [(ngModel)]="env.user"
+                    placeholder="deploy"
+                  />
+                  <label for="env-key">SSH key (credential)</label>
+                  <select id="env-key" name="key" class="input" [(ngModel)]="env.credentialName">
+                    <option [ngValue]="null" disabled>Choose a stored key</option>
+                    @for (c of credentials(); track c) {
+                      <option [ngValue]="c">{{ c }}</option>
+                    }
+                  </select>
+                  <label for="env-url">URL <span class="hint">(optional)</span></label>
+                  <input
+                    id="env-url"
+                    name="url"
+                    class="input"
+                    [(ngModel)]="env.url"
+                    placeholder="https://staging.example.com"
+                  />
+                </div>
+                <p class="hint">
+                  Store the private key first as a multi-line credential (no passphrase). ORBOT pins
+                  the server’s host key and tests the login when you connect. Units you issue the
+                  server to may log in and set it up as their work needs; every command is on the
+                  record. Production servers are reached only inside a deploy you approve.
+                </p>
+              }
               <div class="actions">
-                <button type="submit" class="btn btn--primary" [disabled]="busy()">
-                  Connect environment
+                <button
+                  type="submit"
+                  class="btn btn--primary"
+                  [disabled]="busy() || (env.isServer && !env.credentialName)"
+                >
+                  {{ env.isServer ? 'Connect server' : 'Connect environment' }}
                 </button>
               </div>
             </form>
@@ -237,6 +316,27 @@ type Form = 'repository' | 'credential' | 'environment' | 'service';
                   <span class="chip">{{ s.spec.kind }}{{ tier(s) ? ' · ' + tier(s) : '' }}</span>
                   <span class="meta">{{ s.connected ? 'connected' : 'not connected' }}</span>
                 </div>
+                @if (server(s); as sv) {
+                  <div class="row server">
+                    <span class="mono">{{ sv.user }}&#64;{{ sv.host }}:{{ sv.port }}</span>
+                    <span class="meta">key {{ sv.credentialName }}</span>
+                    @if (sv.url) {
+                      <a [href]="sv.url" target="_blank" rel="noopener">{{ sv.url }}</a>
+                    }
+                    <button
+                      type="button"
+                      class="btn small"
+                      *orbCan="null"
+                      [disabled]="busy()"
+                      (click)="checkServer(s)"
+                    >
+                      Check login
+                    </button>
+                  </div>
+                  @for (f of sv.fingerprints; track f) {
+                    <div class="meta mono fingerprint">{{ f }}</div>
+                  }
+                }
                 <div class="row holders" [hidden]="s.spec.kind === 'connection'">
                   <span class="meta">Issued to:</span>
                   @for (u of holders(s.id); track u.id) {
@@ -322,6 +422,24 @@ type Form = 'repository' | 'credential' | 'environment' | 'service';
         color: var(--color-text);
       }
     }
+    .check {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+    }
+    .key {
+      resize: vertical;
+      font-family: var(--font-mono);
+    }
+    .server-fields {
+      display: grid;
+      grid-template-columns: max-content 1fr;
+      gap: var(--space-2) var(--space-3);
+      align-items: center;
+    }
+    .fingerprint {
+      overflow-wrap: anywhere;
+    }
     .stock {
       display: flex;
       flex-direction: column;
@@ -368,8 +486,8 @@ export class SupplyPage implements OnInit {
   protected readonly form = signal<Form>('repository');
   protected readonly busy = signal(false);
   protected repo = { name: '', location: '' };
-  protected cred = { name: '', value: '' };
-  protected env: { name: string; tier: 'staging' | 'production' } = { name: '', tier: 'staging' };
+  protected cred = { name: '', value: '', multiline: false };
+  protected env = this.blankEnv();
   protected svc = {
     name: '',
     apiUrl: 'https://api.github.com',
@@ -430,6 +548,31 @@ export class SupplyPage implements OnInit {
           : 'coins';
   }
 
+  private blankEnv() {
+    return {
+      name: '',
+      tier: 'staging' as 'staging' | 'production',
+      isServer: false,
+      host: '',
+      port: 22,
+      user: '',
+      credentialName: null as string | null,
+      url: '',
+    };
+  }
+
+  protected server(s: SupplyView) {
+    return s.spec.kind === 'environment' ? (s.spec.server ?? null) : null;
+  }
+
+  protected checkServer(s: SupplyView): Promise<void> {
+    return this.act(async () => {
+      const r = await this.api.checkServer(s.id);
+      if (!r.ok) throw new Error(`Could not log in to ${s.name}: ${r.output || 'no answer'}`);
+      return `Logged in to ${s.name}: ${r.output}`;
+    });
+  }
+
   protected tier(s: SupplyView): string | null {
     return s.spec.kind === 'environment' ? (s.spec.details['tier'] ?? null) : null;
   }
@@ -453,15 +596,29 @@ export class SupplyPage implements OnInit {
   protected storeCredential(): Promise<void> {
     return this.act(async () => {
       const s = await this.api.storeCredential(this.cred.name.trim(), this.cred.value);
-      this.cred = { name: '', value: '' };
+      this.cred = { name: '', value: '', multiline: false };
       return `Stored credential ${s.name} (value is write-only).`;
     });
   }
 
   protected connectEnv(): Promise<void> {
     return this.act(async () => {
-      const s = await this.api.connectEnvironment(this.env.name.trim(), this.env.tier);
-      this.env = { name: '', tier: 'staging' };
+      const e = this.env;
+      if (e.isServer) {
+        const s = await this.api.connectServer({
+          name: e.name.trim(),
+          tier: e.tier,
+          host: e.host.trim(),
+          port: Number(e.port) || 22,
+          user: e.user.trim(),
+          credentialName: e.credentialName ?? '',
+          url: e.url.trim() || null,
+        });
+        this.env = this.blankEnv();
+        return `Connected server ${s.name}: logged in, host key pinned.`;
+      }
+      const s = await this.api.connectEnvironment(e.name.trim(), e.tier);
+      this.env = this.blankEnv();
       return `Connected environment ${s.name}.`;
     });
   }

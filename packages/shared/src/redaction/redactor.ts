@@ -91,6 +91,13 @@ const SECRET_KEYS = new Set([
 ]);
 
 const HIGH_ENTROPY_TOKEN = /[A-Za-z0-9+/_=-]{32,}/g;
+/**
+ * SSH public keys and key fingerprints are public by design (a server's host keys are
+ * pinned on the record), so the blob after a key type or `SHA256:` is not masked. Private
+ * keys are still caught by the private-key pattern and by exact match.
+ */
+const PUBLIC_KEY_PREFIX =
+  /(?:\b(?:ssh-(?:ed25519|rsa|dss)|ecdsa-sha2-nistp(?:256|384|521)|sk-ssh-ed25519@openssh\.com|sk-ecdsa-sha2-nistp256@openssh\.com) |\bSHA256:)$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const HEX = /^[0-9a-f]+$/i;
 
@@ -190,7 +197,8 @@ export class Redactor {
       });
     }
 
-    text = text.replace(HIGH_ENTROPY_TOKEN, (token) => {
+    text = text.replace(HIGH_ENTROPY_TOKEN, (token: string, at: number, whole: string) => {
+      if (PUBLIC_KEY_PREFIX.test(whole.slice(Math.max(0, at - 48), at))) return token;
       if (!looksHighEntropy(token)) return token;
       findings.push({ detector: 'high-entropy' });
       return mask('high-entropy');
