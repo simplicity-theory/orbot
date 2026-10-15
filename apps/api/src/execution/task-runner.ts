@@ -302,6 +302,24 @@ export class TaskRunner {
             command,
             run.abort.signal,
           ),
+        devRun: async (server, command) =>
+          this.servers.devRun(
+            await this.record.requireActive('task', taskId),
+            botPrincipal,
+            refs,
+            server,
+            command,
+            run.abort.signal,
+          ),
+        devFetch: async (server, path) =>
+          this.servers.devFetch(
+            await this.record.requireActive('task', taskId),
+            botPrincipal,
+            refs,
+            server,
+            path,
+            run.abort.signal,
+          ),
         serverUpload: async (server, path) =>
           this.servers.upload(
             await this.record.requireActive('task', taskId),

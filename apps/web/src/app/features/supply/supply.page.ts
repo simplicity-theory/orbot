@@ -226,16 +226,19 @@ type Form = 'repository' | 'credential' | 'environment' | 'service';
               />
               <label for="env-tier">Tier</label>
               <select id="env-tier" name="tier" class="input" [(ngModel)]="env.tier">
+                <option value="dev">dev (a server bots build and test on)</option>
                 <option value="staging">staging</option>
                 <option value="production">
                   production (issuing it = deploy rights; cannot be undone)
                 </option>
               </select>
-              <label class="check"
-                ><input type="checkbox" name="isServer" [(ngModel)]="env.isServer" /> It’s a server
-                bots log in to over SSH</label
-              >
-              @if (env.isServer) {
+              @if (env.tier !== 'dev') {
+                <label class="check"
+                  ><input type="checkbox" name="isServer" [(ngModel)]="env.isServer" /> It’s a
+                  server bots log in to over SSH</label
+                >
+              }
+              @if (env.isServer || env.tier === 'dev') {
                 <div class="server-fields">
                   <label for="env-host">Host</label>
                   <input
@@ -282,6 +285,12 @@ type Form = 'repository' | 'credential' | 'environment' | 'service';
                   />
                 </div>
                 <p class="hint">
+                  @if (env.tier === 'dev') {
+                    Bots in the units you issue it to get their own folder on it (<span class="mono"
+                      >~/orbot-dev/&lt;repo&gt;/&lt;bot&gt;</span
+                    >), kept in step with their code, and run whatever they need there to build,
+                    test and iterate. Install rsync on it for fast syncs.
+                  }
                   Store the private key first as a multi-line credential (no passphrase). ORBOT pins
                   the server’s host key and tests the login when you connect. Units you issue the
                   server to may log in and set it up as their work needs; every command is on the
@@ -292,9 +301,13 @@ type Form = 'repository' | 'credential' | 'environment' | 'service';
                 <button
                   type="submit"
                   class="btn btn--primary"
-                  [disabled]="busy() || (env.isServer && !env.credentialName)"
+                  [disabled]="
+                    busy() || ((env.isServer || env.tier === 'dev') && !env.credentialName)
+                  "
                 >
-                  {{ env.isServer ? 'Connect server' : 'Connect environment' }}
+                  {{
+                    env.isServer || env.tier === 'dev' ? 'Connect server' : 'Connect environment'
+                  }}
                 </button>
               </div>
             </form>
@@ -551,7 +564,7 @@ export class SupplyPage implements OnInit {
   private blankEnv() {
     return {
       name: '',
-      tier: 'staging' as 'staging' | 'production',
+      tier: 'staging' as 'dev' | 'staging' | 'production',
       isServer: false,
       host: '',
       port: 22,
@@ -604,7 +617,7 @@ export class SupplyPage implements OnInit {
   protected connectEnv(): Promise<void> {
     return this.act(async () => {
       const e = this.env;
-      if (e.isServer) {
+      if (e.isServer || e.tier === 'dev') {
         const s = await this.api.connectServer({
           name: e.name.trim(),
           tier: e.tier,

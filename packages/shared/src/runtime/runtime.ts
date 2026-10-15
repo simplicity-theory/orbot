@@ -120,6 +120,13 @@ export interface RunContext {
   serverRun(server: string, command: string): Promise<ServerResult>;
   /** Copy the task's committed work (HEAD of its branch) into a directory on a server. */
   serverUpload(server: string, remotePath: string): Promise<ServerResult>;
+  /**
+   * On a dev server (null = the unit's first): bring the bot's folder up to date with the
+   * working tree (uncommitted edits too), then run the command in that folder.
+   */
+  devRun(server: string | null, command: string): Promise<ServerResult>;
+  /** Copy a file or directory from the bot's folder on a dev server back into the workspace. */
+  devFetch(server: string | null, path: string): Promise<ServerResult>;
 }
 
 export interface ServerInfo {

@@ -113,8 +113,14 @@ export class ServersService implements OnModuleInit {
       hostKeys,
       fingerprints: await this.ssh.fingerprints(hostKeys).catch(() => []),
       url: input.url || null,
+      rsync: false,
     };
-    const probe = await this.exec(server, 'echo orbot-ok', {});
+    const probe = await this.exec(
+      server,
+      'echo orbot-ok; command -v rsync >/dev/null 2>&1 && echo orbot-rsync',
+      {},
+    );
+    server.rsync = probe.output.includes('orbot-rsync');
     if (probe.exitCode !== 0 || !probe.output.includes('orbot-ok')) {
       throw new BadRequestException({
         message: `The key "${credential}" could not log in as ${input.user}@${input.host}: ${this.firstLine(probe.output)}`,
@@ -223,6 +229,99 @@ export class ServersService implements OnModuleInit {
     return result;
   }
 
+  /**
+   * A bot's folder on a dev server, relative to the login's home: one per repository and bot.
+   * A bot works one task at a time, so its folder is its own, and what it installed there
+   * (dependencies, build caches) is still there for its next task on the same repository.
+   */
+  private async devDir(task: RecordVersion<TaskBody>, bot: Principal): Promise<string> {
+    const repo = task.body.repoSupplyId
+      ? await this.record.getActive('supply', task.body.repoSupplyId)
+      : null;
+    const slug = (x: string) =>
+      x
+        .toLowerCase()
+        .replace(/[^a-z0-9._-]+/g, '-')
+        .replace(/^[-.]+|-+$/g, '') || 'x';
+    return `orbot-dev/${slug(repo?.body.name ?? 'workspace')}/${slug(bot.displayName)}`;
+  }
+
+  /** On a dev server: sync the working tree (uncommitted edits too) to the bot's folder, then run. */
+  async devRun(
+    task: RecordVersion<TaskBody>,
+    bot: Principal,
+    refs: RecordEventRefs,
+    name: string | null,
+    command: string,
+    signal: AbortSignal,
+  ): Promise<ServerResult> {
+    if (!task.body.workspace) throw new Error('This task has no workspace to build.');
+    const s = await this.devServer(task, bot, name, command);
+    const dir = await this.devDir(task, bot);
+    const ws = task.body.workspace.path;
+    return this.recorded(s, task, bot, refs, `[${dir}] ${command}`, async () => {
+      const key = await this.useKey(s.body.spec.server, bot, task);
+      const sync = await this.ssh.sync(s.body.spec.server, key, ws, dir, {
+        rsync: s.body.spec.server.rsync,
+        timeoutMs: COMMAND_TIMEOUT_MS,
+        signal,
+      });
+      if (sync.exitCode !== 0) {
+        return {
+          exitCode: sync.exitCode,
+          output: `Could not sync your working tree to ${s.body.name}:${dir}.\n${sync.output}`,
+        };
+      }
+      return this.ssh.run(s.body.spec.server, key, `cd ${dir} && ${command}`, {
+        timeoutMs: COMMAND_TIMEOUT_MS,
+        signal,
+      });
+    });
+  }
+
+  /** From a dev server: copy a file or directory from the bot's folder into the workspace. */
+  async devFetch(
+    task: RecordVersion<TaskBody>,
+    bot: Principal,
+    refs: RecordEventRefs,
+    name: string | null,
+    path: string,
+    signal: AbortSignal,
+  ): Promise<ServerResult> {
+    if (!task.body.workspace) throw new Error('This task has no workspace.');
+    const p = path.trim().replace(/^\.\//, '');
+    if (!/^[A-Za-z0-9_./@+-]+$/.test(p) || p.startsWith('/') || p.split('/').includes('..')) {
+      throw new Error('Give a path inside your folder, e.g. package-lock.json or src/generated.');
+    }
+    if (p === '.git' || p.startsWith('.git/')) throw new Error('.git is not copied back.');
+    const s = await this.devServer(task, bot, name, `fetch ${p}`);
+    const dir = await this.devDir(task, bot);
+    const ws = task.body.workspace.path;
+    return this.recorded(s, task, bot, refs, `[${dir}] fetch ${p}`, async () => {
+      const key = await this.useKey(s.body.spec.server, bot, task);
+      const r = await this.ssh.fetch(s.body.spec.server, key, dir, p, ws, {
+        timeoutMs: COMMAND_TIMEOUT_MS,
+        signal,
+      });
+      return r.exitCode === 0 ? { exitCode: 0, output: `Copied ${p} into your workspace.` } : r;
+    });
+  }
+
+  private async devServer(
+    task: RecordVersion<TaskBody>,
+    bot: Principal,
+    name: string | null,
+    command: string,
+  ): Promise<Server> {
+    const s = await this.authorize(task, bot, name ?? '', command);
+    if (s.body.spec.details['tier'] !== 'dev') {
+      throw new Error(
+        `${s.body.name} is a ${s.body.spec.details['tier'] ?? 'staging'} server, not a dev server: use server_run there.`,
+      );
+    }
+    return s;
+  }
+
   private async authorize(
     task: RecordVersion<TaskBody>,
     bot: Principal,
@@ -230,7 +329,14 @@ export class ServersService implements OnModuleInit {
     command: string,
   ): Promise<Server> {
     const servers = await this.forUnit(task.body.unitId);
-    const s = servers.find((x) => x.body.name.toLowerCase() === name.trim().toLowerCase());
+    const s = name.trim()
+      ? servers.find((x) => x.body.name.toLowerCase() === name.trim().toLowerCase())
+      : servers.find((x) => x.body.spec.details['tier'] === 'dev');
+    if (!s && !name.trim()) {
+      throw new Error(
+        'Your unit holds no dev server. Build and test locally with run_script, or ask for one with blocked.',
+      );
+    }
     if (!s) {
       throw new Error(
         `Your unit holds no server called "${name}". ${servers.length ? `It holds: ${servers.map((x) => x.body.name).join(', ')}.` : 'It holds none: ask for one with blocked.'}`,
@@ -284,6 +390,22 @@ export class ServersService implements OnModuleInit {
     return { exitCode: r.exitCode, output: tail(output, BOT_OUTPUT) };
   }
 
+  /** Reveal the key for a bot's use, recording the use by name. */
+  private async useKey(
+    server: ServerAccess,
+    bot: Principal,
+    task: RecordVersion<TaskBody>,
+  ): Promise<string> {
+    const key = await this.secrets.reveal(server.credentialName);
+    await this.record.event(
+      'credential.used',
+      { secretName: server.credentialName, purpose: `SSH to ${server.user}@${server.host}` },
+      { unitId: task.body.unitId, taskId: task.entityId, botId: bot.id },
+      actorRef(bot),
+    );
+    return key;
+  }
+
   /** Reveal the key (recorded by name when a bot uses it) and run the command. */
   private async exec(
     server: ServerAccess,
@@ -292,15 +414,10 @@ export class ServersService implements OnModuleInit {
     bot?: Principal,
     task?: RecordVersion<TaskBody>,
   ): Promise<ServerResult> {
-    const key = await this.secrets.reveal(server.credentialName);
-    if (bot && task) {
-      await this.record.event(
-        'credential.used',
-        { secretName: server.credentialName, purpose: `SSH to ${server.user}@${server.host}` },
-        { unitId: task.body.unitId, taskId: task.entityId, botId: bot.id },
-        actorRef(bot),
-      );
-    }
+    const key =
+      bot && task
+        ? await this.useKey(server, bot, task)
+        : await this.secrets.reveal(server.credentialName);
     return this.ssh.run(server, key, command, { ...opts, timeoutMs: COMMAND_TIMEOUT_MS });
   }
 

@@ -22,7 +22,8 @@ export type CreateTaskRequest = z.input<typeof CreateTaskRequest>;
 /** Connect a server bots log in to over SSH, as an environment. */
 export const ConnectServerRequest = z.object({
   name: z.string().trim().min(1).max(100),
-  tier: z.enum(['staging', 'production']),
+  /** dev: bots build and test there; staging/production: where work is deployed. */
+  tier: z.enum(['dev', 'staging', 'production']),
   host: z
     .string()
     .trim()

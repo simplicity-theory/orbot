@@ -315,12 +315,17 @@ export const ServerAccess = z.object({
   fingerprints: z.array(z.string()),
   /** Where the service on it can be seen, if anywhere. */
   url: z.string().nullable().default(null),
+  /** rsync is installed on it (dev folders are kept in sync with it; otherwise tar). */
+  rsync: z.boolean().default(false),
 });
 export type ServerAccess = z.infer<typeof ServerAccess>;
 
 export const GenericSupply = z.object({
   kind: z.enum(['environment', 'tool', 'compute']),
-  /** For environments: `tier` is `staging` or `production` (production deploy rights are irreversible). */
+  /**
+   * For environments: `tier` is `dev` (bots build and test there), `staging` or `production`
+   * (production deploy rights are irreversible).
+   */
   details: z.record(z.string(), z.string()),
   /** For environments that are servers: how bots log in. */
   server: ServerAccess.nullable().default(null),

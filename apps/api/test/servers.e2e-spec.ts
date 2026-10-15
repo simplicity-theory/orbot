@@ -1,4 +1,6 @@
 import type { RecordEvent, SupplyView, TaskDetailView } from '@orbot/shared';
+import { writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { vi } from 'vitest';
 import { git } from '../src/common/git.js';
 import { RecordService } from '../src/record/record.service.js';
@@ -96,7 +98,7 @@ describe('Servers: bots log in over SSH to the servers their unit holds', () => 
     t = await startTestApp();
     ssh = t.app.get(SshClient);
     vi.spyOn(ssh, 'scan').mockImplementation(async (host) =>
-      host === 'web1.test' || host === 'prod1.test' ? [HOST_KEY] : [],
+      ['web1.test', 'prod1.test', 'dev1.test'].includes(host) ? [HOST_KEY] : [],
     );
     vi.spyOn(ssh, 'fingerprints').mockResolvedValue(['256 SHA256:fakeprint web1.test (ED25519)']);
     vi.spyOn(ssh, 'run').mockImplementation(async (target, key, command, opts) => {
@@ -105,7 +107,12 @@ describe('Servers: bots log in over SSH to the servers their unit holds', () => 
       runs.push({ target, key, command, stdinBytes });
       if (target.user === 'nobody')
         return { exitCode: 255, output: 'Permission denied (publickey).' };
-      if (command === 'echo orbot-ok') return { exitCode: 0, output: 'orbot-ok\n' };
+      if (command.startsWith('echo orbot-ok')) {
+        return {
+          exitCode: 0,
+          output: `orbot-ok\n${target.host === 'dev1.test' ? 'orbot-rsync\n' : ''}`,
+        };
+      }
       if (command.startsWith('cat ~/.ssh')) return { exitCode: 0, output: `here it is:\n${key}\n` };
       return { exitCode: 0, output: `ran: ${command}\n` };
     });
@@ -147,7 +154,8 @@ describe('Servers: bots log in over SSH to the servers their unit holds', () => 
       },
     });
     expect(JSON.stringify(r.body)).not.toContain('fakekey');
-    expect(runs.at(-1)).toMatchObject({ key: KEY, command: 'echo orbot-ok' });
+    expect(runs.at(-1)).toMatchObject({ key: KEY });
+    expect(runs.at(-1)!.command).toMatch(/^echo orbot-ok/);
     expect(runs.at(-1)!.target.hostKeys).toEqual([HOST_KEY]);
 
     const check = await t.agent.post(`/api/supply/servers/${s.id}/check`).expect(200);
@@ -245,10 +253,74 @@ describe('Servers: bots log in over SSH to the servers their unit holds', () => 
     );
   });
 
+  it('dev server: a bot’s own folder kept in step with its working tree; it builds and tests there, and fetches files back', async () => {
+    const syncs: { local: string; remote: string; rsync: boolean }[] = [];
+    vi.spyOn(ssh, 'sync').mockImplementation(async (_t, key, local, remote, opts) => {
+      expect(key).toBe(KEY);
+      syncs.push({ local, remote, rsync: opts.rsync });
+      return { exitCode: 0, output: '' };
+    });
+    vi.spyOn(ssh, 'fetch').mockImplementation(async (_t, _k, remote, path, local) => {
+      await writeFile(join(local, path), `{"from":"${remote}"}\n`);
+      return { exitCode: 0, output: '' };
+    });
+    const dev = (await server({ name: 'dev1', tier: 'dev', host: 'dev1.test' }).expect(201))
+      .body as SupplyView;
+    expect(dev.spec).toMatchObject({ details: { tier: 'dev' }, server: { rsync: true } });
+    const fx = await makeUnitWithBot(t.app, {
+      name: 'Builders',
+      prefix: 'B',
+      // web1 (staging) too: dev_run there is refused; it is not a dev server.
+      supplyIds: [
+        repoId,
+        dev.id,
+        ((await t.agent.get('/api/supply').expect(200)).body as SupplyView[]).find(
+          (x) => x.name === 'web1',
+        )!.id,
+      ],
+    });
+    const { d, fake } = await runTask(fx.unit.entityId, fx.bot.entityId, [
+      [toolUse('a', 'write_file', { path: 'src/sum.js', content: 'export const sum = 1;\n' })],
+      [toolUse('b', 'dev_run', { server: '', command: 'npm ci && npm test' })],
+      [toolUse('c', 'dev_fetch', { server: '', path: 'package-lock.json' })],
+      [toolUse('d', 'dev_fetch', { server: 'dev1', path: '../../etc/passwd' })],
+      [toolUse('e', 'dev_run', { server: 'web1', command: 'npm test' })],
+      [toolUse('f', 'commit', { message: 'Sum, with lockfile' })],
+      [toolUse('g', 'write_handover', handover)],
+      [toolUse('h', 'done', { summary: 'Built and tested on dev1.' })],
+    ]);
+    expect(d.task.status).toBe('done');
+    const folder = `orbot-dev/app/${fx.bot.body.callsign.toLowerCase()}`;
+    expect(syncs).toEqual([{ local: d.task.workspace!.path, remote: folder, rsync: true }]);
+    expect(runs.at(-1)!.command).toBe(`cd ${folder} && npm ci && npm test`);
+    const cmds = (
+      d.events.filter((e) => e.kind === 'server.command') as RecordEvent<'server.command'>[]
+    ).map((e) => e.body.command);
+    expect(cmds).toEqual([`[${folder}] npm ci && npm test`, `[${folder}] fetch package-lock.json`]);
+    const sent = JSON.stringify(fake.requests);
+    expect(sent).toContain('Give a path inside your folder');
+    expect(sent).toContain('web1 is a staging server, not a dev server');
+    expect(await git(d.task.workspace!.path, ['show', 'HEAD:package-lock.json'])).toBe(
+      `{"from":"${folder}"}`,
+    );
+  });
+
+  it('a unit with no dev server is told so', async () => {
+    const fx = await makeUnitWithBot(t.app, { name: 'Solo', prefix: 'S', supplyIds: [repoId] });
+    const { fake } = await runTask(fx.unit.entityId, fx.bot.entityId, [
+      [toolUse('a', 'dev_run', { server: '', command: 'npm test' })],
+      [toolUse('b', 'write_handover', handover)],
+      [toolUse('c', 'done', { summary: 'ok' })],
+    ]);
+    expect(JSON.stringify(fake.requests)).toContain('Your unit holds no dev server.');
+  });
+
   it('recon gets no server commands', async () => {
     const { RECON_TOOLS } = await import('../src/runtime/claude-common.js');
     const names = RECON_TOOLS.map((x) => x.name);
     expect(names).toContain('list_servers');
+    expect(names).toContain('dev_run'); // building and testing changes no code
+    expect(names).not.toContain('dev_fetch');
     expect(names).not.toContain('server_run');
     expect(names).not.toContain('server_upload');
   });

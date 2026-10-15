@@ -21,6 +21,11 @@ test('Supply Depot: store an SSH key and connect a server (an unreachable one is
   await page.getByRole('button', { name: 'environment', exact: true }).click();
   const form = page.locator('form').filter({ has: page.locator('#env-name') });
   await form.getByLabel('Name').fill('web1');
+  // A dev environment is always a server: its fields show without the checkbox.
+  await form.getByLabel('Tier').selectOption('dev');
+  await expect(form.getByRole('checkbox', { name: /server bots log in to/ })).toHaveCount(0);
+  await expect(form.getByText(/their own folder on it/)).toBeVisible();
+  await form.getByLabel('Tier').selectOption('staging');
   await form.getByRole('checkbox', { name: /server bots log in to/ }).check();
   await expect(form.getByRole('button', { name: 'Connect server' })).toBeDisabled();
   await form.getByLabel('Host').fill('127.0.0.1');

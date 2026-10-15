@@ -161,6 +161,18 @@ export const TOOLS: BotTool[] = [
     input_schema: obj({ server: str, path: str }),
   },
   {
+    name: 'dev_run',
+    description:
+      'Build, test or run anything on your unit’s dev server: your folder there is first brought up to date with your working tree (uncommitted edits included; .git and gitignored paths such as node_modules are left as they are), then the shell command runs in that folder. Install what you need (non-interactive; `sudo -n` if allowed). Leave server empty for the unit’s dev server.',
+    input_schema: obj({ server: str, command: str }),
+  },
+  {
+    name: 'dev_fetch',
+    description:
+      'Copy a file or directory from your folder on the dev server back into your workspace (e.g. an updated lockfile or generated code), path relative to the folder. Leave server empty for the unit’s dev server.',
+    input_schema: obj({ server: str, path: str }),
+  },
+  {
     name: 'raise_dispute',
     description:
       'You disagree with another unit (name it) about this work, e.g. its rules conflict with your brief. HQ rules under standing orders; you then follow the ruling.',
@@ -176,6 +188,7 @@ const WRITE_TOOLS = new Set([
   'send_back',
   'server_run',
   'server_upload',
+  'dev_fetch',
 ]);
 export const RECON_TOOLS = TOOLS.filter((t) => !WRITE_TOOLS.has(t.name));
 
@@ -254,6 +267,28 @@ export abstract class ClaudeFamilyRuntime implements BotRuntime {
                 )
                 .join('\n')
             : 'Your unit holds no servers.',
+        };
+      }
+      case 'dev_run':
+      case 'dev_fetch': {
+        const server = s('server').trim() || null;
+        const r =
+          name === 'dev_run'
+            ? await ctx.devRun(server, s('command'))
+            : await ctx.devFetch(server, s('path'));
+        return {
+          events:
+            name === 'dev_fetch' && r.exitCode === 0
+              ? [
+                  {
+                    type: 'artifact',
+                    kind: 'file',
+                    ref: s('path'),
+                    summary: `Copied ${s('path')} back from the dev server`,
+                  },
+                ]
+              : [],
+          output: `exit ${r.exitCode ?? 'none (stopped)'}\n${r.output}`,
         };
       }
       case 'server_run':
@@ -396,6 +431,7 @@ export abstract class ClaudeFamilyRuntime implements BotRuntime {
       'You arrived today: everything you know about this work comes from the brief below (the unit’s documents). Act on it, and leave the unit better documented than you found it.',
       'Work only through your tools; you cannot reach anything outside the workspace. Record decisions and surprises in the War Diary as you go, send a sitrep at milestones, commit your changes, and always write a handover before you finish, block, fail, send back or stand down.',
       'If a check you are running fails because of the previous unit’s work, use send_back with a reason they can act on. If you need something only someone outside the unit can give (access, a decision), use blocked. If another unit’s rules conflict with your brief, use raise_dispute; once ruled on, follow the ruling.',
+      'If your unit holds a dev server (list_servers shows tier dev), build, test and iterate there with dev_run: edit code in your workspace with write_file, then dev_run syncs it and runs the command in your own folder on the server. Use dev_fetch for files the server generates that belong in the repository. Commit as usual: the workspace is the work of record, not the dev server.',
       'If your unit holds servers (list_servers), you may log in to them with server_run and set them up as the task needs; copy committed work there with server_upload. Leave each server documented: what you installed, where, how to restart it, in the War Diary and your handover, so a successor can carry on.',
       brief.task.kind === 'recon'
         ? 'This is a recon task: read-only. Survey the code to answer the question, change nothing, and file_report your findings (what you looked at, what you found, risks, a suggested approach) before the handover and done.'
