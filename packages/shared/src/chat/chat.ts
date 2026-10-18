@@ -68,6 +68,14 @@ export const ChatAction = z.discriminatedUnion('kind', [
   }),
   /** Approve (or reject) a production deploy waiting on the Commander. */
   z.object({ kind: z.literal('approve-deploy'), unitId: Id, taskId: Id, approve: z.boolean() }),
+  /** Decide what a bot asked permission for under its unit's rules of engagement. */
+  z.object({
+    kind: z.literal('decide-permission'),
+    unitId: Id,
+    taskId: Id,
+    approve: z.boolean(),
+    note: z.string().nullable().default(null),
+  }),
   /** Stand down one bot, one unit, or everything (`scope: 'all'`). Work pauses with a handover. */
   z.object({
     kind: z.literal('stand-down'),

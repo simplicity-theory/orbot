@@ -109,9 +109,7 @@ export class ClaudeRuntime extends ClaudeFamilyRuntime {
             });
             continue;
           }
-          yield call.name === 'raise_dispute'
-            ? { type: 'dispute', against: String(input['against']), claim: String(input['claim']) }
-            : this.terminal(call.name, String(input['reason'] ?? input['summary'] ?? ''));
+          yield this.finish(call.name, input);
           return;
         }
         try {

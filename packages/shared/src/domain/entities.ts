@@ -241,6 +241,26 @@ export const TaskApproval = z.object({
 });
 export type TaskApproval = z.infer<typeof TaskApproval>;
 
+/**
+ * A bot asked permission for something its unit's rules of engagement say it must escalate.
+ * The task waits (awaiting approval) until the Commander, or the unit's Captain, decides;
+ * then it resumes with the decision in its brief.
+ */
+export const TaskPermission = z.object({
+  /** What the bot wants to do. */
+  action: z.string().min(1),
+  /** The "must escalate" rule it falls under, as the bot quoted it. */
+  rule: z.string(),
+  /** Why the bot needs to do it. */
+  reason: z.string(),
+  status: z.enum(['pending', 'approved', 'refused']),
+  requestedAt: z.iso.datetime({ offset: true }),
+  by: z.string().nullable(),
+  at: z.iso.datetime({ offset: true }).nullable(),
+  note: z.string().nullable(),
+});
+export type TaskPermission = z.infer<typeof TaskPermission>;
+
 export const TaskBody = z.object({
   /** Human-facing number, e.g. Task #142. */
   number: z.number().int().positive(),
@@ -267,6 +287,8 @@ export const TaskBody = z.object({
   baseRef: z.string().nullable().default(null),
   /** Production deploys wait for the Commander's approval (per the unit's approval gate). */
   approval: TaskApproval.nullable().default(null),
+  /** The bot's latest request for permission under the rules of engagement, if any. */
+  permission: TaskPermission.nullable().default(null),
   /** A pull request opened for this task's branch, if any. */
   pullRequest: PullRequestRef.nullable().default(null),
 });

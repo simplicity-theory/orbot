@@ -208,6 +208,8 @@ function matchInRecord(
       );
     case 'dispute':
       return ofKind('dispute.raised').some((e) => e.body.claim === ev.claim);
+    case 'permission':
+      return ofKind('permission.requested').some((e) => e.body.action === ev.action);
     case 'report':
       return ofKind('report.filed').some((e) => e.body.title === ev.title);
   }

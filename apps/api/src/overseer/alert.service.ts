@@ -100,6 +100,20 @@ export class AlertService implements OnApplicationBootstrap, OnModuleDestroy {
         urgent: true,
       });
     }
+    const permission = b['permission'] as { status?: string; action?: string } | null | undefined;
+    if (
+      v.entityType === 'task' &&
+      b['status'] === 'awaiting-approval' &&
+      permission?.status === 'pending'
+    ) {
+      return this.once(`permission:${v.entityId}:${v.version}`, {
+        kind: 'approval',
+        title: `A bot asks permission: task #${String(b['number'])}`,
+        text: String(permission.action),
+        link: `/units/${String(b['unitId'])}/tasks/${v.entityId}`,
+        urgent: true,
+      });
+    }
     if (v.entityType === 'dispute' && b['status'] === 'referred') {
       return this.once(`dispute:${v.entityId}`, {
         kind: 'dispute',

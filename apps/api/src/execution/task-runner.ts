@@ -130,6 +130,7 @@ export class TaskRunner {
     );
     return {
       standingOrders: unit.body.standingOrders.map((o) => o.text),
+      rulesOfEngagement: unit.body.rulesOfEngagement,
       supply: supply
         .filter((s): s is NonNullable<typeof s> => !!s && s.body.connected)
         .map((s) => ({ name: s.body.name, kind: s.body.spec.kind })),
@@ -455,6 +456,9 @@ export class TaskRunner {
               run.runId,
               spent,
             );
+          case 'permission':
+            // Its rules of engagement say ask first: the task waits for the decision.
+            return this.awaitPermission(ev, task.body, refs, botActor, run.runId, spent);
           case 'send-back':
             // The check did its job: pause this task until the previous unit has fixed it.
             return this.finish(
@@ -695,6 +699,67 @@ export class TaskRunner {
       await w.event('run.finished', { runId, outcome }, refs, actor);
     });
     return outcome;
+  }
+
+  /**
+   * The bot asked permission under its rules of engagement. The run ends; the task waits
+   * (awaiting approval) with the request on it, and the bot keeps the task for when it resumes.
+   */
+  private async awaitPermission(
+    ev: Extract<BotEvent, { type: 'permission' }>,
+    task: TaskBody,
+    refs: RecordEventRefs,
+    actor: string,
+    runId: string,
+    spent: number,
+  ): Promise<RunOutcome> {
+    const reason = `Asks permission: ${ev.action}`;
+    await this.record.transaction(async (w) => {
+      const e = await w.event(
+        'permission.requested',
+        { action: ev.action, rule: ev.rule, reason: ev.reason },
+        refs,
+        actor,
+      );
+      await w.revise(
+        'task',
+        refs.taskId!,
+        (b) => ({
+          ...b,
+          permission: {
+            action: ev.action,
+            rule: ev.rule,
+            reason: ev.reason,
+            status: 'pending',
+            requestedAt: e.createdAt,
+            by: null,
+            at: null,
+            note: null,
+          },
+        }),
+        { actor, reason },
+      );
+      await this.setStatus(
+        w,
+        refs.taskId!,
+        'awaiting-approval',
+        reason,
+        refs,
+        actor,
+        reason,
+        spent,
+      );
+      await this.setBot(
+        w,
+        refs.botId!,
+        'blocked',
+        refs.taskId!,
+        `Task #${task.number}: awaiting approval`,
+        actor,
+      );
+      await w.event('run.finished', { runId, outcome: 'blocked' }, refs, actor);
+    });
+    return 'blocked';
   }
 
   private async setStatus(

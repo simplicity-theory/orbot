@@ -553,6 +553,11 @@ export class ChatService {
         return `Give ${u} the mission “${a.goal}”`;
       case 'rule-change':
         return `Change ${u}'s standing orders: ${a.addOrders.map((o) => `add “${o}”`).join('; ')}`;
+      case 'decide-permission': {
+        const t = await this.record.requireActive('task', a.taskId);
+        const what = t.body.permission?.action ?? 'its request';
+        return `${a.approve ? 'Give' : 'Refuse'} task #${t.body.number} (${u}) permission: ${what}`;
+      }
       case 'frago':
         return `${a.change === 'stand-down' ? 'Stand down' : 'Amend'} ${a.taskIds.length} task(s) in ${u}`;
       default:

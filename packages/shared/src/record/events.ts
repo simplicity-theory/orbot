@@ -66,6 +66,14 @@ export const RecordEventBodies = {
     action: z.string(),
     runId: z.string().nullable(),
   }),
+  /** A bot asked permission for something its rules of engagement say it must escalate. */
+  'permission.requested': z.object({ action: z.string(), rule: z.string(), reason: z.string() }),
+  /** The Commander (or the unit's Captain) decided a permission request. */
+  'permission.decided': z.object({
+    action: z.string(),
+    approve: z.boolean(),
+    note: z.string().nullable(),
+  }),
   /** A bot raised a dispute with another unit about its task (the task waits for a ruling). */
   'dispute.raised': z.object({ against: z.string(), claim: z.string() }),
   /** HQ found two active tasks changing the same files in one repository. */

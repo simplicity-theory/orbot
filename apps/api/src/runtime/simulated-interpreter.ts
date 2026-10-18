@@ -39,6 +39,12 @@ const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const FRAGO_DROP =
   /\b(drop|stand down|pause|hold off( on)?|put .+ on hold|park|shelve|deprioriti[sz]e)\b|\bfor now\b/i;
 const FRAGO_AMEND = /\b(instead|also make sure|make sure|change .+ to)\b/i;
+/** "Give E-2 permission", "Refuse the request: …", "Permission granted". */
+const PERMISSION_DECISION =
+  /\b(give|grant|allow|refuse|deny|decline|approve|reject)\b.*\b(permission|request)\b|\bpermission\b.*\b(granted|given|refused|denied)\b/i;
+const PERMISSION_REFUSED = /\b(refuse|refused|deny|denied|decline|reject|no)\b/i;
+/** Status reason on a task waiting for permission (set by the task runner). */
+const ASKS_PERMISSION = 'Asks permission:';
 const DEPLOY_DECISION = /\b(approve|reject|refuse|hold)\b.*\b(deploy|deployment|release)\b/i;
 const IMPERATIVE =
   /^(ship|launch|roll out|add|build|fix|implement|create|write|make|ship|refactor|update|remove|migrate|investigate|review|test|document|set up|harden|improve|support|rename|upgrade|split|clean up|automate|audit|scan)\b/i;
@@ -118,12 +124,49 @@ export class SimulatedInterpreter {
         answers.push(this.answer(sentence, unit, input));
         continue;
       }
+      // Permission (rules of engagement) can be given from any channel, like deploy approvals.
+      if (
+        PERMISSION_DECISION.test(sentence) &&
+        (/\bpermission\b/i.test(sentence) || !DEPLOY_DECISION.test(sentence))
+      ) {
+        const approve = !PERMISSION_REFUSED.test(sentence);
+        const note = /:\s*(.+)$/.exec(sentence)?.[1]?.trim() ?? null;
+        const waiting = (unit ? [unit] : input.units).flatMap((u) =>
+          u.tasks
+            .filter(
+              (t) =>
+                t.status === 'awaiting-approval' && !!t.statusReason?.startsWith(ASKS_PERMISSION),
+            )
+            .map((t) => ({ u, t })),
+        );
+        if (!waiting.length) {
+          out.unclear.push(`${raw} — no bot is waiting for permission.`);
+        } else if (!approve && !note) {
+          out.unclear.push(`${raw} — say why you refuse (“Refuse the request: …”).`);
+        } else {
+          kinds.add('order');
+          for (const { u, t } of waiting)
+            out.actions.push({
+              kind: 'decide-permission',
+              unitId: u.id,
+              taskId: t.id,
+              approve,
+              note,
+            });
+        }
+        continue;
+      }
       // Deploy approvals can be given from any channel.
       if (DEPLOY_DECISION.test(sentence)) {
         const approve = /\bapprove\b/i.test(sentence);
         const waiting = (unit ? [unit] : input.units).flatMap((u) =>
           u.tasks
-            .filter((t) => t.kind === 'deploy' && t.status === 'awaiting-approval')
+            .filter(
+              (t) =>
+                t.kind === 'deploy' &&
+                t.status === 'awaiting-approval' &&
+                !t.statusReason?.startsWith(ASKS_PERMISSION),
+            )
             .map((t) => ({ u, t })),
         );
         if (!waiting.length) {

@@ -36,7 +36,7 @@ Tests use the `orbot_test` / `orbot_secrets_test` databases and reset them; the 
   - `record/` — `RecordService`: the append-only permanent record (versions, supersessions, events), history, as-of, diff, search.
   - `secrets/` — separate database + AES-256-GCM. The only code that can read a secret value.
   - `redaction/` — `RedactionService`, response interceptor, redacting pino logger. `common/error.filter.ts` redacts errors.
-  - `execution/task-runner.ts` — drives a bot through a task: brief → workspace → runtime events → policy check → record.
+  - `execution/task-runner.ts` — drives a bot through a task: brief → workspace → runtime events → policy check → record. A `permission` event (bot tool `request_permission`, for what the unit's rules of engagement say must be escalated) parks the task in `awaiting-approval`; `OverseerService.decidePermission` resumes it with the decision in its brief (D98).
   - `runtime/` — `RuntimeRegistry`, `SimulatedRuntime` + `scenarios/*.json`, `WorkspaceManager` (git worktree per task).
   - `overseer/` — `OverseerService` (missions → backbriefs → tasks, dispatch, unit sitreps, reassign, replace bots), `BriefingService` (handover + Field Manual + War Diary → `TaskBrief`, `task.briefed` event), `CurationService`, `ColdStartService`.
   - `overseer/hq.service.ts` — `HqService` (actor `system:hq`): operation → O Group plan → chained missions on an integration branch → backbriefs → execution → handoffs/send-backs → deploy approval → After Action review → closed; renders the operation's shared record document.

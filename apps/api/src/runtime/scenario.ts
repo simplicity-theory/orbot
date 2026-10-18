@@ -20,6 +20,18 @@ export const ScenarioStep = z.discriminatedUnion('do', [
    * Picked up again with a ruling in the brief, the bot follows it and carries on.
    */
   z.object({ do: z.literal('dispute'), against: Text, claim: Text }),
+  /**
+   * Ask permission (rules of engagement) and stop until it is decided. Picked up again with
+   * the decision in the brief: approved, the bot goes ahead; refused, it skips the next
+   * `skipIfRefused` steps (the refused work) and carries on.
+   */
+  z.object({
+    do: z.literal('ask-permission'),
+    action: Text,
+    rule: Text,
+    reason: Text,
+    skipIfRefused: z.number().int().nonnegative().default(0),
+  }),
   z.object({ do: z.literal('diary'), category: DiaryCategory, text: Text }),
   z.object({ do: z.literal('sitrep'), text: Text, status: TaskStatus.optional() }),
   z.object({ do: z.literal('write-file'), path: z.string(), content: Text }),

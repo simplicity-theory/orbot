@@ -345,6 +345,25 @@ export class ActionsService {
           affects: [],
         };
       }
+      case 'decide-permission': {
+        const before = await this.record.requireActive('task', action.taskId);
+        const t = await this.overseer.decidePermission(
+          action.taskId,
+          action.approve,
+          action.note ?? 'Given in chat',
+          ctx.actor,
+        );
+        const what = before.body.permission?.action ?? 'its request';
+        return {
+          summary: action.approve
+            ? `Permission given to task #${t.body.number} (${u}): ${what}.`
+            : `Permission refused to task #${t.body.number} (${u}): ${what}.`,
+          links: [{ label: `Task #${t.body.number}`, link: taskLink(t.body, t.entityId) }],
+          // The bot acts on it straight away: a decision cannot be taken back.
+          inverse: null,
+          affects: [],
+        };
+      }
       case 'take-issue': {
         const m = await this.connections.takeIssue(
           action.connectionId,

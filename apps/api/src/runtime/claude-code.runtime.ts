@@ -183,14 +183,7 @@ export class ClaudeCodeRuntime extends ClaudeFamilyRuntime {
         if (finished) return text('The task is already finished.', true);
         if (TERMINAL.has(t.name)) {
           if (!wroteHandover) return text('Write the handover first (write_handover).', true);
-          finished =
-            t.name === 'raise_dispute'
-              ? {
-                  type: 'dispute',
-                  against: String(input['against']),
-                  claim: String(input['claim']),
-                }
-              : this.terminal(t.name, String(input['reason'] ?? input['summary'] ?? ''));
+          finished = this.finish(t.name, input);
           return text('Recorded. Stop here.');
         }
         try {

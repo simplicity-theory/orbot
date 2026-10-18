@@ -381,6 +381,13 @@ export class Api {
     );
   }
 
+  /** Approve or refuse what a bot asked permission for (a refusal needs a note). */
+  decidePermission(taskId: string, approve: boolean, note: string | null = null) {
+    return firstValueFrom(
+      this.http.post<TaskView>(`${API}/tasks/${taskId}/permission-decision`, { approve, note }),
+    );
+  }
+
   ruleDispute(id: string, prevails: 'raiser' | 'other', reasoning: string) {
     return firstValueFrom(
       this.http.post<unknown>(`${API}/disputes/${id}/rule`, { prevails, reasoning }),

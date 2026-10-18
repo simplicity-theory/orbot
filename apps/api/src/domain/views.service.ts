@@ -629,14 +629,19 @@ function attentionFor(
     });
   }
   for (const t of tasks.filter((t) => t.status === 'awaiting-approval')) {
-    const deploy = t.kind === 'deploy';
+    const permission = t.permission?.status === 'pending' ? t.permission : null;
+    const deploy = !permission && t.kind === 'deploy';
+    const bot = bots.find((b) => b.id === t.botId)?.callsign ?? 'A bot';
     items.push({
       kind: 'awaiting-approval',
-      label: deploy
-        ? `Production deploy awaiting approval: #${t.number} ${t.title}`
-        : `Task #${t.number} awaiting approval`,
+      label: permission
+        ? `${bot} asks permission on #${t.number}: ${permission.action}`
+        : deploy
+          ? `Production deploy awaiting approval: #${t.number} ${t.title}`
+          : `Task #${t.number} awaiting approval`,
       link: taskLink(unitId, t.botId, t.id),
       entityId: t.id,
+      ...(permission ? { action: 'decide-permission' as const, permission } : {}),
       ...(deploy ? { action: 'approve-deploy' as const } : {}),
     });
   }

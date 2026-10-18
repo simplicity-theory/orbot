@@ -1,6 +1,7 @@
 import type { ChatSendResult, TaskDetailView } from '@orbot/shared';
 import { git } from '../src/common/git.js';
 import { ClaudeRuntime, type ClaudeClient } from '../src/runtime/claude.runtime.js';
+import { RecordService } from '../src/record/record.service.js';
 import { RuntimeRegistry } from '../src/runtime/runtime.registry.js';
 import { makeRepo, makeUnitWithBot, settled } from './fixtures.js';
 import { startTestApp, type TestApp } from './helpers.js';
@@ -212,6 +213,67 @@ describe('ClaudeRuntime (against a scripted API)', () => {
     expect(d.task.statusReason).toBe('Disputed with Guard: Guard caps logins at 5.');
     expect(d.events.map((e) => e.kind)).toContain('dispute.raised');
     expect(JSON.stringify(fake.requests[0])).toContain('raise_dispute');
+  });
+
+  it('briefs the rules of engagement; request_permission (after a handover) waits for your decision', async () => {
+    await t.app.get(RecordService).revise(
+      'unit',
+      unitId,
+      (u) => ({
+        ...u,
+        rulesOfEngagement: { mayDoAlone: ['Run tests'], mustEscalate: ['Changing a public API'] },
+      }),
+      { actor: 'system:test', reason: 'Rules of engagement for the test' },
+    );
+    const fake = new FakeClaude([
+      [
+        toolUse('p1', 'write_handover', {
+          state: 'Stopped before renaming the endpoint.',
+          nextSteps: ['Rename it if permitted'],
+          triedAndFailed: [],
+          openProblems: [],
+          flagsForSuccessor: [],
+        }),
+      ],
+      [
+        toolUse('p2', 'request_permission', {
+          action: 'Rename /v1/users to /v1/accounts',
+          rule: 'Changing a public API',
+          reason: 'The brief asks for the new name.',
+        }),
+      ],
+    ]);
+    t.app
+      .get(RuntimeRegistry)
+      .register(new ClaudeRuntime(fake as unknown as ClaudeClient, { model: 'claude-opus-5-5' }));
+    const task = (
+      await t.agent
+        .post('/api/tasks')
+        .send({ unitId, botId, title: 'Rename the users endpoint', repoSupplyId: repoId })
+        .expect(201)
+    ).body;
+    await t.agent.post(`/api/tasks/${task.id}/run`).expect(202);
+    await settled(t.app);
+    const d: TaskDetailView = (await t.agent.get(`/api/tasks/${task.id}`).expect(200)).body;
+    expect(d.task.status).toBe('awaiting-approval');
+    expect(d.task.permission).toMatchObject({
+      action: 'Rename /v1/users to /v1/accounts',
+      rule: 'Changing a public API',
+      status: 'pending',
+    });
+    const first = fake.requests[0] as { tools: { name: string }[]; system: string };
+    expect(first.tools.map((x) => x.name)).toContain('request_permission');
+    expect(first.system).toContain('Must ask permission first:\n- Changing a public API');
+    // Leave the unit as other tests expect it.
+    await t.app
+      .get(RecordService)
+      .revise(
+        'unit',
+        unitId,
+        (u) => ({ ...u, rulesOfEngagement: { mayDoAlone: [], mustEscalate: [] } }),
+        { actor: 'system:test', reason: 'Reset' },
+      );
+    await settled(t.app);
   });
 
   it('recon: no tool that changes the workspace; the report is filed with the unit', async () => {

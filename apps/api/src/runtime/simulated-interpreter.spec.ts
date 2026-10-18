@@ -280,4 +280,55 @@ describe('SimulatedInterpreter', () => {
       { what: 'an issue tracker', kind: 'supply' },
     ]);
   });
+
+  describe('permission requests (rules of engagement)', () => {
+    const asking = unit({
+      tasks: [
+        {
+          id: '00000000-0000-4000-8000-0000000000b2',
+          number: 9,
+          title: 'Format dates',
+          status: 'awaiting-approval',
+          statusReason: 'Asks permission: Add a new dependency',
+          missionId: null,
+          botCallsign: 'G-1',
+          kind: 'deploy',
+        },
+      ],
+    });
+
+    it('gives permission to the bot that asked', () => {
+      const r = i.interpret(input('Give G-1 permission.', { units: [asking] }));
+      expect(r.actions).toEqual([
+        {
+          kind: 'decide-permission',
+          unitId: asking.id,
+          taskId: '00000000-0000-4000-8000-0000000000b2',
+          approve: true,
+          note: null,
+        },
+      ]);
+    });
+
+    it('refuses with the reason given, and asks for one if there is none', () => {
+      const r = i.interpret(
+        input('Refuse the request: use the standard library', { units: [asking] }),
+      );
+      expect(r.actions[0]).toMatchObject({ approve: false, note: 'use the standard library' });
+      const bare = i.interpret(input('Refuse the request.', { units: [asking] }));
+      expect(bare.actions).toEqual([]);
+      expect(bare.unclear[0]).toMatch(/say why you refuse/);
+    });
+
+    it('a deploy approval does not decide a permission request', () => {
+      const r = i.interpret(input('Approve the deploy.', { units: [asking] }));
+      expect(r.actions).toEqual([]);
+    });
+
+    it('says so when no bot is waiting', () => {
+      expect(i.interpret(input('Give permission.')).unclear[0]).toMatch(
+        /no bot is waiting for permission/,
+      );
+    });
+  });
 });

@@ -41,6 +41,30 @@
       </p>
     }
 
+    @if (t.permission; as p) {
+      @if (p.status === 'pending' && t.status === 'awaiting-approval') {
+        <section class="panel" aria-labelledby="permission-h">
+          <h2 id="permission-h" class="panel__title">
+            {{ v.bot?.callsign ?? 'The bot' }} asks permission
+            <span class="meta">(<orb-term key="roe">rules of engagement</orb-term>)</span>
+          </h2>
+          <orb-permission-decision
+            [taskId]="t.id"
+            [permission]="p"
+            [unitId]="v.unit.id"
+            [label]="'permission on task #' + t.number"
+            (decided)="view.reload()"
+          />
+        </section>
+      } @else if (p.status !== 'pending') {
+        <p class="panel reason" role="status">
+          <orb-icon name="stamp" />
+          Permission {{ p.status === 'approved' ? 'given' : 'refused' }}: {{ p.action
+          }}{{ p.note ? ' — ' + p.note : '' }}
+        </p>
+      }
+    }
+
     <section class="panel">
       <dl class="dl">
         <dt>Bot</dt>

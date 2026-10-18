@@ -137,6 +137,9 @@ export class DutiesService implements OnModuleInit {
         const t = { unitId: a.unitId, taskId: c.id };
         if (a.approval?.status === 'approved' && b.approval?.status !== 'approved')
           return { duty: 'approve-own-work', ...t };
+        // Deciding a permission request its own unit made (either way) is the chain's job.
+        if (b.permission?.status === 'pending' && a.permission?.status !== 'pending')
+          return { duty: 'approve-own-work', ...t };
         if (
           a.botId === botId &&
           a.credentialNames.some((n) => !(b.credentialNames ?? []).includes(n))

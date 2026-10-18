@@ -1,0 +1,47 @@
+{
+  "id": "needs-permission",
+  "description": "Does the routine part of the work, then reaches something its unit's rules of engagement say it must escalate (adding a new production dependency) and asks permission. Picked up again: approved, it adds the dependency and finishes; refused, it leaves the dependency out, says so, and finishes without it.",
+  "seed": 6101,
+  "script": [
+    {
+      "do": "step",
+      "action": "read-brief",
+      "detail": "Read the brief for “{task}”, including the rules of engagement.",
+      "outcome": "understood"
+    },
+    {
+      "do": "write-file",
+      "path": "orbot/task-{number}.md",
+      "content": "# Task #{number}: {task}\n\nRoutine part done by {callsign}.\n"
+    },
+    { "do": "commit", "message": "Task #{number}: {task} (routine part)" },
+    { "do": "cost", "units": 1 },
+    {
+      "do": "handover",
+      "state": "Routine part of task #{number} committed on {branch}. Waiting for permission to add a production dependency.",
+      "nextSteps": ["If approved, add the dependency; if refused, finish without it."],
+      "flagsForSuccessor": []
+    },
+    {
+      "do": "ask-permission",
+      "action": "Add a new production dependency",
+      "rule": "Adding a new dependency",
+      "reason": "The task needs a date library; writing one by hand would take longer and be riskier.",
+      "skipIfRefused": 2
+    },
+    {
+      "do": "write-file",
+      "path": "orbot/task-{number}-dependency.md",
+      "content": "Dependency added for task #{number}, with permission.\n"
+    },
+    { "do": "commit", "message": "Task #{number}: add the dependency (with permission)" },
+    { "do": "cost", "units": 1 },
+    {
+      "do": "handover",
+      "state": "Task #{number} done on {branch}, following the decision on the dependency.",
+      "nextSteps": [],
+      "flagsForSuccessor": []
+    },
+    { "do": "done", "summary": "Done, following the decision on the dependency." }
+  ]
+}

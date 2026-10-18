@@ -598,6 +598,75 @@ export class OverseerService implements OnApplicationBootstrap, OnModuleDestroy 
     return next;
   }
 
+  /**
+   * The Commander (or the unit's Captain) decides what a bot asked permission for under its
+   * rules of engagement. Either way the task resumes, with the decision in its brief: approved,
+   * the bot goes ahead; refused, it finds another way or reports why it cannot.
+   */
+  async decidePermission(taskId: string, approve: boolean, note: string | null, actor: string) {
+    const task = await this.record.requireActive('task', taskId);
+    const p = task.body.permission;
+    if (task.body.status !== 'awaiting-approval' || p?.status !== 'pending') {
+      throw new ConflictException({
+        message: `Task #${task.body.number} is not waiting for permission.`,
+        action: 'Reload to see its current state.',
+      });
+    }
+    const cmd = await this.overseers.of(task.body.unitId);
+    const verdict = approve ? 'approved' : 'refused';
+    const reason = `Permission ${verdict}: ${p.action}${note ? ` (${note})` : ''}`;
+    const refs = {
+      unitId: task.body.unitId,
+      taskId,
+      botId: task.body.botId,
+      missionId: task.body.missionId,
+    };
+    const next = await this.record.transaction(async (w) => {
+      const t = await w.revise(
+        'task',
+        taskId,
+        (b) => ({
+          ...b,
+          permission: {
+            ...b.permission!,
+            status: approve ? 'approved' : 'refused',
+            by: actor,
+            at: new Date().toISOString(),
+            note,
+          },
+          // Blocked until the bot picks it up again (straight away, below).
+          status: 'blocked',
+          statusReason: reason,
+        }),
+        { actor, reason },
+      );
+      await w.event('permission.decided', { action: p.action, approve, note }, refs, actor);
+      await w.event('task.status', { from: task.body.status, to: 'blocked', reason }, refs, actor);
+      await this.sitrep(
+        w,
+        task.body.unitId,
+        task.body.missionId,
+        taskId,
+        cmd.actor,
+        `Task #${task.body.number}: ${reason}. The bot carries on with the decision in its brief.`,
+      );
+      return t;
+    });
+    await this.runner.start(taskId, actor).catch(async (err: Error) => {
+      await this.record.event(
+        'sitrep',
+        {
+          level: 'unit',
+          text: `Could not resume task #${task.body.number} after the decision: ${err.message}`,
+          status: null,
+        },
+        refs,
+        cmd.actor,
+      );
+    });
+    return next;
+  }
+
   /** Move a task to another bot of the same unit. Its workspace (branch) goes with it. */
   async reassign(
     taskId: string,

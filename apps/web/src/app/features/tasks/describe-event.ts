@@ -232,6 +232,21 @@ export function describeEvent(e: RecordEvent): EventSummary {
         text: `${(b['lessons'] as unknown[]).length} lesson(s) kept as standing orders`,
         tone: 'info',
       };
+    case 'permission.requested':
+      return {
+        icon: 'stamp',
+        label: 'Asks permission',
+        term: 'roe',
+        text: `${s('action')}${b['rule'] ? ` (must escalate: ${s('rule')})` : ''}: ${s('reason')}`,
+        tone: 'warning',
+      };
+    case 'permission.decided':
+      return {
+        icon: 'stamp',
+        label: b['approve'] ? 'Permission given' : 'Permission refused',
+        text: `${s('action')}${b['note'] ? `: ${s('note')}` : ''}`,
+        tone: b['approve'] ? 'success' : 'warning',
+      };
     case 'dispute.raised':
       return {
         icon: 'users',

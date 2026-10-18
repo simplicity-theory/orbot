@@ -35,7 +35,8 @@ interface RunState {
 }
 
 /** Steps after which the run is over. */
-type Stop = boolean;
+/** True: the run ends here. A number: skip that many of the following steps. */
+type Stop = boolean | number;
 
 /**
  * Scripted, deterministic fake bots. No AI calls. Proves the command system
@@ -120,10 +121,11 @@ export class SimulatedRuntime implements BotRuntime {
       };
     }
 
-    for (const step of script) {
+    for (let i = 0; i < script.length; i++) {
       if (ctx.signal.aborted) return;
-      const stop = yield* this.perform(step, brief, ctx, text, state);
-      if (stop) return;
+      const stop = yield* this.perform(script[i]!, brief, ctx, text, state);
+      if (stop === true) return;
+      if (typeof stop === 'number') i += stop;
     }
   }
 
@@ -156,6 +158,22 @@ export class SimulatedRuntime implements BotRuntime {
         }
         yield { type: 'dispute', against: text(step.against), claim: text(step.claim) };
         return true;
+      case 'ask-permission': {
+        const action = text(step.action);
+        const decision = brief.permissions.findLast((p) => p.action === action);
+        if (decision) {
+          // Decided: go ahead, or leave the refused work out and carry on.
+          yield {
+            type: 'step',
+            action: 'read-decision',
+            detail: `${decision.approved ? 'Approved' : 'Refused'}: ${action}${decision.note ? ` (${decision.note})` : ''}`,
+            outcome: decision.approved ? 'going ahead' : 'will not do it',
+          };
+          return decision.approved ? false : step.skipIfRefused;
+        }
+        yield { type: 'permission', action, rule: text(step.rule), reason: text(step.reason) };
+        return true;
+      }
       case 'hold':
         if (brief.lastHandover) return false;
         await sleep(step.ms, ctx.signal);

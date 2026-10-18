@@ -1,4 +1,4 @@
-import type { ProposedTask, TaskBody, Workspace } from '../domain/entities.js';
+import type { ProposedTask, RulesOfEngagement, TaskBody, Workspace } from '../domain/entities.js';
 import type { Interpretation } from '../chat/chat.js';
 import type { DiaryCategory } from '../record/events.js';
 import type { TaskStatus } from '../status/status.js';
@@ -62,6 +62,13 @@ export interface BriefRecon {
   markdown: string;
 }
 
+/** A decision on something the bot asked permission for. */
+export interface BriefPermission {
+  action: string;
+  approved: boolean;
+  note: string | null;
+}
+
 export interface BriefDiaryEntry {
   eventId: string;
   category: string;
@@ -75,8 +82,16 @@ export interface TaskBrief {
   taskId: string;
   task: TaskBody;
   bot: { id: string; callsign: string; role: string };
-  unit: { id: string; name: string; standingOrders: string[] };
+  unit: {
+    id: string;
+    name: string;
+    standingOrders: string[];
+    /** What a bot may do without asking, and what it must ask permission for. */
+    rulesOfEngagement: RulesOfEngagement;
+  };
   workspace: Workspace;
+  /** Decisions on this task's permission requests, oldest first: the bot follows them. */
+  permissions: BriefPermission[];
   /** The last handover for this work (this task, or the one it continues). */
   lastHandover: BriefHandover | null;
   /** Field Manual entries relevant to the task, plus pinned ones. */
@@ -149,6 +164,7 @@ export interface ServerResult {
 
 export interface LiveOrders {
   standingOrders: string[];
+  rulesOfEngagement: RulesOfEngagement;
   supply: { name: string; kind: string }[];
 }
 
@@ -172,6 +188,11 @@ export type BotEvent =
   | { type: 'artifact'; kind: 'commit' | 'file' | 'deployment'; ref: string; summary: string }
   /** The bot disagrees with another unit (named) about this work: HQ rules on it. */
   | { type: 'dispute'; against: string; claim: string }
+  /**
+   * The bot needs to do something its rules of engagement say it must escalate: the task
+   * waits for the Commander's decision, then resumes with it in the brief.
+   */
+  | { type: 'permission'; action: string; rule: string; reason: string }
   /** A check failed: send the work back to the unit that handed it over. */
   | { type: 'send-back'; reason: string }
   | { type: 'cost'; units: number }

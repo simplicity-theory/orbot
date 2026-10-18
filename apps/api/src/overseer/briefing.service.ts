@@ -79,8 +79,10 @@ export class BriefingService {
         id: unit.entityId,
         name: unit.body.name,
         standingOrders: unit.body.standingOrders.map((s) => s.text),
+        rulesOfEngagement: unit.body.rulesOfEngagement,
       },
       workspace,
+      permissions: await this.permissions(task.entityId),
       ...k,
       rulings: await this.rulings(task.entityId),
       recon,
@@ -126,6 +128,20 @@ export class BriefingService {
       });
     }
     return out;
+  }
+
+  /** Decisions on what this task asked permission for, oldest first. */
+  private async permissions(taskId: string): Promise<TaskBrief['permissions']> {
+    const decided = (await this.record.listEvents({
+      taskId,
+      kinds: ['permission.decided'],
+      limit: 100,
+    })) as RecordEvent<'permission.decided'>[];
+    return decided.map((e) => ({
+      action: e.body.action,
+      approved: e.body.approve,
+      note: e.body.note,
+    }));
   }
 
   /** What the unit's documents say about this work. Used for briefs and cold-start checks. */

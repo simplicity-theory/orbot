@@ -11,6 +11,7 @@ import type {
   OperationBody,
   SupplyBody,
   TaskBody,
+  TaskPermission,
   UnitBody,
 } from '../domain/entities.js';
 import type { AppManifest } from '../domain/apps.js';
@@ -73,7 +74,9 @@ export interface BudgetView {
 export interface AttentionItem {
   kind: AttentionKind;
   /** Something the Commander can do right there, e.g. approve a production deploy. */
-  action?: 'approve-deploy' | 'acknowledge';
+  action?: 'approve-deploy' | 'decide-permission' | 'acknowledge';
+  /** For permission requests: what the bot asked, under which rule, and why. */
+  permission?: TaskPermission;
   /** For escalations: the chain to acknowledge. */
   chainId?: string;
   label: string;

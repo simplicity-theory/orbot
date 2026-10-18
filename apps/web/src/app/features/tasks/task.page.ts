@@ -18,6 +18,7 @@ import { MainEffortBadge } from '../../ui/main-effort';
 import { StatusBadge } from '../../ui/status-badge';
 import { Term } from '../../ui/term';
 import { Toasts } from '../../ui/toast';
+import { PermissionDecision } from '../../ui/permission-decision';
 import { RecordTimeline } from './record-timeline';
 
 @Component({
@@ -32,6 +33,7 @@ import { RecordTimeline } from './record-timeline';
     Icon,
     RecordTimeline,
     RelativeTimePipe,
+    PermissionDecision,
   ],
   templateUrl: './task.page.html',
   styleUrl: './task.page.scss',

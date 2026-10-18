@@ -179,6 +179,18 @@ export const DeployDecisionRequest = z.object({
 });
 export type DeployDecisionRequest = z.input<typeof DeployDecisionRequest>;
 
+/** Approve or refuse what a bot asked permission for (a refusal says why). */
+export const PermissionDecisionRequest = z
+  .object({
+    approve: z.boolean(),
+    note: z.string().trim().max(1000).nullable().default(null),
+  })
+  .refine((b) => b.approve || !!b.note, {
+    message: 'Say why you refuse, so the bot can find another way.',
+    path: ['note'],
+  });
+export type PermissionDecisionRequest = z.input<typeof PermissionDecisionRequest>;
+
 export const StandDownScope = z.enum(['all', 'unit', 'bot']);
 export type StandDownScope = z.infer<typeof StandDownScope>;
 

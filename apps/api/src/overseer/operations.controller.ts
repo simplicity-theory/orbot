@@ -1,6 +1,11 @@
 import { Authority, unitOf } from '../officers/authority.js';
 import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Put } from '@nestjs/common';
-import { CreateOperationRequest, DeployDecisionRequest, SetBudgetRequest } from '@orbot/shared';
+import {
+  CreateOperationRequest,
+  DeployDecisionRequest,
+  PermissionDecisionRequest,
+  SetBudgetRequest,
+} from '@orbot/shared';
 import type { z } from 'zod';
 import { Actor } from '../auth/auth.guard.js';
 import { ZodPipe } from '../common/zod.pipe.js';
@@ -90,5 +95,18 @@ export class OperationsController {
     @Actor() actor: string,
   ) {
     return toView(await this.overseer.decideDeploy(id, body.approve, body.note, actor));
+  }
+
+  /** Approve (or refuse) what a bot asked permission for under its rules of engagement. */
+  @Authority({ level: 'unit', units: unitOf('task', 'param') })
+  @Post('tasks/:id/permission-decision')
+  @HttpCode(200)
+  async decidePermission(
+    @Param('id', Uuid) id: string,
+    @Body(new ZodPipe(PermissionDecisionRequest))
+    body: z.output<typeof PermissionDecisionRequest>,
+    @Actor() actor: string,
+  ) {
+    return toView(await this.overseer.decidePermission(id, body.approve, body.note, actor));
   }
 }

@@ -6,6 +6,7 @@ import { Backbrief } from '../../ui/backbrief';
 import { Acknowledge } from '../../ui/acknowledge';
 import { UrlPipe } from '../../ui/url.pipe';
 import { DeployApproval } from '../../ui/deploy-approval';
+import { PermissionDecision } from '../../ui/permission-decision';
 import { EmptyState } from '../../ui/empty-state';
 import { Icon } from '../../ui/icon';
 import { LoadError } from '../../ui/load-error';
@@ -25,6 +26,7 @@ import { scrollToFragment } from './scroll-to-fragment';
     LoadError,
     Skeleton,
     DeployApproval,
+    PermissionDecision,
     Acknowledge,
     UrlPipe,
   ],
@@ -64,7 +66,9 @@ import { scrollToFragment } from './scroll-to-fragment';
         }
         @if (needsYou.items().length) {
           <section aria-labelledby="other-h">
-            <h2 id="other-h" class="panel__title">Deploys, escalations, blocks and failures</h2>
+            <h2 id="other-h" class="panel__title">
+              Deploys, permission requests, escalations, blocks and failures
+            </h2>
             <ul class="list-reset panel items">
               @for (a of needsYou.items(); track a.entityId + a.kind) {
                 <li>
@@ -88,6 +92,14 @@ import { scrollToFragment } from './scroll-to-fragment';
                     <orb-deploy-approval
                       class="inline"
                       [taskId]="a.entityId"
+                      [unitId]="a.unitId"
+                      [label]="a.label"
+                    />
+                  } @else if (a.action === 'decide-permission' && a.permission) {
+                    <orb-permission-decision
+                      class="inline"
+                      [taskId]="a.entityId"
+                      [permission]="a.permission"
                       [unitId]="a.unitId"
                       [label]="a.label"
                     />

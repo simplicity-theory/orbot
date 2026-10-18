@@ -21,12 +21,19 @@ import {
   type Interpretation,
   type OperationPlan,
   type OperationPlanInput,
+  type RulesOfEngagement,
   type RunContext,
   type TaskBrief,
 } from '@orbot/shared';
 import { git } from '../common/git.js';
 
 const run = promisify(execFile);
+
+/** The unit's rules of engagement, as a bot reads them. */
+function roe(r: RulesOfEngagement): string {
+  const list = (xs: string[]) => xs.map((x) => `- ${x}`).join('\n') || '- none';
+  return `May do alone:\n${list(r.mayDoAlone)}\nMust ask permission first:\n${list(r.mustEscalate)}`;
+}
 
 /** A bot tool: a name, what it does, and a strict JSON Schema for its input. */
 export interface BotTool {
@@ -178,6 +185,12 @@ export const TOOLS: BotTool[] = [
       'You disagree with another unit (name it) about this work, e.g. its rules conflict with your brief. HQ rules under standing orders; you then follow the ruling.',
     input_schema: obj({ against: str, claim: str }),
   },
+  {
+    name: 'request_permission',
+    description:
+      'Ask permission before doing something your unit’s rules of engagement say you must escalate. Name the action, quote the rule, and say why. Write a handover first: the task waits for the decision, then you pick it up again with the decision in your brief.',
+    input_schema: obj({ action: str, rule: str, reason: str }),
+  },
 ];
 
 /** Recon is read-only: no tool that changes the workspace. */
@@ -199,6 +212,7 @@ export const TERMINAL = new Set([
   'send_back',
   'stand_down',
   'raise_dispute',
+  'request_permission',
 ]);
 
 /**
@@ -217,6 +231,16 @@ export abstract class ClaudeFamilyRuntime implements BotRuntime {
     system: string,
     prompt: string,
   ): Promise<z.infer<S>>;
+
+  /** The event a terminal tool call ends the run with. */
+  protected finish(name: string, input: Record<string, unknown>): BotEvent {
+    const s = (k: string) => String(input[k] ?? '');
+    if (name === 'raise_dispute')
+      return { type: 'dispute', against: s('against'), claim: s('claim') };
+    if (name === 'request_permission')
+      return { type: 'permission', action: s('action'), rule: s('rule'), reason: s('reason') };
+    return this.terminal(name, String(input['reason'] ?? input['summary'] ?? ''));
+  }
 
   protected terminal(name: string, text: string): BotEvent {
     switch (name) {
@@ -410,7 +434,7 @@ export abstract class ClaudeFamilyRuntime implements BotRuntime {
           events: [
             { type: 'step', action: 'check-orders', detail: 'Re-read standing orders and supply' },
           ],
-          output: `Standing orders:\n${o.standingOrders.map((x) => `- ${x}`).join('\n') || '- none'}\nSupply:\n${o.supply.map((x) => `- ${x.name} (${x.kind})`).join('\n') || '- none'}`,
+          output: `Standing orders:\n${o.standingOrders.map((x) => `- ${x}`).join('\n') || '- none'}\n${roe(o.rulesOfEngagement)}\nSupply:\n${o.supply.map((x) => `- ${x.name} (${x.kind})`).join('\n') || '- none'}`,
         };
       }
       case 'write_handover':
@@ -439,7 +463,7 @@ export abstract class ClaudeFamilyRuntime implements BotRuntime {
       `You are ${brief.bot.callsign}, a ${brief.bot.role} in the ${brief.unit.name} unit of ORBOT, working one task in your own git worktree on branch ${brief.workspace.branch}.`,
       'You arrived today: everything you know about this work comes from the brief below (the unit’s documents). Act on it, and leave the unit better documented than you found it.',
       'Work only through your tools; you cannot reach anything outside the workspace. Record decisions and surprises in the War Diary as you go, send a sitrep at milestones, commit your changes, and always write a handover before you finish, block, fail, send back or stand down.',
-      'If a check you are running fails because of the previous unit’s work, use send_back with a reason they can act on. If you need something only someone outside the unit can give (access, a decision), use blocked. If another unit’s rules conflict with your brief, use raise_dispute; once ruled on, follow the ruling.',
+      'If a check you are running fails because of the previous unit’s work, use send_back with a reason they can act on. If you need something only someone outside the unit can give (access, a decision), use blocked. If another unit’s rules conflict with your brief, use raise_dispute; once ruled on, follow the ruling. If your unit’s rules of engagement say something must be escalated, use request_permission before doing it.',
       'If your unit holds a dev server (list_servers shows tier dev), build, test and iterate there with dev_run: edit code in your workspace with write_file, then dev_run syncs it and runs the command in your own folder on the server. Use dev_fetch for files the server generates that belong in the repository. Commit as usual: the workspace is the work of record, not the dev server.',
       'If your unit holds servers (list_servers), you may log in to them with server_run and set them up as the task needs; copy committed work there with server_upload. Leave each server documented: what you installed, where, how to restart it, in the War Diary and your handover, so a successor can carry on.',
       brief.task.kind === 'recon'
@@ -447,6 +471,9 @@ export abstract class ClaudeFamilyRuntime implements BotRuntime {
         : '',
       brief.unit.standingOrders.length
         ? `Standing orders (always apply):\n${brief.unit.standingOrders.map((o) => `- ${o}`).join('\n')}`
+        : '',
+      brief.unit.rulesOfEngagement.mustEscalate.length
+        ? `Rules of engagement:\n${roe(brief.unit.rulesOfEngagement)}\nBefore you do anything under "Must ask permission first", use request_permission (after a handover) and wait for the decision. Never do it on your own judgement. A refused action stays refused: find another way, or report blocked with what you would need.`
         : '',
     ]
       .filter(Boolean)
@@ -457,6 +484,9 @@ export abstract class ClaudeFamilyRuntime implements BotRuntime {
     return [
       `# Task #${brief.task.number}: ${brief.task.title}`,
       brief.task.description,
+      brief.permissions.length
+        ? `## Decisions on what you asked permission for (follow them)\n${brief.permissions.map((p) => `- ${p.approved ? 'Approved' : 'Refused'}: ${p.action}${p.note ? ` (${p.note})` : ''}`).join('\n')}`
+        : '',
       brief.rulings.length
         ? `## Rulings on your disputes (follow them)\n${brief.rulings.map((r) => `- ${r.text}`).join('\n')}`
         : '',
