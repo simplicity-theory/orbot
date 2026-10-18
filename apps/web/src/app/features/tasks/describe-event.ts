@@ -89,6 +89,29 @@ export function describeEvent(e: RecordEvent): EventSummary {
         tone: code === 0 ? 'neutral' : 'warning',
       };
     }
+    case 'app.install': {
+      const st = s('status');
+      const verb =
+        {
+          started: 'install started',
+          installed: 'installed',
+          failed: 'failed',
+          removed: 'removed',
+        }[st] ?? st;
+      return {
+        icon: 'server',
+        label: 'App',
+        text: `${s('app')} on ${s('server')}: ${verb}${b['message'] ? ` — ${s('message')}` : ''}`,
+        tone: st === 'failed' ? 'danger' : st === 'installed' ? 'success' : 'neutral',
+      };
+    }
+    case 'server.workspace':
+      return {
+        icon: 'user',
+        label: 'Workspace',
+        text: `Bot workspace set up on ${s('server')}: bots' dev work runs as ${s('user')}`,
+        tone: 'neutral',
+      };
     case 'credential.used':
       return {
         icon: 'key',

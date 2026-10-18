@@ -3,7 +3,10 @@ import { inject, Injectable } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import type {
   AppointOfficerRequest,
+  AppProgressView,
   ConnectServerRequest,
+  InstallAppRequest,
+  ModelCheckView,
   ConnectServiceRequest,
   MeView,
   OfficerView,
@@ -76,6 +79,7 @@ export const apiUrl = {
   chat: (channel: string) => `${API}/chat/${channel}`,
   orders: () => `${API}/orders`,
   supply: () => `${API}/supply`,
+  server: (id: string) => `${API}/supply/servers/${id}`,
   settings: () => `${API}/settings`,
   standDown: () => `${API}/stand-down`,
   mainEffort: () => `${API}/main-effort`,
@@ -280,6 +284,40 @@ export class Api {
     return firstValueFrom(
       this.http.post<{ ok: boolean; output: string }>(`${API}/supply/servers/${id}/check`, {}),
     );
+  }
+
+  setupWorkspace(serverId: string) {
+    return firstValueFrom(
+      this.http.post<SupplyView>(`${API}/supply/servers/${serverId}/workspace`, {}),
+    );
+  }
+
+  installApp(serverId: string, req: InstallAppRequest) {
+    return firstValueFrom(
+      this.http.post<SupplyView>(`${API}/supply/servers/${serverId}/apps`, req),
+    );
+  }
+
+  appProgress(serverId: string, appId: string) {
+    return firstValueFrom(
+      this.http.get<AppProgressView>(`${API}/supply/servers/${serverId}/apps/${appId}/progress`),
+    );
+  }
+
+  appStatus(serverId: string, appId: string) {
+    return firstValueFrom(
+      this.http.post<SupplyView>(`${API}/supply/servers/${serverId}/apps/${appId}/status`, {}),
+    );
+  }
+
+  uninstallApp(serverId: string, appId: string) {
+    return firstValueFrom(
+      this.http.post<SupplyView>(`${API}/supply/servers/${serverId}/apps/${appId}/uninstall`, {}),
+    );
+  }
+
+  checkModel(id: string) {
+    return firstValueFrom(this.http.post<ModelCheckView>(`${API}/supply/models/${id}/check`, {}));
   }
 
   connectEnvironment(name: string, tier: 'staging' | 'production') {

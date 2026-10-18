@@ -145,13 +145,13 @@ export const TOOLS: BotTool[] = [
   {
     name: 'list_servers',
     description:
-      'List the servers your unit holds (environments you can log in to over SSH): name, tier, user@host, URL.',
+      'List the servers your unit holds (environments you can log in to over SSH): name, tier, user@host, URL, GPU, the user dev_run works as, and the apps running there.',
     input_schema: obj({}),
   },
   {
     name: 'server_run',
     description:
-      'Run a shell command on one of your unit’s servers over SSH, as its configured user (non-interactive: no prompts, no TTY; use `sudo -n` where needed). Returns the exit code and output. Production servers only inside an approved deploy task.',
+      'Run a shell command on one of your unit’s servers over SSH, as its configured user (non-interactive: no prompts, no TTY; use `sudo -n` where needed). Returns the exit code and output. Production servers, and servers that run apps, only inside an approved deploy task.',
     input_schema: obj({ server: str, command: str }),
   },
   {
@@ -262,8 +262,17 @@ export abstract class ClaudeFamilyRuntime implements BotRuntime {
           events: [],
           output: list.length
             ? list
-                .map(
-                  (x) => `- ${x.name} (${x.tier}): ${x.user}@${x.host}${x.url ? `, ${x.url}` : ''}`,
+                .map((x) =>
+                  [
+                    `- ${x.name} (${x.tier}): ${x.user}@${x.host}${x.url ? `, ${x.url}` : ''}`,
+                    x.gpu ? `  GPU: ${x.gpu}` : null,
+                    x.tier === 'dev' ? `  dev_run works as ${x.devUser}` : null,
+                    x.apps.length
+                      ? `  Runs apps (${x.apps.join(', ')}): server_run and server_upload only inside an approved deploy; do not stop or change them`
+                      : null,
+                  ]
+                    .filter(Boolean)
+                    .join('\n'),
                 )
                 .join('\n')
             : 'Your unit holds no servers.',

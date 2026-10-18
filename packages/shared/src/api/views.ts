@@ -13,6 +13,7 @@ import type {
   TaskBody,
   UnitBody,
 } from '../domain/entities.js';
+import type { AppManifest } from '../domain/apps.js';
 import type { RecordEvent } from '../record/events.js';
 import type { VersionWithStatus } from '../record/record.js';
 import type { BotStatus, Status } from '../status/status.js';
@@ -361,4 +362,29 @@ export interface ConnectionView {
   /** Latest pipeline result per branch. */
   pipelines: RecordEvent<'pipeline.status'>[];
   errors: RecordEvent<'connection.error'>[];
+}
+
+/** A server's page: the server, what happened on it, and the apps that can be installed. */
+export interface ServerDetailView {
+  supply: SupplyView;
+  /** Installs, the workspace and commands run on it, newest last. */
+  events: RecordEvent<'app.install' | 'server.command' | 'server.workspace'>[];
+  catalog: AppManifest[];
+}
+
+/** An install in progress, read live from the server (redacted). */
+export interface AppProgressView {
+  /** running <step> | done | failed <step>: <why> | removed | missing */
+  state: string;
+  /** The unit that runs it is still active on the server. */
+  active: boolean;
+  log: string;
+}
+
+/** A model endpoint answered (or not). */
+export interface ModelCheckView {
+  ok: boolean;
+  /** The models it serves. */
+  models: string[];
+  message: string;
 }

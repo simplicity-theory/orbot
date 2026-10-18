@@ -79,10 +79,12 @@ import { parseWanted, sectionOf, SUPPLY_SECTIONS, type SupplySection } from './s
             </h2>
             <p class="meta">{{ sec.lede }}</p>
           </div>
-          <button *orbCan="null" type="button" class="btn btn--primary" (click)="add()">
-            <orb-icon class="sm" name="plus" />
-            {{ sec.add }}
-          </button>
+          @if (sec.add) {
+            <button *orbCan="null" type="button" class="btn btn--primary" (click)="add()">
+              <orb-icon class="sm" name="plus" />
+              {{ sec.add }}
+            </button>
+          }
         </div>
 
         @if (supply.error(); as err) {
@@ -96,6 +98,7 @@ import { parseWanted, sectionOf, SUPPLY_SECTIONS, type SupplySection } from './s
                     [item]="s"
                     [units]="units()"
                     [repoName]="repoName(s)"
+                    [hostName]="hostName(s)"
                     (changed)="reload()"
                   />
                 </li>
@@ -104,9 +107,21 @@ import { parseWanted, sectionOf, SUPPLY_SECTIONS, type SupplySection } from './s
           } @else {
             <orb-empty-state [icon]="sec.icon" [title]="sec.empty">
               {{ sec.emptyBody }}
-              <button *orbCan="null" actions type="button" class="btn btn--primary" (click)="add()">
-                {{ sec.add }}
-              </button>
+              @if (sec.add) {
+                <button
+                  *orbCan="null"
+                  actions
+                  type="button"
+                  class="btn btn--primary"
+                  (click)="add()"
+                >
+                  {{ sec.add }}
+                </button>
+              } @else {
+                <a actions class="btn" [routerLink]="[]" [queryParams]="{ section: 'environments' }"
+                  >Servers & environments</a
+                >
+              }
             </orb-empty-state>
           }
         } @else {
@@ -227,6 +242,12 @@ export class SupplyPage implements OnInit {
     return (this.supply.value() ?? []).find((r) => r.id === id)?.name ?? null;
   }
 
+  protected hostName(s: SupplyView): string | null {
+    if (s.spec.kind !== 'model' || !s.spec.hostedOn) return null;
+    const id = s.spec.hostedOn.supplyId;
+    return (this.supply.value() ?? []).find((r) => r.id === id)?.name ?? null;
+  }
+
   protected openWanted(): void {
     const { section, name } = parseWanted(this.connect() ?? '');
     this.open(section, name);
@@ -238,18 +259,22 @@ export class SupplyPage implements OnInit {
 
   private open(section: SupplySection, name?: string): void {
     const sec = SUPPLY_SECTIONS.find((s) => s.id === section)!;
+    if (!sec.add) return;
+    const add = sec.add;
     const ref = (() => {
       switch (section) {
         case 'repositories':
-          return this.show<RepositoryDialogData>(RepositoryDialog, { name }, sec.add);
+          return this.show<RepositoryDialogData>(RepositoryDialog, { name }, add);
         case 'credentials':
-          return this.show<CredentialDialogData>(CredentialDialog, { name }, sec.add);
+          return this.show<CredentialDialogData>(CredentialDialog, { name }, add);
         case 'environments':
           return this.show<EnvironmentDialogData>(
             EnvironmentDialog,
             { name, credentials: this.credentials },
-            sec.add,
+            add,
           );
+        case 'models':
+          return null;
         case 'connections':
           return this.show<ConnectionDialogData>(
             ConnectionDialog,
@@ -259,11 +284,11 @@ export class SupplyPage implements OnInit {
               ),
               credentials: this.credentials,
             },
-            sec.add,
+            add,
           );
       }
     })();
-    ref.closed.subscribe((s) => {
+    ref?.closed.subscribe((s) => {
       if (s) this.reload();
     });
   }

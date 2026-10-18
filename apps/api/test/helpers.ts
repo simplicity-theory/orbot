@@ -31,6 +31,7 @@ export function testConfig(overrides: Record<string, string> = {}): AppConfig {
     ORBOT_ESCALATION_SWEEP_SECONDS: '0',
     ORBOT_DAILY_BRIEF_CHECK_SECONDS: '0',
     ORBOT_CONNECTIONS_POLL_SECONDS: '0',
+    ORBOT_APPS_POLL_SECONDS: '0',
     ORBOT_LOG_LEVEL: 'info',
     ORBOT_WORKSPACES_DIR: mkdtempSync(join(tmpdir(), 'orbot-test-ws-')),
     ...overrides,

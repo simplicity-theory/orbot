@@ -111,6 +111,10 @@ export const routes: Routes = [
         loadComponent: () => import('./features/supply/supply.page').then((m) => m.SupplyPage),
       },
       {
+        path: 'supply/servers/:serverId',
+        loadComponent: () => import('./features/supply/server.page').then((m) => m.ServerPage),
+      },
+      {
         path: 'archive',
         title: 'Archive',
         loadComponent: () => import('./features/archive/archive.page').then((m) => m.ArchivePage),

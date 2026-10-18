@@ -61,6 +61,10 @@ const Env = z.object({
   ORBOT_DAILY_BRIEF_CHECK_SECONDS: z.coerce.number().min(0).default(60),
   /** How often pending build pipelines are checked on connected services (0 = only on push). */
   ORBOT_CONNECTIONS_POLL_SECONDS: z.coerce.number().min(0).default(30),
+  /** Where installable apps live (deploy/apps/<app>) with their shared scripts. */
+  ORBOT_DEPLOY_DIR: z.string().default('./deploy'),
+  /** How often installs on servers are followed (0 = never; tests poll by hand). */
+  ORBOT_APPS_POLL_SECONDS: z.coerce.number().min(0).default(10),
   ORBOT_LOG_LEVEL: z
     .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
     .default('info'),
@@ -94,6 +98,8 @@ export interface AppConfig {
   escalationSweepMs: number;
   dailyBriefCheckMs: number;
   connectionsPollMs: number;
+  deployDir: string;
+  appsPollMs: number;
   logLevel: z.infer<typeof Env>['ORBOT_LOG_LEVEL'];
 }
 
@@ -140,6 +146,8 @@ export function loadConfig(overrides: Record<string, string | undefined> = {}): 
     escalationSweepMs: e.ORBOT_ESCALATION_SWEEP_SECONDS * 1000,
     dailyBriefCheckMs: e.ORBOT_DAILY_BRIEF_CHECK_SECONDS * 1000,
     connectionsPollMs: e.ORBOT_CONNECTIONS_POLL_SECONDS * 1000,
+    deployDir: resolve(REPO_ROOT, e.ORBOT_DEPLOY_DIR),
+    appsPollMs: e.ORBOT_APPS_POLL_SECONDS * 1000,
     logLevel: e.ORBOT_LOG_LEVEL,
   };
 }

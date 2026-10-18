@@ -110,7 +110,7 @@ describe('Servers: bots log in over SSH to the servers their unit holds', () => 
       if (command.startsWith('echo orbot-ok')) {
         return {
           exitCode: 0,
-          output: `orbot-ok\n${target.host === 'dev1.test' ? 'orbot-rsync\n' : ''}`,
+          output: `orbot-ok\nos=Ubuntu 24.04 LTS\n${target.host === 'dev1.test' ? 'rsync=yes\n' : 'rsync=no\n'}`,
         };
       }
       if (command.startsWith('cat ~/.ssh')) return { exitCode: 0, output: `here it is:\n${key}\n` };
@@ -296,7 +296,10 @@ describe('Servers: bots log in over SSH to the servers their unit holds', () => 
     const cmds = (
       d.events.filter((e) => e.kind === 'server.command') as RecordEvent<'server.command'>[]
     ).map((e) => e.body.command);
-    expect(cmds).toEqual([`[${folder}] npm ci && npm test`, `[${folder}] fetch package-lock.json`]);
+    expect(cmds).toEqual([
+      `[deploy:${folder}] npm ci && npm test`,
+      `[deploy:${folder}] fetch package-lock.json`,
+    ]);
     const sent = JSON.stringify(fake.requests);
     expect(sent).toContain('Give a path inside your folder');
     expect(sent).toContain('web1 is a staging server, not a dev server');

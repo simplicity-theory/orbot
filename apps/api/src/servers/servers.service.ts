@@ -1,6 +1,9 @@
 import { execFile } from 'node:child_process';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { promisify } from 'node:util';
-import { BadRequestException, Injectable, type OnModuleInit } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, type OnModuleInit } from '@nestjs/common';
 import {
   actorRef,
   type ConnectServerRequest,
@@ -16,15 +19,17 @@ import {
 } from '@orbot/shared';
 import type { z } from 'zod';
 import { git } from '../common/git.js';
+import { APP_CONFIG, type AppConfig } from '../config/config.js';
 import { OFFICER_SECRET_PREFIX } from '../officers/officers.service.js';
 import { PolicyService } from '../policy/policy.service.js';
 import type { WriteContext } from '../record/record.service.js';
 import { RecordService } from '../record/record.service.js';
 import { RedactionService } from '../redaction/redaction.service.js';
 import { SecretsService } from '../secrets/secrets.service.js';
-import { SshClient } from './ssh.client.js';
+import { SupplyService } from '../supply/supply.service.js';
+import { SshClient, type SshTarget } from './ssh.client.js';
 
-type Server = RecordVersion<SupplyBody> & {
+export type Server = RecordVersion<SupplyBody> & {
   body: SupplyBody & { spec: { kind: 'environment'; server: ServerAccess } };
 };
 
@@ -47,7 +52,28 @@ async function gitArchive(cwd: string): Promise<Buffer> {
   return r.stdout;
 }
 
-const tail = (s: string, n: number) => (s.length > n ? `[…]\n${s.slice(-n)}` : s);
+export const tail = (s: string, n: number) => (s.length > n ? `[…]\n${s.slice(-n)}` : s);
+
+/** `key=value` lines (as deploy/server/facts.sh and an app's status.sh print them). */
+export function parseKv(output: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const line of output.split('\n')) {
+    const i = line.indexOf('=');
+    if (i > 0 && /^[a-z][a-z0-9_-]*$/.test(line.slice(0, i)))
+      out[line.slice(0, i)] = line.slice(i + 1).trim();
+  }
+  return out;
+}
+
+/** A short, safe name for credentials and folders. */
+export const slug = (x: string) =>
+  x
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, '-')
+    .replace(/^[-.]+|-+$/g, '') || 'x';
+
+/** The user bots' dev work runs as, once the bot workspace is set up. */
+export const WORKSPACE_USER = 'orbot-dev';
 
 /**
  * Servers bots log in to. A server is an environment with SSH access: issuing it to a unit
@@ -59,8 +85,10 @@ const tail = (s: string, n: number) => (s.length > n ? `[…]\n${s.slice(-n)}` :
 @Injectable()
 export class ServersService implements OnModuleInit {
   constructor(
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
     private readonly record: RecordService,
     private readonly secrets: SecretsService,
+    private readonly supply: SupplyService,
     private readonly redaction: RedactionService,
     private readonly policy: PolicyService,
     readonly ssh: SshClient,
@@ -74,12 +102,28 @@ export class ServersService implements OnModuleInit {
     return {
       name: 'Production servers',
       evaluate: async (req) => {
-        if (req.action !== 'server.run' || req.details?.['tier'] !== 'production') return null;
+        if (req.action !== 'server.run') return null;
+        const production = req.details?.['tier'] === 'production';
+        // Apps run on it: the admin login could stop or change them, so it is production-only.
+        const hostsApps =
+          req.details?.['hostsApps'] === true && req.details['asWorkspace'] !== true;
+        if (!production && !hostsApps) return null;
         const task = req.taskId ? await this.record.getActive('task', req.taskId) : null;
         if (task?.body.kind === 'deploy' && task.body.approval?.status === 'approved') return null;
+        const server = String(req.details?.['server']);
+        if (!production) {
+          return {
+            allowed: false,
+            reason: `${server} runs apps (${String(req.details?.['apps'])}): bots log in as its admin only inside a production deploy you approved`,
+            action:
+              req.details?.['dev'] === true
+                ? `Set up the bot workspace on ${server}'s page in the Supply Depot; dev_run then works there without touching the apps.`
+                : `Build and test with dev_run (it runs in the bot workspace), or have the unit run it as a deploy task.`,
+          };
+        }
         return {
           allowed: false,
-          reason: `${String(req.details['server'])} is a production server: bots reach it only inside a production deploy you approved`,
+          reason: `${server} is a production server: bots reach it only inside a production deploy you approved`,
           action: 'Have the unit run it as a deploy task; it waits for your approval.',
         };
       },
@@ -90,7 +134,38 @@ export class ServersService implements OnModuleInit {
 
   /** Pin the server's host keys, prove the key logs in, and put it in the depot. */
   async connect(input: z.output<typeof ConnectServerRequest>, ctx: WriteContext) {
-    const credential = input.credentialName;
+    await this.requireKey(input.credentialName);
+    const hostKeys = await this.scanHostKeys(input.host, input.port);
+    const server: ServerAccess = {
+      host: input.host,
+      port: input.port,
+      user: input.user,
+      credentialName: input.credentialName,
+      hostKeys,
+      fingerprints: await this.ssh.fingerprints(hostKeys).catch(() => []),
+      url: input.url || null,
+      rsync: false,
+      facts: null,
+      workspace: null,
+      apps: [],
+    };
+    const facts = await this.proveLogin(server);
+    return this.record.create(
+      'supply',
+      {
+        name: input.name,
+        connected: true,
+        spec: {
+          kind: 'environment',
+          details: { tier: input.tier },
+          server: { ...server, facts, rsync: facts['rsync'] === 'yes' },
+        },
+      },
+      ctx,
+    );
+  }
+
+  private async requireKey(credential: string): Promise<void> {
     if (credential.startsWith(OFFICER_SECRET_PREFIX) || !(await this.secrets.exists(credential))) {
       throw new BadRequestException({
         message: `No credential called "${credential}" is stored.`,
@@ -98,55 +173,206 @@ export class ServersService implements OnModuleInit {
           'Store the SSH private key as a credential in the Supply Depot (multi-line), then choose it here.',
       });
     }
-    const hostKeys = await this.ssh.scan(input.host, input.port).catch(() => []);
+  }
+
+  private async scanHostKeys(host: string, port: number): Promise<string[]> {
+    const hostKeys = await this.ssh.scan(host, port).catch(() => []);
     if (!hostKeys.length) {
       throw new BadRequestException({
-        message: `Could not reach SSH on ${input.host}:${input.port}.`,
+        message: `Could not reach SSH on ${host}:${port}.`,
         action: 'Check the host name, the port and that sshd is running and reachable from here.',
       });
     }
-    const server: ServerAccess = {
-      host: input.host,
-      port: input.port,
-      user: input.user,
-      credentialName: credential,
-      hostKeys,
-      fingerprints: await this.ssh.fingerprints(hostKeys).catch(() => []),
-      url: input.url || null,
-      rsync: false,
-    };
-    const probe = await this.exec(
-      server,
-      'echo orbot-ok; command -v rsync >/dev/null 2>&1 && echo orbot-rsync',
-      {},
-    );
-    server.rsync = probe.output.includes('orbot-rsync');
-    if (probe.exitCode !== 0 || !probe.output.includes('orbot-ok')) {
-      throw new BadRequestException({
-        message: `The key "${credential}" could not log in as ${input.user}@${input.host}: ${this.firstLine(probe.output)}`,
-        action:
-          'Add the public half of the key to ~/.ssh/authorized_keys for that user. A key with a passphrase cannot be used: store one without.',
-      });
-    }
-    return this.record.create(
-      'supply',
-      {
-        name: input.name,
-        connected: true,
-        spec: { kind: 'environment', details: { tier: input.tier }, server },
-      },
-      ctx,
-    );
+    return hostKeys;
   }
 
-  /** Log in again with the stored key (e.g. after changing the server). */
-  async check(supplyId: string): Promise<{ ok: boolean; output: string }> {
+  /** Log in with the key and read what the server is. Refuses if the login fails. */
+  private async proveLogin(server: ServerAccess): Promise<Record<string, string>> {
+    const probe = await this.exec(server, `echo orbot-ok; ${await this.factsScript()}`, {});
+    if (probe.exitCode !== 0 || !probe.output.includes('orbot-ok')) {
+      throw new BadRequestException({
+        message: `The key "${server.credentialName}" could not log in as ${server.user}@${server.host}: ${this.firstLine(probe.output)}`,
+        action:
+          'Add the public half of the key to ~/.ssh/authorized_keys for that user. A key with a passphrase cannot be used: store one without. If the server was reinstalled, tick "pin its new host key".',
+      });
+    }
+    return parseKv(this.redaction.clean(probe.output));
+  }
+
+  /** Log in again with the stored key (e.g. after changing the server), and refresh its facts. */
+  async check(supplyId: string, actor: string): Promise<{ ok: boolean; output: string }> {
     const s = await this.require(supplyId);
-    const r = await this.exec(s.body.spec.server, 'echo orbot-ok; uname -a', {});
-    return {
-      ok: r.exitCode === 0 && r.output.includes('orbot-ok'),
-      output: this.redaction.clean(r.output.replace('orbot-ok\n', '')).trim(),
-    };
+    const r = await this.exec(s.body.spec.server, `echo orbot-ok; ${await this.factsScript()}`, {});
+    const ok = r.exitCode === 0 && r.output.includes('orbot-ok');
+    const output = this.redaction.clean(r.output.replace('orbot-ok\n', '')).trim();
+    if (ok) {
+      const facts = parseKv(output);
+      await this.reviseServer(
+        supplyId,
+        (sv) => ({ ...sv, facts, rsync: facts['rsync'] === 'yes' }),
+        { actor, reason: `Logged in to ${s.body.name} and refreshed what it is` },
+      );
+    }
+    return { ok, output: ok ? this.describeFacts(parseKv(output)) : output };
+  }
+
+  private describeFacts(f: Record<string, string>): string {
+    return [f['os'], f['gpu'] && f['gpu'] !== 'none (no nvidia-smi)' ? f['gpu'] : null]
+      .filter(Boolean)
+      .join(' · ');
+  }
+
+  private async factsScript(): Promise<string> {
+    const script = await readFile(join(this.config.deployDir, 'server', 'facts.sh'), 'utf8');
+    return `bash -s <<'ORBOT_FACTS'\n${script}\nORBOT_FACTS`;
+  }
+
+  /** Write a new version of the server with its access details changed. */
+  async reviseServer(
+    supplyId: string,
+    change: (server: ServerAccess) => ServerAccess,
+    ctx: WriteContext,
+  ): Promise<Server> {
+    return (await this.record.revise(
+      'supply',
+      supplyId,
+      (b) => {
+        if (b.spec.kind !== 'environment' || !b.spec.server) return b;
+        return { ...b, spec: { ...b.spec, server: change(b.spec.server) } };
+      },
+      ctx,
+    )) as Server;
+  }
+
+  // ---------- The bot workspace ----------
+
+  /**
+   * Give bots their own login on the server for dev work: a user without sudo or docker, with
+   * a key ORBOT generates (a credential, used by name). dev_run and dev_fetch use it from then
+   * on, so bots cannot stop or change what is installed on the server.
+   */
+  async setupWorkspace(supplyId: string, ctx: WriteContext): Promise<Server> {
+    const s = await this.require(supplyId);
+    const credentialName = `${slug(s.body.name)}.${WORKSPACE_USER}.key`;
+    const dir = await mkdtemp(join(tmpdir(), 'orbot-keygen-'));
+    let publicKey: string;
+    try {
+      const keyFile = join(dir, 'key');
+      await run('ssh-keygen', [
+        '-q',
+        '-t',
+        'ed25519',
+        '-N',
+        '',
+        '-C',
+        `${WORKSPACE_USER}@${s.body.name}`,
+        '-f',
+        keyFile,
+      ]);
+      const privateKey = await readFile(keyFile, 'utf8');
+      publicKey = (await readFile(`${keyFile}.pub`, 'utf8')).trim();
+      await this.supply.storeCredential(
+        { name: credentialName, value: privateKey },
+        { actor: ctx.actor, reason: `Login key for the bot workspace on ${s.body.name}` },
+      );
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+    const script = await readFile(join(this.config.deployDir, 'server', 'workspace.sh'), 'utf8');
+    const r = await this.admin(s, 'sudo -n bash -s  # deploy/server/workspace.sh', ctx.actor, {
+      stdin: Buffer.from(
+        `export WORKSPACE_USER='${WORKSPACE_USER}'\nexport PUBLIC_KEY='${publicKey}'\n${script}`,
+      ),
+    });
+    if (r.exitCode !== 0 || !r.output.includes('orbot-workspace-ok')) {
+      throw new BadRequestException({
+        message: `Could not set up the bot workspace on ${s.body.name}: ${this.firstLine(r.output)}`,
+        action: this.failureHelp(r.output, s),
+      });
+    }
+    const login: SshTarget = { ...s.body.spec.server, user: WORKSPACE_USER };
+    const probe = await this.ssh.run(
+      login,
+      await this.secrets.reveal(credentialName),
+      'echo orbot-ok',
+      {
+        timeoutMs: 60_000,
+      },
+    );
+    if (!probe.output.includes('orbot-ok')) {
+      throw new BadRequestException({
+        message: `The bot workspace user was created, but ORBOT could not log in as ${WORKSPACE_USER}: ${this.firstLine(probe.output)}`,
+        action: `Check that sshd allows ${WORKSPACE_USER} to log in (AllowUsers / AllowGroups in /etc/ssh/sshd_config), then set it up again.`,
+      });
+    }
+    const revised = await this.reviseServer(
+      supplyId,
+      (sv) => ({ ...sv, workspace: { user: WORKSPACE_USER, credentialName } }),
+      ctx,
+    );
+    await this.record.event(
+      'server.workspace',
+      { supplyId, server: s.body.name, user: WORKSPACE_USER },
+      {},
+      ctx.actor,
+    );
+    return revised;
+  }
+
+  /** What to do about a failed admin command, from its output. */
+  failureHelp(output: string, s: Server): string {
+    const user = s.body.spec.server.user;
+    if (/password is required|not in the sudoers|may not run sudo/i.test(output)) {
+      return `Give ${user} passwordless sudo on the server (e.g. a line "${user} ALL=(ALL) NOPASSWD:ALL" in /etc/sudoers.d/orbot), then try again.`;
+    }
+    if (
+      /could not resolve|connection refused|timed out|no route to host|network is unreachable|host key verification failed|permission denied \(publickey/i.test(
+        output,
+      )
+    ) {
+      return `ORBOT could not log in to ${s.body.name}: check it is on and reachable, then use Check login on its page.`;
+    }
+    return "The command's output is in the server's record.";
+  }
+
+  /**
+   * A command ORBOT runs as the server's admin login on the Commander's behalf (installing an
+   * app, setting up the workspace). On the record as `server.command`, output redacted.
+   */
+  async admin(
+    s: Server,
+    command: string,
+    actor: string,
+    opts: { stdin?: Buffer; timeoutMs?: number; record?: boolean } = {},
+  ): Promise<ServerResult> {
+    const started = Date.now();
+    let r: ServerResult;
+    try {
+      const key = await this.secrets.reveal(s.body.spec.server.credentialName);
+      r = await this.ssh.run(s.body.spec.server, key, command, {
+        ...(opts.stdin ? { stdin: opts.stdin } : {}),
+        timeoutMs: opts.timeoutMs ?? COMMAND_TIMEOUT_MS,
+      });
+    } catch (err) {
+      r = { exitCode: null, output: (err as Error).message };
+    }
+    const output = this.redaction.clean(r.output);
+    if (opts.record !== false) {
+      await this.record.event(
+        'server.command',
+        {
+          supplyId: s.entityId,
+          server: s.body.name,
+          command,
+          exitCode: r.exitCode,
+          output: tail(output, RECORD_OUTPUT),
+          durationMs: Date.now() - started,
+        },
+        {},
+        actor,
+      );
+    }
+    return { exitCode: r.exitCode, output };
   }
 
   // ---------- Bots ----------
@@ -171,6 +397,11 @@ export class ServersService implements OnModuleInit {
       host: s.body.spec.server.host,
       user: s.body.spec.server.user,
       url: s.body.spec.server.url,
+      devUser: s.body.spec.server.workspace?.user ?? s.body.spec.server.user,
+      gpu: s.body.spec.server.facts?.['gpu']?.startsWith('none')
+        ? null
+        : (s.body.spec.server.facts?.['gpu'] ?? null),
+      apps: s.body.spec.server.apps.filter((a) => a.status !== 'removed').map((a) => a.name),
     }));
   }
 
@@ -238,11 +469,6 @@ export class ServersService implements OnModuleInit {
     const repo = task.body.repoSupplyId
       ? await this.record.getActive('supply', task.body.repoSupplyId)
       : null;
-    const slug = (x: string) =>
-      x
-        .toLowerCase()
-        .replace(/[^a-z0-9._-]+/g, '-')
-        .replace(/^[-.]+|-+$/g, '') || 'x';
     return `orbot-dev/${slug(repo?.body.name ?? 'workspace')}/${slug(bot.displayName)}`;
   }
 
@@ -259,9 +485,10 @@ export class ServersService implements OnModuleInit {
     const s = await this.devServer(task, bot, name, command);
     const dir = await this.devDir(task, bot);
     const ws = task.body.workspace.path;
-    return this.recorded(s, task, bot, refs, `[${dir}] ${command}`, async () => {
-      const key = await this.useKey(s.body.spec.server, bot, task);
-      const sync = await this.ssh.sync(s.body.spec.server, key, ws, dir, {
+    const login = this.devLogin(s);
+    return this.recorded(s, task, bot, refs, `[${login.user}:${dir}] ${command}`, async () => {
+      const key = await this.useKey(login, bot, task);
+      const sync = await this.ssh.sync(login, key, ws, dir, {
         rsync: s.body.spec.server.rsync,
         timeoutMs: COMMAND_TIMEOUT_MS,
         signal,
@@ -272,7 +499,7 @@ export class ServersService implements OnModuleInit {
           output: `Could not sync your working tree to ${s.body.name}:${dir}.\n${sync.output}`,
         };
       }
-      return this.ssh.run(s.body.spec.server, key, `cd ${dir} && ${command}`, {
+      return this.ssh.run(login, key, `cd ${dir} && ${command}`, {
         timeoutMs: COMMAND_TIMEOUT_MS,
         signal,
       });
@@ -297,9 +524,10 @@ export class ServersService implements OnModuleInit {
     const s = await this.devServer(task, bot, name, `fetch ${p}`);
     const dir = await this.devDir(task, bot);
     const ws = task.body.workspace.path;
-    return this.recorded(s, task, bot, refs, `[${dir}] fetch ${p}`, async () => {
-      const key = await this.useKey(s.body.spec.server, bot, task);
-      const r = await this.ssh.fetch(s.body.spec.server, key, dir, p, ws, {
+    const login = this.devLogin(s);
+    return this.recorded(s, task, bot, refs, `[${login.user}:${dir}] fetch ${p}`, async () => {
+      const key = await this.useKey(login, bot, task);
+      const r = await this.ssh.fetch(login, key, dir, p, ws, {
         timeoutMs: COMMAND_TIMEOUT_MS,
         signal,
       });
@@ -313,7 +541,7 @@ export class ServersService implements OnModuleInit {
     name: string | null,
     command: string,
   ): Promise<Server> {
-    const s = await this.authorize(task, bot, name ?? '', command);
+    const s = await this.authorize(task, bot, name ?? '', command, { dev: true });
     if (s.body.spec.details['tier'] !== 'dev') {
       throw new Error(
         `${s.body.name} is a ${s.body.spec.details['tier'] ?? 'staging'} server, not a dev server: use server_run there.`,
@@ -322,11 +550,20 @@ export class ServersService implements OnModuleInit {
     return s;
   }
 
+  /** Where dev work runs: the bot workspace once it is set up, else the server's login. */
+  private devLogin(s: Server): ServerAccess {
+    const sv = s.body.spec.server;
+    return sv.workspace
+      ? { ...sv, user: sv.workspace.user, credentialName: sv.workspace.credentialName }
+      : sv;
+  }
+
   private async authorize(
     task: RecordVersion<TaskBody>,
     bot: Principal,
     name: string,
     command: string,
+    opts: { dev?: boolean } = {},
   ): Promise<Server> {
     const servers = await this.forUnit(task.body.unitId);
     const s = name.trim()
@@ -352,10 +589,23 @@ export class ServersService implements OnModuleInit {
         supplyId: s.entityId,
         tier: s.body.spec.details['tier'] ?? 'staging',
         command: this.redaction.clean(command),
+        ...this.appDetails(s, opts.dev === true),
       },
     });
     if (!d.allowed) throw new Error(`Refused: ${d.reason}. ${d.action ?? ''}`.trim());
     return s;
+  }
+
+  /** For the policy: which apps run on the server, and whether the bot works in the workspace. */
+  private appDetails(s: Server, dev: boolean) {
+    const apps = s.body.spec.server.apps.filter((a) => a.status !== 'removed');
+    if (!apps.length) return {};
+    return {
+      hostsApps: true,
+      apps: apps.map((a) => a.name).join(', '),
+      dev,
+      asWorkspace: dev && s.body.spec.server.workspace !== null,
+    };
   }
 
   private async recorded(
@@ -421,7 +671,7 @@ export class ServersService implements OnModuleInit {
     return this.ssh.run(server, key, command, { ...opts, timeoutMs: COMMAND_TIMEOUT_MS });
   }
 
-  private async require(supplyId: string): Promise<Server> {
+  async require(supplyId: string): Promise<Server> {
     const s = await this.record.requireActive('supply', supplyId);
     if (s.body.spec.kind !== 'environment' || !s.body.spec.server) {
       throw new BadRequestException({
@@ -432,7 +682,7 @@ export class ServersService implements OnModuleInit {
     return s as Server;
   }
 
-  private firstLine(s: string): string {
+  firstLine(s: string): string {
     return this.redaction.clean(s.trim().split('\n').pop() ?? '').slice(0, 300) || 'no answer';
   }
 }

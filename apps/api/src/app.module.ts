@@ -28,7 +28,8 @@ import { RedactionService } from './redaction/redaction.service.js';
 import { RuntimeRegistry } from './runtime/runtime.registry.js';
 import Anthropic from '@anthropic-ai/sdk';
 import { ClaudeRuntime } from './runtime/claude.runtime.js';
-import { ServersController } from './servers/servers.controller.js';
+import { ModelsController, ServersController } from './servers/servers.controller.js';
+import { AppsService } from './servers/apps.service.js';
 import { ServersService } from './servers/servers.service.js';
 import { SshClient } from './servers/ssh.client.js';
 import { ClaudeCodeRuntime } from './runtime/claude-code.runtime.js';
@@ -113,6 +114,7 @@ export class AppModule {
         DeconflictionController,
         DisputeController,
         ServersController,
+        ModelsController,
       ],
       providers: [
         { provide: LOG_DESTINATION, useValue: opts.logDestination ?? null },
@@ -189,6 +191,7 @@ export class AppModule {
         DailyBriefService,
         SshClient,
         ServersService,
+        AppsService,
         AlertService,
         BudgetService,
         EscalationService,

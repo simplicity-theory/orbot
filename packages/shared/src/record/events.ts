@@ -133,6 +133,18 @@ export const RecordEventBodies = {
     output: z.string(),
     durationMs: z.number().int().nonnegative(),
   }),
+  /** An app installed on, or removed from, a server (`deploy/apps`). The log tail is redacted. */
+  'app.install': z.object({
+    supplyId: z.string(),
+    server: z.string(),
+    app: z.string(),
+    appId: z.string(),
+    status: z.enum(['started', 'installed', 'failed', 'removed']),
+    message: z.string().nullable(),
+    log: z.string(),
+  }),
+  /** The bot workspace (a login without sudo for bots' dev work) set up on a server. */
+  'server.workspace': z.object({ supplyId: z.string(), server: z.string(), user: z.string() }),
   'policy.check': z.object({
     action: z.string(),
     allowed: z.boolean(),

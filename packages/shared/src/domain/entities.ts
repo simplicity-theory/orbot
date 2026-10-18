@@ -281,6 +281,7 @@ export const SupplyKind = z.enum([
   'credential',
   'compute',
   'connection',
+  'model',
 ]);
 export type SupplyKind = z.infer<typeof SupplyKind>;
 
@@ -298,6 +299,31 @@ export const CredentialSupply = z.object({
   /** Name of the secret in the secrets store. The value is never here. */
   secretName: z.string().min(1),
 });
+
+export const AppInstallStatus = z.enum(['installing', 'running', 'failed', 'removing', 'removed']);
+export type AppInstallStatus = z.infer<typeof AppInstallStatus>;
+
+/** One app on a server: what was installed with which settings, and how it is doing. */
+export const ServerApp = z.object({
+  id: Id,
+  /** The app's folder in deploy/apps. */
+  app: z.string().min(1),
+  name: z.string().min(1),
+  status: AppInstallStatus,
+  /** Settings as given (never secrets). */
+  settings: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])),
+  /** Secret settings, by credential name. */
+  credentials: z.record(z.string(), z.string().nullable()),
+  /** The step it is on (installing) or failed at, and why. */
+  message: z.string().nullable().default(null),
+  startedAt: z.string(),
+  finishedAt: z.string().nullable().default(null),
+  /** Depot items the app provides, e.g. the model it serves. */
+  provides: z.array(Id).default([]),
+  /** Its last status report (status.sh), redacted. */
+  report: z.record(z.string(), z.string()).nullable().default(null),
+});
+export type ServerApp = z.infer<typeof ServerApp>;
 
 /**
  * A server bots log in to over SSH. The private key is a credential, used by name; the host
@@ -317,6 +343,18 @@ export const ServerAccess = z.object({
   url: z.string().nullable().default(null),
   /** rsync is installed on it (dev folders are kept in sync with it; otherwise tar). */
   rsync: z.boolean().default(false),
+  /** What the server is (OS, GPU, Docker, sudo), as `deploy/server/facts.sh` reported it. */
+  facts: z.record(z.string(), z.string()).nullable().default(null),
+  /**
+   * The bot workspace: a separate login without sudo for bots' dev work, so they cannot touch
+   * the apps on the server. Its key is an ORBOT-generated credential.
+   */
+  workspace: z
+    .object({ user: z.string().min(1), credentialName: z.string().min(1) })
+    .nullable()
+    .default(null),
+  /** Apps ORBOT installed on it from `deploy/apps`. */
+  apps: z.array(ServerApp).default([]),
 });
 export type ServerAccess = z.infer<typeof ServerAccess>;
 
@@ -355,6 +393,24 @@ export const ConnectionSupply = z.object({
 });
 export type ConnectionSupply = z.infer<typeof ConnectionSupply>;
 
+/**
+ * A language model bots can be given: an OpenAI-compatible endpoint (e.g. vLLM on one of the
+ * Commander's servers). The API key is a credential, referenced by name.
+ */
+export const ModelSupply = z.object({
+  kind: z.literal('model'),
+  protocol: z.enum(['openai']),
+  /** e.g. http://10.0.0.5:8000/v1 */
+  baseUrl: z.string().min(1),
+  /** The model name in API calls. */
+  model: z.string().min(1),
+  credentialName: z.string().nullable(),
+  contextWindow: z.number().int().positive().nullable().default(null),
+  /** Where it runs, when ORBOT installed it: the server and the app on it. */
+  hostedOn: z.object({ supplyId: Id, appId: Id }).nullable().default(null),
+});
+export type ModelSupply = z.infer<typeof ModelSupply>;
+
 export const SupplyBody = z.object({
   name: z.string().min(1),
   connected: z.boolean(),
@@ -363,6 +419,7 @@ export const SupplyBody = z.object({
     CredentialSupply,
     GenericSupply,
     ConnectionSupply,
+    ModelSupply,
   ]),
 });
 export type SupplyBody = z.infer<typeof SupplyBody>;

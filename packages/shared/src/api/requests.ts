@@ -264,3 +264,13 @@ export type ConnectServiceRequest = z.input<typeof ConnectServiceRequest>;
 /** Take a tracker issue on as a mission for a unit. */
 export const TakeIssueRequest = z.object({ unitId: Id, number: z.number().int().positive() });
 export type TakeIssueRequest = z.input<typeof TakeIssueRequest>;
+
+/** Install an app from deploy/apps on a server. */
+export const InstallAppRequest = z.object({
+  app: z.string().regex(/^[a-z][a-z0-9-]{0,39}$/),
+  /** Settings by key; missing ones take the manifest's default. Validated against it. */
+  settings: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).default({}),
+  /** Secrets that are chosen (not generated): the credential to use, or null for none. */
+  credentials: z.record(z.string(), z.string().nullable()).default({}),
+});
+export type InstallAppRequest = z.input<typeof InstallAppRequest>;

@@ -135,6 +135,11 @@ export interface ServerInfo {
   host: string;
   user: string;
   url: string | null;
+  /** The user dev_run works as (the bot workspace, once set up). */
+  devUser: string;
+  gpu: string | null;
+  /** Apps running on it: the admin login is then for approved deploys only. */
+  apps: string[];
 }
 
 export interface ServerResult {

@@ -19,6 +19,10 @@ node scripts/check-tokens.mjs
 step "Format check"
 npx prettier --check .
 
+step "Server scripts (deploy/)"
+(cd deploy && docker run --rm -v "$PWD:/mnt:ro" -w /mnt koalaman/shellcheck:v0.10.0 -x \
+  lib/common.sh apps/*/*.sh server/*.sh)
+
 step "Typecheck"
 npm run typecheck -w @orbot/shared
 npm run typecheck -w @orbot/api

@@ -34,6 +34,16 @@ export const SUPPLY_SECTIONS = [
       'Add a dev server for bots to build and test on, or the staging and production environments they deploy to.',
   },
   {
+    id: 'models',
+    label: 'Models',
+    icon: 'bot',
+    add: null,
+    lede: 'Language models served from your own servers over an OpenAI-compatible API, with their keys by name.',
+    empty: 'No models yet',
+    emptyBody:
+      'Open a server with a GPU under Servers & environments and install vLLM on it: the model it serves appears here.',
+  },
+  {
     id: 'connections',
     label: 'Connections',
     term: 'connection',
@@ -49,7 +59,7 @@ export const SUPPLY_SECTIONS = [
   label: string;
   term?: string;
   icon: IconName;
-  add: string;
+  add: string | null;
   lede: string;
   empty: string;
   emptyBody: string;
@@ -64,6 +74,8 @@ export function sectionOf(s: SupplyView): SupplySection {
       return 'credentials';
     case 'connection':
       return 'connections';
+    case 'model':
+      return 'models';
     default:
       return 'environments';
   }
@@ -92,6 +104,8 @@ export function iconOf(s: SupplyView): IconName {
       return 'key';
     case 'connection':
       return 'link';
+    case 'model':
+      return 'bot';
     case 'environment':
       return s.spec.server ? 'server' : 'grid';
     default:

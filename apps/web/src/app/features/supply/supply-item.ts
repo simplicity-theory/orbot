@@ -16,7 +16,13 @@ import { iconOf, tierOf } from './supply-sections';
     @let s = item();
     <div class="head">
       <orb-icon [name]="icon()" />
-      <h3 class="name">{{ s.name }}</h3>
+      <h3 class="name">
+        @if (server()) {
+          <a [routerLink]="['/supply/servers', s.id]">{{ s.name }}</a>
+        } @else {
+          {{ s.name }}
+        }
+      </h3>
       @if (tier(); as t) {
         <span class="chip" [class.prod]="t === 'production'">{{ t }}</span>
       }
@@ -24,14 +30,10 @@ import { iconOf, tierOf } from './supply-sections';
         <span class="chip off">not connected</span>
       }
       @if (server()) {
-        <button
-          *orbCan="null"
-          type="button"
-          class="btn small check"
-          [disabled]="busy()"
-          (click)="checkLogin()"
-        >
-          Check login
+        <a class="btn small end" [routerLink]="['/supply/servers', s.id]">Apps & workspace</a>
+      } @else if (s.spec.kind === 'model') {
+        <button type="button" class="btn small end" [disabled]="busy()" (click)="checkModel()">
+          Check it answers
         </button>
       }
     </div>
@@ -60,6 +62,24 @@ import { iconOf, tierOf } from './supply-sections';
           <dt>Token</dt>
           <dd class="mono">{{ s.spec.credentialName ?? 'none' }}</dd>
         }
+        @case ('model') {
+          <dt>Model</dt>
+          <dd class="mono">{{ s.spec.model }}</dd>
+          <dt>API</dt>
+          <dd class="mono">{{ s.spec.baseUrl }} <span class="meta">(OpenAI-compatible)</span></dd>
+          <dt>API key</dt>
+          <dd class="mono">{{ s.spec.credentialName ?? 'none' }}</dd>
+          @if (s.spec.contextWindow) {
+            <dt>Context</dt>
+            <dd>{{ s.spec.contextWindow.toLocaleString() }} tokens</dd>
+          }
+          @if (s.spec.hostedOn; as h) {
+            <dt>Runs on</dt>
+            <dd>
+              <a [routerLink]="['/supply/servers', h.supplyId]">{{ hostName() ?? 'its server' }}</a>
+            </dd>
+          }
+        }
         @default {
           @if (server(); as sv) {
             <dt>Login</dt>
@@ -72,22 +92,22 @@ import { iconOf, tierOf } from './supply-sections';
                 <a [href]="sv.url" target="_blank" rel="noopener">{{ sv.url }}</a>
               </dd>
             }
+            @if (sv.facts?.['gpu']; as gpu) {
+              <dt>GPU</dt>
+              <dd>{{ gpu }}</dd>
+            }
+            <dt>Apps</dt>
+            <dd>{{ apps() || 'none yet' }}</dd>
             @if (tier() === 'dev') {
-              <dt>Bot folders</dt>
+              <dt>Bots' dev work</dt>
               <dd>
-                <span class="mono">~/orbot-dev/&lt;repo&gt;/&lt;bot&gt;</span>, synced with
-                {{ sv.rsync ? 'rsync' : 'tar (install rsync for faster syncs)' }}
+                {{
+                  sv.workspace
+                    ? 'as ' + sv.workspace.user + ' (no sudo)'
+                    : 'as ' + sv.user + ' (set up the bot workspace to keep them apart)'
+                }}
               </dd>
             }
-            <dt>Host keys</dt>
-            <dd>
-              <details>
-                <summary>{{ sv.fingerprints.length }} pinned</summary>
-                @for (f of sv.fingerprints; track f) {
-                  <div class="meta mono fingerprint">{{ f }}</div>
-                }
-              </details>
-            </dd>
           } @else {
             @for (d of details(); track d[0]) {
               <dt>{{ d[0] }}</dt>
@@ -177,7 +197,7 @@ import { iconOf, tierOf } from './supply-sections';
     .off {
       background: color-mix(in srgb, var(--tone-muted) 14%, transparent);
     }
-    .check {
+    .end {
       margin-left: auto;
     }
     .facts {
@@ -185,13 +205,6 @@ import { iconOf, tierOf } from './supply-sections';
       dd {
         overflow-wrap: anywhere;
       }
-    }
-    summary {
-      cursor: pointer;
-    }
-    .fingerprint {
-      overflow-wrap: anywhere;
-      margin-top: var(--space-1);
     }
     .foot {
       display: flex;
@@ -235,6 +248,8 @@ export class SupplyItem {
   readonly units = input.required<UnitView[]>();
   /** For a connection: the name of the repository it serves. */
   readonly repoName = input<string | null>(null);
+  /** For a model: the name of the server it runs on. */
+  readonly hostName = input<string | null>(null);
   /** Something changed: the page reloads the depot and the units. */
   readonly changed = output<void>();
   protected readonly busy = signal(false);
@@ -245,6 +260,12 @@ export class SupplyItem {
     const s = this.item();
     return s.spec.kind === 'environment' ? (s.spec.server ?? null) : null;
   });
+  protected readonly apps = computed(() =>
+    (this.server()?.apps ?? [])
+      .filter((a) => a.status !== 'removed')
+      .map((a) => `${a.name} (${a.status})`)
+      .join(', '),
+  );
   protected readonly details = computed(() => {
     const spec = this.item().spec;
     if (spec.kind !== 'environment' && spec.kind !== 'tool' && spec.kind !== 'compute') return [];
@@ -267,12 +288,12 @@ export class SupplyItem {
     this.units().filter((u) => !u.supplyIds.includes(this.item().id)),
   );
 
-  protected checkLogin(): Promise<void> {
+  protected checkModel(): Promise<void> {
     const s = this.item();
     return this.act(async () => {
-      const r = await this.api.checkServer(s.id);
-      if (!r.ok) throw new Error(`Could not log in to ${s.name}: ${r.output || 'no answer'}`);
-      return `Logged in to ${s.name}: ${r.output}`;
+      const r = await this.api.checkModel(s.id);
+      if (!r.ok) throw new Error(`${s.name}: ${r.message}`);
+      return r.message;
     });
   }
 
