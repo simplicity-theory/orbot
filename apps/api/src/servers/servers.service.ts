@@ -7,6 +7,7 @@ import { BadRequestException, Inject, Injectable, type OnModuleInit } from '@nes
 import {
   actorRef,
   type ConnectServerRequest,
+  type UpdateEnvironmentRequest,
   type PolicyRule,
   type Principal,
   type RecordEventRefs,
@@ -163,6 +164,144 @@ export class ServersService implements OnModuleInit {
       },
       ctx,
     );
+  }
+
+  /**
+   * Change an environment. A new host, port, user or key is tested by logging in before
+   * anything is saved, and so is the login of a plain environment that becomes a server. Host
+   * keys are pinned again only for a new host or port, or when the Commander says the server
+   * was reinstalled: a changed key is otherwise refused by ssh.
+   */
+  async update(
+    supplyId: string,
+    input: z.output<typeof UpdateEnvironmentRequest>,
+    ctx: WriteContext,
+  ) {
+    const s = await this.record.requireActive('supply', supplyId);
+    if (s.body.spec.kind !== 'environment') {
+      throw new BadRequestException({
+        message: `${s.body.name} is not an environment.`,
+        action: 'Only servers and environments are edited here.',
+      });
+    }
+    const sv = s.body.spec.server ?? null;
+    const tier = s.body.spec.details['tier'] ?? 'staging';
+    if (tier !== input.tier && (tier === 'production' || input.tier === 'production')) {
+      const holders = (await this.record.listActive('unit')).filter((u) =>
+        u.body.supplyIds.includes(supplyId),
+      );
+      if (holders.length) {
+        throw new BadRequestException({
+          message: `${s.body.name} is held by ${holders.map((u) => u.body.name).join(', ')}: moving it ${input.tier === 'production' ? 'to' : 'out of'} production would ${input.tier === 'production' ? 'give' : 'take away'} deploy rights.`,
+          action:
+            input.tier === 'production'
+              ? 'Withdraw it from those units first, then give deploy rights by order in chat, which asks you to confirm.'
+              : 'Deploy rights cannot be taken back. Connect the server again as a separate environment instead.',
+        });
+      }
+    }
+    const login = input.server;
+    if (input.tier === 'dev' && !login) {
+      throw new BadRequestException({
+        message: 'A dev environment is a server bots log in to.',
+        action: 'Give its SSH login: host, user and key.',
+      });
+    }
+    if (sv && !login) {
+      throw new BadRequestException({
+        message: `${s.body.name} is a server; it cannot stop being one.`,
+        action: 'Keep its login, or connect a separate environment without one.',
+      });
+    }
+
+    const changed: string[] = [];
+    if (input.name !== s.body.name) changed.push(`name ${s.body.name} → ${input.name}`);
+    if (input.tier !== tier) changed.push(`tier ${tier} → ${input.tier}`);
+    let next: ServerAccess | null = sv;
+    if (login && !sv) {
+      // A plain environment becomes a server: pin its keys and prove the login, as on connect.
+      await this.requireKey(login.credentialName);
+      const hostKeys = await this.scanHostKeys(login.host, login.port);
+      const fresh: ServerAccess = {
+        host: login.host,
+        port: login.port,
+        user: login.user,
+        credentialName: login.credentialName,
+        hostKeys,
+        fingerprints: await this.ssh.fingerprints(hostKeys).catch(() => []),
+        url: login.url || null,
+        rsync: false,
+        facts: null,
+        workspace: null,
+        apps: [],
+      };
+      const facts = await this.proveLogin(fresh);
+      next = { ...fresh, facts, rsync: facts['rsync'] === 'yes' };
+      changed.push(`now a server: ${login.user}@${login.host}:${login.port}`);
+    } else if (login && sv) {
+      const moved = login.host !== sv.host || login.port !== sv.port;
+      const relogin = moved || login.user !== sv.user || login.credentialName !== sv.credentialName;
+      next = { ...sv, url: login.url || null };
+      if ((login.url || null) !== sv.url) changed.push('URL');
+      if (relogin || input.repinHostKey) {
+        await this.requireKey(login.credentialName);
+        next = {
+          ...next,
+          host: login.host,
+          port: login.port,
+          user: login.user,
+          credentialName: login.credentialName,
+        };
+        if (moved || input.repinHostKey) {
+          next.hostKeys = await this.scanHostKeys(login.host, login.port);
+          next.fingerprints = await this.ssh.fingerprints(next.hostKeys).catch(() => []);
+          changed.push(
+            moved ? `address ${login.user}@${login.host}:${login.port}` : 'host key pinned again',
+          );
+        }
+        if (login.user !== sv.user) changed.push(`user ${sv.user} → ${login.user}`);
+        if (login.credentialName !== sv.credentialName) changed.push(`key ${login.credentialName}`);
+        const facts = await this.proveLogin(next);
+        next = { ...next, facts, rsync: facts['rsync'] === 'yes' };
+      }
+    }
+    if (!changed.length) return s;
+    const reason = ctx.reason || `${s.body.name} edited: ${changed.join(', ')}`;
+    const revised = await this.record.revise(
+      'supply',
+      supplyId,
+      (b) => ({
+        ...b,
+        name: input.name,
+        spec: {
+          kind: 'environment',
+          details: { ...(b.spec.kind === 'environment' ? b.spec.details : {}), tier: input.tier },
+          server: next,
+        },
+      }),
+      { ...ctx, reason },
+    );
+    // Models served from it are reached at its new address.
+    if (sv && login && login.host !== sv.host) {
+      for (const id of sv.apps.flatMap((a) => a.provides)) {
+        await this.record.revise(
+          'supply',
+          id,
+          (b) =>
+            b.spec.kind === 'model'
+              ? {
+                  ...b,
+                  spec: {
+                    ...b.spec,
+                    baseUrl: b.spec.baseUrl.replace(`//${sv.host}:`, `//${login.host}:`),
+                  },
+                }
+              : b,
+          { ...ctx, reason: `${s.body.name} moved to ${login.host}` },
+        );
+      }
+    }
+    return revised;
   }
 
   private async requireKey(credential: string): Promise<void> {

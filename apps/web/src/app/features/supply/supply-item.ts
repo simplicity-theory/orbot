@@ -30,7 +30,14 @@ import { iconOf, tierOf } from './supply-sections';
         <span class="chip off">not connected</span>
       }
       @if (server()) {
-        <a class="btn small end" [routerLink]="['/supply/servers', s.id]">Apps & workspace</a>
+        <span class="end buttons">
+          <button *orbCan="null" type="button" class="btn small" (click)="edit.emit()">Edit</button>
+          <a class="btn small" [routerLink]="['/supply/servers', s.id]">Apps & workspace</a>
+        </span>
+      } @else if (s.spec.kind === 'environment') {
+        <button *orbCan="null" type="button" class="btn small end" (click)="edit.emit()">
+          Edit
+        </button>
       } @else if (s.spec.kind === 'model') {
         <button type="button" class="btn small end" [disabled]="busy()" (click)="checkModel()">
           Check it answers
@@ -200,6 +207,10 @@ import { iconOf, tierOf } from './supply-sections';
     .end {
       margin-left: auto;
     }
+    .buttons {
+      display: inline-flex;
+      gap: var(--space-2);
+    }
     .facts {
       font-size: var(--font-size-sm);
       dd {
@@ -250,6 +261,8 @@ export class SupplyItem {
   readonly repoName = input<string | null>(null);
   /** For a model: the name of the server it runs on. */
   readonly hostName = input<string | null>(null);
+  /** For an environment or server: the Commander wants to change it. */
+  readonly edit = output<void>();
   /** Something changed: the page reloads the depot and the units. */
   readonly changed = output<void>();
   protected readonly busy = signal(false);

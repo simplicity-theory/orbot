@@ -1,7 +1,8 @@
-import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Put } from '@nestjs/common';
 import {
   ConnectServerRequest,
   InstallAppRequest,
+  UpdateEnvironmentRequest,
   type AppProgressView,
   type ModelCheckView,
   type ServerDetailView,
@@ -113,6 +114,22 @@ export class ServersController {
     return toView(
       await this.apps.uninstall(id, appId, { actor, reason: 'Remove the app from the server' }),
     );
+  }
+}
+
+/** Editing any environment: a plain one becomes a server by giving it a login. */
+@Controller('supply/environments')
+export class EnvironmentsController {
+  constructor(private readonly servers: ServersService) {}
+
+  /** Change its name, tier and (for a server) login. A new login is tested before it is saved. */
+  @Put(':id')
+  async update(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body(new ZodPipe(UpdateEnvironmentRequest)) body: z.output<typeof UpdateEnvironmentRequest>,
+    @Actor() actor: string,
+  ) {
+    return toView(await this.servers.update(id, body, { actor, reason: '' }));
   }
 }
 

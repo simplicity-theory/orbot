@@ -100,6 +100,7 @@ import { parseWanted, sectionOf, SUPPLY_SECTIONS, type SupplySection } from './s
                     [repoName]="repoName(s)"
                     [hostName]="hostName(s)"
                     (changed)="reload()"
+                    (edit)="editServer(s)"
                   />
                 </li>
               }
@@ -246,6 +247,16 @@ export class SupplyPage implements OnInit {
     if (s.spec.kind !== 'model' || !s.spec.hostedOn) return null;
     const id = s.spec.hostedOn.supplyId;
     return (this.supply.value() ?? []).find((r) => r.id === id)?.name ?? null;
+  }
+
+  protected editServer(s: SupplyView): void {
+    this.show<EnvironmentDialogData>(
+      EnvironmentDialog,
+      { editing: s, credentials: this.credentials },
+      `Edit ${s.name}`,
+    ).closed.subscribe((saved) => {
+      if (saved) this.reload();
+    });
   }
 
   protected openWanted(): void {

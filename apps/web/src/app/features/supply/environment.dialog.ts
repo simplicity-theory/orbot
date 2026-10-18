@@ -9,6 +9,8 @@ import { Toasts } from '../../ui/toast';
 
 export interface EnvironmentDialogData {
   name?: string;
+  /** Edit this server instead of adding one. */
+  editing?: SupplyView;
   /** Names of the stored credentials (SSH keys among them). */
   credentials: Signal<string[]>;
 }
@@ -25,13 +27,16 @@ const TIERS: { id: Tier; label: string; hint: string }[] = [
   },
 ];
 
-/** Add an environment. A dev server, or any server bots log in to over SSH, needs its key. */
+/**
+ * Add an environment, or edit a server. A dev server, or any server bots log in to over SSH,
+ * needs its key.
+ */
 @Component({
   selector: 'orb-environment-dialog',
   imports: [FormsModule, RouterLink],
   template: `
     <form class="form" (ngSubmit)="submit()">
-      <h2>Add a server or environment</h2>
+      <h2>{{ editing ? 'Edit ' + editing.name : 'Add a server or environment' }}</h2>
       <label for="env-name">Name</label>
       <input
         id="env-name"
@@ -53,7 +58,10 @@ const TIERS: { id: Tier; label: string; hint: string }[] = [
           </label>
         }
       </fieldset>
-      @if (tier !== 'dev') {
+      @if (editing && editingTier === 'production') {
+        <p class="hint">Deploy rights cannot be taken back while a unit holds it.</p>
+      }
+      @if (tier !== 'dev' && !current?.server) {
         <label class="check"
           ><input type="checkbox" name="isServer" [(ngModel)]="isServer" /> It’s a server bots log
           in to over SSH</label
@@ -92,7 +100,7 @@ const TIERS: { id: Tier; label: string; hint: string }[] = [
           <label for="env-key">SSH key (credential)</label>
           <select id="env-key" name="key" class="input" [(ngModel)]="credentialName">
             <option [ngValue]="null" disabled>Choose a stored key</option>
-            @for (c of data.credentials(); track c) {
+            @for (c of keys(); track c) {
               <option [ngValue]="c">{{ c }}</option>
             }
           </select>
@@ -105,6 +113,12 @@ const TIERS: { id: Tier; label: string; hint: string }[] = [
             placeholder="https://staging.example.com"
           />
         </div>
+        @if (current?.server) {
+          <label class="check"
+            ><input type="checkbox" name="repin" [(ngModel)]="repinHostKey" /> The server was
+            reinstalled: pin its new host key</label
+          >
+        }
         @if (!data.credentials().length) {
           <p class="hint">
             No credentials stored yet.
@@ -120,9 +134,13 @@ const TIERS: { id: Tier; label: string; hint: string }[] = [
               >~/orbot-dev/&lt;repo&gt;/&lt;bot&gt;</span
             >) kept in step with its code. Install rsync for fast syncs.
           }
-          ORBOT pins the host key and tests the login when you connect. Every command is on the
-          record. Bots use <span class="mono">sudo -n</span>, so give the user passwordless sudo if
-          they should install packages.
+          @if (current?.server) {
+            A new host, port, user or key is tested by logging in before anything is saved.
+          } @else {
+            ORBOT pins the host key and tests the login when you connect.
+          }
+          Every command is on the record. Bots use <span class="mono">sudo -n</span>, so give the
+          user passwordless sudo if they should install packages.
         </p>
       }
       @if (error(); as e) {
@@ -135,7 +153,7 @@ const TIERS: { id: Tier; label: string; hint: string }[] = [
           class="btn btn--primary"
           [disabled]="busy() || !name.trim() || (asServer() && !credentialName)"
         >
-          {{ asServer() ? 'Connect server' : 'Connect environment' }}
+          {{ editing ? 'Save changes' : asServer() ? 'Connect server' : 'Connect environment' }}
         </button>
       </div>
     </form>
@@ -199,16 +217,27 @@ export class EnvironmentDialog {
   private readonly api = inject(Api);
   private readonly toasts = inject(Toasts);
   protected readonly tiers = TIERS;
-  protected name = this.data.name ?? '';
-  protected tier: Tier = 'staging';
-  protected isServer = false;
-  protected host = '';
-  protected port = 22;
-  protected user = '';
-  protected credentialName: string | null = null;
-  protected url = '';
+  protected readonly editing = this.data.editing ?? null;
+  protected readonly current = this.editing?.spec.kind === 'environment' ? this.editing.spec : null;
+  protected readonly editingTier = (this.current?.details['tier'] ?? 'staging') as Tier;
+  protected name = this.editing?.name ?? this.data.name ?? '';
+  protected tier: Tier = this.editing ? this.editingTier : 'staging';
+  protected isServer = !!this.current?.server;
+  protected host = this.current?.server?.host ?? '';
+  protected port = this.current?.server?.port ?? 22;
+  protected user = this.current?.server?.user ?? '';
+  protected credentialName: string | null = this.current?.server?.credentialName ?? null;
+  protected url = this.current?.server?.url ?? '';
+  protected repinHostKey = false;
   protected readonly busy = signal(false);
   protected readonly error = signal<UserFacingError | null>(null);
+
+  /** Stored credentials, and the server's current key even if it is no longer listed. */
+  protected keys(): string[] {
+    const list = this.data.credentials();
+    const mine = this.current?.server?.credentialName;
+    return mine && !list.includes(mine) ? [mine, ...list] : list;
+  }
 
   /** A dev environment is always a server. */
   protected asServer(): boolean {
@@ -221,7 +250,26 @@ export class EnvironmentDialog {
     try {
       let message: string;
       let s: SupplyView;
-      if (this.asServer()) {
+      if (this.editing) {
+        const becomes = this.asServer() && !this.current?.server;
+        s = await this.api.updateEnvironment(this.editing.id, {
+          name: this.name.trim(),
+          tier: this.tier,
+          server: this.asServer()
+            ? {
+                host: this.host.trim(),
+                port: Number(this.port) || 22,
+                user: this.user.trim(),
+                credentialName: this.credentialName ?? '',
+                url: this.url.trim() || null,
+              }
+            : null,
+          repinHostKey: this.repinHostKey,
+        });
+        message = becomes
+          ? `Saved ${s.name}: logged in, host key pinned. It has a server page now.`
+          : `Saved ${s.name}.`;
+      } else if (this.asServer()) {
         s = await this.api.connectServer({
           name: this.name.trim(),
           tier: this.tier,

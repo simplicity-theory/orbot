@@ -38,6 +38,22 @@ export const ConnectServerRequest = z.object({
 });
 export type ConnectServerRequest = z.input<typeof ConnectServerRequest>;
 
+/** How bots log in to a server over SSH. */
+export const ServerLogin = ConnectServerRequest.omit({ name: true, tier: true });
+
+/**
+ * Change an environment: its name, tier and, for a server, its login. A plain environment
+ * becomes a server by giving it a login. A new login is tested before anything is saved.
+ */
+export const UpdateEnvironmentRequest = z.object({
+  name: z.string().trim().min(1).max(100),
+  tier: z.enum(['dev', 'staging', 'production']),
+  server: ServerLogin.nullable().default(null),
+  /** The server was reinstalled (new host key): pin the keys it offers now. */
+  repinHostKey: z.boolean().default(false),
+});
+export type UpdateEnvironmentRequest = z.input<typeof UpdateEnvironmentRequest>;
+
 export const ConnectRepositoryRequest = z.object({
   name: z.string().trim().min(1).max(100),
   /** Local path to a git repository, or a clone URL (without embedded credentials). */

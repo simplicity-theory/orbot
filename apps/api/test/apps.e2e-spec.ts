@@ -98,6 +98,8 @@ class FakeGpuServer {
         ? ok(command === 'echo orbot-ok' ? 'orbot-ok\n' : `ran as orbot-dev: ${command}\n`)
         : { exitCode: 255, output: 'Permission denied (publickey).' };
     }
+    if (target.user === 'nobody')
+      return { exitCode: 255, output: 'Permission denied (publickey).' };
     if (command.startsWith('echo orbot-ok')) {
       return ok(
         'orbot-ok\nos=Ubuntu 24.04.1 LTS\ngpu=NVIDIA GeForce RTX 3090, 24576 MiB, 550.120\ndocker=not installed\nsudo=passwordless\nrsync=yes\n',
@@ -461,6 +463,189 @@ describe('Apps on servers: install vLLM from deploy/apps and serve a model to th
       (s: SupplyView) => s.id === app.provides[0],
     );
     expect(model.connected).toBe(false);
+  });
+
+  it('moving the server to a new host moves the URL of the model it serves', async () => {
+    const app = appOf(await detail());
+    await t.agent
+      .put(`/api/supply/environments/${serverId}`)
+      .send({
+        name: 'gpu1',
+        tier: 'dev',
+        server: { host: 'localhost', user: 'admin', credentialName: 'gpu-key', url: null },
+      })
+      .expect(200);
+    const model = (await t.agent.get('/api/supply').expect(200)).body.find(
+      (s: SupplyView) => s.id === app.provides[0],
+    );
+    expect(model.spec.baseUrl).toBe(`http://localhost:${apiPort}/v1`);
+  });
+});
+
+describe('Editing a server', () => {
+  let t: TestApp;
+  let gpu: FakeGpuServer;
+  let scan: ReturnType<typeof vi.fn>;
+  let id: string;
+
+  beforeAll(async () => {
+    t = await startTestApp();
+    gpu = new FakeGpuServer();
+    const ssh = t.app.get(SshClient);
+    scan = vi
+      .spyOn(ssh, 'scan')
+      .mockImplementation(async (host) => [
+        `${host} ${HOST_KEY.split(' ').slice(1).join(' ')}`,
+      ]) as unknown as ReturnType<typeof vi.fn>;
+    vi.spyOn(ssh, 'fingerprints').mockImplementation(async (keys) =>
+      keys.map((k) => `256 SHA256:x ${k.split(' ')[0]} (ED25519)`),
+    );
+    vi.spyOn(ssh, 'run').mockImplementation(async (target, key, command, opts) =>
+      gpu.answer(target, key, command, opts.stdin),
+    );
+    await t.agent.post('/api/supply/credentials').send({ name: 'gpu-key', value: KEY }).expect(201);
+    await t.agent
+      .post('/api/supply/credentials')
+      .send({ name: 'other-key', value: KEY.replace('gpukey', 'other') })
+      .expect(201);
+    id = (
+      await t.agent
+        .post('/api/supply/servers')
+        .send({
+          name: 'gpu1',
+          tier: 'dev',
+          host: '127.0.0.1',
+          user: 'admin',
+          credentialName: 'gpu-key',
+        })
+        .expect(201)
+    ).body.id;
+  });
+  afterAll(() => t.close());
+
+  const base = {
+    name: 'gpu1',
+    tier: 'dev',
+    host: '127.0.0.1',
+    port: 22,
+    user: 'admin',
+    credentialName: 'gpu-key',
+    url: null,
+  };
+  /** The flat fields above, sent the way the API takes them. */
+  const edit = (body: Record<string, unknown>) => {
+    const { name, tier, repinHostKey, ...server } = { ...base, ...body } as Record<string, unknown>;
+    return t.agent
+      .put(`/api/supply/environments/${id}`)
+      .send({ name, tier, server, ...(repinHostKey ? { repinHostKey } : {}) });
+  };
+
+  it('a new name or URL is saved without logging in again or touching the pinned key', async () => {
+    const runs = gpu.runs.length;
+    const scans = scan.mock.calls.length;
+    const r = await edit({ name: 'gpu-main', url: 'http://gpu-main.lan' }).expect(200);
+    expect(r.body).toMatchObject({
+      name: 'gpu-main',
+      spec: {
+        server: { url: 'http://gpu-main.lan', hostKeys: [expect.stringMatching(/^127\.0\.0\.1 /)] },
+      },
+    });
+    expect(gpu.runs.length).toBe(runs);
+    expect(scan.mock.calls.length).toBe(scans);
+    const history = (await t.agent.get(`/api/record/${id}/history`).expect(200)).body as {
+      reason: string;
+    }[];
+    expect(history.at(-1)!.reason).toBe('gpu1 edited: name gpu1 → gpu-main, URL');
+    base.name = 'gpu-main';
+  });
+
+  it('a new login is tested first: if it fails nothing changes', async () => {
+    const msg = (await edit({ user: 'nobody' }).expect(400)).body.error.message;
+    expect(msg).toBe(
+      'The key "gpu-key" could not log in as nobody@127.0.0.1: Permission denied (publickey).',
+    );
+    const s = (await t.agent.get(`/api/supply/servers/${id}`).expect(200)).body.supply;
+    expect(s.spec.server.user).toBe('admin');
+    expect((await edit({ credentialName: 'nope' }).expect(400)).body.error.message).toBe(
+      'No credential called "nope" is stored.',
+    );
+    const ok = await edit({ credentialName: 'other-key' }).expect(200);
+    expect(ok.body.spec.server.credentialName).toBe('other-key');
+    expect(gpu.runs.at(-1)!.key).toContain('other');
+    base.credentialName = 'other-key';
+  });
+
+  it('a new host is scanned and pinned again; "reinstalled" re-pins the same host', async () => {
+    const r = await edit({ host: 'localhost' }).expect(200);
+    expect(r.body.spec.server.hostKeys).toEqual([expect.stringMatching(/^localhost ssh-ed25519 /)]);
+    expect(r.body.spec.server.fingerprints).toEqual(['256 SHA256:x localhost (ED25519)']);
+    base.host = 'localhost';
+    const scans = scan.mock.calls.length;
+    await edit({ repinHostKey: true }).expect(200);
+    expect(scan.mock.calls.length).toBe(scans + 1);
+  });
+
+  it('the tier cannot move to or from production while a unit holds the server', async () => {
+    const fx = await makeUnitWithBot(t.app, { name: 'Holders', prefix: 'H', supplyIds: [id] });
+    const msg = (await edit({ tier: 'production' }).expect(400)).body.error;
+    expect(msg.message).toBe(
+      'gpu-main is held by Holders: moving it to production would give deploy rights.',
+    );
+    expect(msg.action).toContain('give deploy rights by order in chat');
+    await edit({ tier: 'staging' }).expect(200);
+    void fx;
+  });
+
+  it('a plain environment becomes a server by giving it a login; its history stays', async () => {
+    const env: SupplyView = (
+      await t.agent
+        .post('/api/supply/environments')
+        .send({ name: '3090-Server', tier: 'production' })
+        .expect(201)
+    ).body;
+    const put = (body: Record<string, unknown>) =>
+      t.agent.put(`/api/supply/environments/${env.id}`).send(body);
+    expect((await put({ name: '3090-Server', tier: 'dev' }).expect(400)).body.error.message).toBe(
+      'A dev environment is a server bots log in to.',
+    );
+    const login = { host: '127.0.0.1', user: 'admin', credentialName: 'gpu-key' };
+    expect(
+      (
+        await put({
+          name: '3090-Server',
+          tier: 'dev',
+          server: { ...login, user: 'nobody' },
+        }).expect(400)
+      ).body.error.message,
+    ).toContain('could not log in as nobody@127.0.0.1');
+    const r = await put({ name: '3090-Server', tier: 'dev', server: login }).expect(200);
+    expect(r.body).toMatchObject({
+      id: env.id,
+      version: 2,
+      spec: {
+        kind: 'environment',
+        details: { tier: 'dev' },
+        server: {
+          host: '127.0.0.1',
+          user: 'admin',
+          workspace: null,
+          apps: [],
+          facts: { gpu: expect.stringContaining('RTX 3090') },
+        },
+      },
+    });
+    const history = (await t.agent.get(`/api/record/${env.id}/history`).expect(200)).body as {
+      reason: string;
+    }[];
+    expect(history.at(-1)!.reason).toBe(
+      '3090-Server edited: tier production → dev, now a server: admin@127.0.0.1:22',
+    );
+    // The server page opens for it now.
+    await t.agent.get(`/api/supply/servers/${env.id}`).expect(200);
+    // And it cannot quietly stop being a server.
+    expect(
+      (await put({ name: '3090-Server', tier: 'staging' }).expect(400)).body.error.message,
+    ).toBe('3090-Server is a server; it cannot stop being one.');
   });
 });
 

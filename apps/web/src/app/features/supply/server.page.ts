@@ -22,6 +22,7 @@ import { LoadError } from '../../ui/load-error';
 import { Skeleton } from '../../ui/skeleton';
 import { Toasts } from '../../ui/toast';
 import { RecordTimeline } from '../tasks/record-timeline';
+import { EnvironmentDialog, type EnvironmentDialogData } from './environment.dialog';
 import { InstallAppDialog, type InstallAppData } from './install-app.dialog';
 import { ServerAppCard } from './server-app';
 
@@ -56,9 +57,12 @@ const FACTS: [key: string, label: string][] = [
               }
             </p>
           </div>
-          <button *orbCan="null" type="button" class="btn" [disabled]="busy()" (click)="check()">
-            Check login
-          </button>
+          <div class="header-actions" *orbCan="null">
+            <button type="button" class="btn" [disabled]="busy()" (click)="check()">
+              Check login
+            </button>
+            <button type="button" class="btn btn--primary" (click)="edit()">Edit</button>
+          </div>
         </header>
 
         @if (sv.facts && sv.facts['sudo'] !== 'passwordless') {
@@ -203,6 +207,11 @@ const FACTS: [key: string, label: string][] = [
     </div>
   `,
   styles: `
+    .header-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-2);
+    }
     .columns {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(var(--card-min-width), 1fr));
@@ -343,6 +352,17 @@ export class ServerPage {
         credentials: this.credentials,
       },
       `Install ${manifest.name}`,
+    ).closed.subscribe((s) => {
+      if (s) this.view.reload();
+    });
+  }
+
+  protected edit(): void {
+    openDialog<SupplyView, EnvironmentDialogData, EnvironmentDialog>(
+      this.dialog,
+      EnvironmentDialog,
+      { editing: this.view.value()!.supply, credentials: this.credentials },
+      `Edit ${this.view.value()!.supply.name}`,
     ).closed.subscribe((s) => {
       if (s) this.view.reload();
     });

@@ -6,6 +6,7 @@ import type {
   AppProgressView,
   ConnectServerRequest,
   InstallAppRequest,
+  UpdateEnvironmentRequest,
   ModelCheckView,
   ConnectServiceRequest,
   MeView,
@@ -284,6 +285,10 @@ export class Api {
     return firstValueFrom(
       this.http.post<{ ok: boolean; output: string }>(`${API}/supply/servers/${id}/check`, {}),
     );
+  }
+
+  updateEnvironment(id: string, req: UpdateEnvironmentRequest) {
+    return firstValueFrom(this.http.put<SupplyView>(`${API}/supply/environments/${id}`, req));
   }
 
   setupWorkspace(serverId: string) {

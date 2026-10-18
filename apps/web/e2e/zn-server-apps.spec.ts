@@ -65,3 +65,63 @@ test('a server page shows the GPU, offers the bot workspace, and installs vLLM (
   await expect(page.getByText('No models yet')).toBeVisible();
   await expectAccessible(page, 'models (empty)');
 });
+
+test('edit a server: the form starts from what it is; a login that does not work is refused', async ({
+  page,
+}) => {
+  await page.goto('/supply?section=environments');
+  const card = page
+    .getByRole('list', { name: 'Servers & environments' })
+    .getByRole('listitem')
+    .filter({ hasText: 'gpu1' });
+  await card.getByRole('button', { name: 'Edit' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Edit gpu1' });
+  await expect(dialog.getByRole('heading', { name: 'Edit gpu1' })).toBeVisible();
+  await expect(dialog.getByLabel('Host', { exact: true })).toHaveValue('gpu1.invalid');
+  await expect(dialog.getByLabel('SSH key (credential)').locator('option:checked')).toHaveText(
+    'gpu1-key',
+  );
+  await expect(dialog.getByLabel('User')).toHaveValue('admin');
+  await expect(dialog.getByRole('radio', { name: /Dev server/ })).toBeChecked();
+  await expect(
+    dialog.getByRole('checkbox', { name: /reinstalled: pin its new host key/ }),
+  ).not.toBeChecked();
+  await expectAccessible(page, 'edit server');
+
+  // A URL is saved as it is: nothing to log in to.
+  await dialog.getByLabel(/URL/).fill('http://gpu1.lan:8080');
+  await dialog.getByRole('button', { name: 'Save changes' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Saved gpu1.' })).toBeVisible();
+  await expect(card).toContainText('http://gpu1.lan:8080');
+
+  // A new user is tested first; this server cannot be reached, so nothing changes.
+  await card.getByRole('button', { name: 'Edit' }).click();
+  await dialog.getByLabel('User').fill('ops');
+  await dialog.getByRole('button', { name: 'Save changes' }).click();
+  await expect(dialog.getByRole('alert')).toContainText('could not log in as ops@gpu1.invalid');
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
+  await card.getByRole('link', { name: 'Apps & workspace' }).click();
+  await expect(page.getByRole('heading', { level: 1, name: 'gpu1' })).toBeVisible();
+  await expect(page.locator('header.page-header')).toContainText('admin@gpu1.invalid:22');
+  await expect(page.getByRole('button', { name: 'Edit' })).toBeVisible();
+});
+
+test('a plain environment has Edit too, and its form can make it a server', async ({ page }) => {
+  await page.goto('/supply?section=environments');
+  const card = page
+    .getByRole('list', { name: 'Servers & environments' })
+    .getByRole('listitem')
+    .filter({ hasText: 'production' })
+    .filter({ hasNotText: 'gpu1' });
+  await card.getByRole('button', { name: 'Edit' }).click();
+  const dialog = page.getByRole('dialog', { name: /^Edit / });
+  await expect(dialog.getByRole('radio', { name: /Production/ })).toBeChecked();
+  const asServer = dialog.getByRole('checkbox', { name: /server bots log in to over SSH/ });
+  await expect(asServer).not.toBeChecked();
+  await expect(dialog.getByLabel('Host', { exact: true })).toHaveCount(0);
+  await asServer.check();
+  await expect(dialog.getByLabel('Host', { exact: true })).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Save changes' })).toBeDisabled();
+  await expectAccessible(page, 'edit a plain environment');
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
+});
