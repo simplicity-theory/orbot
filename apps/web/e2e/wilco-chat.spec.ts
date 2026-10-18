@@ -103,11 +103,20 @@ test('promised supply that is not connected: the reply says what is missing and 
   const reply = await say(drawer, 'I’ll give you access to the billing repo.');
   await expect(reply).toContainText(/Not connected in the Supply Depot.*billing repository/);
   await reply.getByRole('link', { name: 'Open Supply Depot' }).click();
+  // The depot opens the right form, filled in; the page behind it is inert until it closes.
+  const dialog = page.getByRole('dialog', { name: 'Connect repository' });
+  await expect(dialog.getByLabel('Name')).toHaveValue('billing');
+  await expectAccessible(page, 'supply depot (connect form)');
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
   await expect(page.getByRole('heading', { level: 1, name: 'Supply Depot' })).toBeVisible();
   await expect(
     page.getByRole('status').filter({ hasText: 'An Overseer asked for billing repository' }),
   ).toBeVisible();
-  await expect(page.getByLabel('Name')).toHaveValue('billing');
+  await expect(
+    page
+      .getByRole('navigation', { name: 'Supply Depot sections' })
+      .getByRole('link', { name: /Repositories/ }),
+  ).toHaveAttribute('aria-current', 'page');
   await expectAccessible(page, 'supply depot');
 });
 

@@ -16,21 +16,28 @@ test('connections start empty, and the depot connects a service', async ({ page 
   await expectAccessible(page, 'connections (empty)');
 
   await page.getByRole('link', { name: 'Supply Depot' }).last().click();
-  await page.getByRole('button', { name: 'service' }).click();
-  const form = page.locator('form').filter({ hasText: 'Connect service' });
+  await page
+    .getByRole('navigation', { name: 'Supply Depot sections' })
+    .getByRole('link', { name: /Connections/ })
+    .click();
+  await expect(page.getByText('No connections yet')).toBeVisible();
+  await page.getByRole('button', { name: 'Connect GitHub' }).first().click();
+  const form = page.getByRole('dialog', { name: 'Connect GitHub' });
   await expect(form.getByLabel('API URL')).toHaveValue('https://api.github.com');
   await expect(form.getByLabel('For repository').locator('option')).not.toHaveCount(0);
   await expect(form.getByRole('group', { name: 'Use it as' })).toContainText('Build pipeline');
   await expectAccessible(page, 'connect a service (dark)');
   await setTheme(page, 'light');
+  await page.getByRole('button', { name: 'Connect GitHub' }).first().click();
+  await expect(form.getByLabel('API URL')).toBeVisible();
   await expectAccessible(page, 'connect a service (light)');
   await setTheme(page, 'dark');
 });
 
 test('connect GitHub from the depot, then take an issue on from Connections', async ({ page }) => {
-  await page.goto('/supply');
-  await page.getByRole('button', { name: 'credential' }).click();
-  const cred = page.locator('form').filter({ hasText: 'Store credential' });
+  await page.goto('/supply?section=credentials');
+  await page.getByRole('button', { name: 'Store credential' }).first().click();
+  const cred = page.getByRole('dialog', { name: 'Store credential' });
   await cred.getByLabel('Name').fill('gh-token');
   await cred.getByLabel('Value').fill(gh.token);
   await cred.getByRole('button', { name: 'Store credential' }).click();
@@ -38,18 +45,22 @@ test('connect GitHub from the depot, then take an issue on from Connections', as
     page.getByRole('status').filter({ hasText: 'Stored credential gh-token' }),
   ).toBeVisible();
 
-  await page.getByRole('button', { name: 'service' }).click();
-  const form = page.locator('form').filter({ hasText: 'Connect service' });
+  await page.goto('/supply?section=connections');
+  await page.getByRole('button', { name: 'Connect GitHub' }).first().click();
+  const form = page.getByRole('dialog', { name: 'Connect GitHub' });
   await form.getByLabel('Name', { exact: true }).fill('GitHub acme/app');
   await form.getByLabel('API URL').fill(gh.url);
   await form.getByLabel('Owner').fill('acme');
   await form.getByLabel('Repository name').fill('app');
   await form.getByLabel(/Push URL/).fill(gh.remote);
   await form.getByLabel('Token (credential)').selectOption({ label: 'gh-token' });
-  await form.getByRole('button', { name: 'Connect service' }).click();
+  await form.getByRole('button', { name: 'Connect GitHub' }).click();
   await expect(
     page.getByRole('status').filter({ hasText: 'Connected GitHub acme/app.' }),
   ).toBeVisible();
+  const item = page.getByRole('list', { name: 'Connections' });
+  await expect(item).toContainText('acme/app');
+  await expect(item).toContainText('code host · issue tracker · build pipeline');
 
   await page.goto('/connections');
   const conn = page.getByRole('region', { name: 'GitHub acme/app' });
