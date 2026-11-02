@@ -13,6 +13,7 @@ import { ZodPipe } from '../common/zod.pipe.js';
 import { toView } from '../domain/view.js';
 import { RecordService } from '../record/record.service.js';
 import { AppsService } from './apps.service.js';
+import { HealthService } from './health.service.js';
 import { ServersService } from './servers.service.js';
 
 /** Servers bots log in to, and the apps on them. Changing them is the Commander's (like all supply). */
@@ -22,6 +23,7 @@ export class ServersController {
     private readonly servers: ServersService,
     private readonly apps: AppsService,
     private readonly record: RecordService,
+    private readonly healthChecks: HealthService,
   ) {}
 
   @Post()
@@ -42,7 +44,7 @@ export class ServersController {
   async detail(@Param('id', new ParseUUIDPipe()) id: string): Promise<ServerDetailView> {
     const s = await this.servers.require(id);
     const events = await this.record.findEvents(
-      ['app.install', 'server.command', 'server.workspace'],
+      ['app.install', 'server.command', 'server.workspace', 'server.health'],
       { supplyId: id },
       { latest: true, limit: 100 },
     );
@@ -50,7 +52,22 @@ export class ServersController {
       supply: toView(s),
       events: events as ServerDetailView['events'],
       catalog: await this.apps.catalog(),
+      health:
+        ((
+          await this.record.findEvents(
+            ['server.health'],
+            { supplyId: id },
+            { latest: true, limit: 1 },
+          )
+        )[0] as ServerDetailView['health']) ?? null,
     };
+  }
+
+  /** Log in, run each app's status check and read the disks; the result is on the record. */
+  @Post(':id/health')
+  @HttpCode(200)
+  health(@Param('id', new ParseUUIDPipe()) id: string, @Actor() actor: string) {
+    return this.healthChecks.check(id, { actor, reason: 'Health check' });
   }
 
   /** Log in again with the stored key, and refresh what the server is. */

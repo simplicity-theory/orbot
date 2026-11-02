@@ -155,7 +155,7 @@ describe('Connections', () => {
         supplyIds: [repoId],
       })
     ).unit.entityId;
-    const prod = (
+    prod = (
       await t.agent
         .post('/api/supply/environments')
         .send({ name: 'production', tier: 'production' })
@@ -202,13 +202,18 @@ describe('Connections', () => {
   });
 
   let opId: string;
+  let prod: string;
   let firstSha: string;
 
   it('an operation’s integration branch is pushed and opened as a pull request; a red pipeline sends a fix', async () => {
     opId = (
       await t.agent
         .post('/api/operations')
-        .send({ intent: 'Rate limit the login endpoint.', name: 'Throttle' })
+        .send({
+          intent: 'Rate limit the login endpoint.',
+          name: 'Throttle',
+          supplyIds: [repoId, prod],
+        })
         .expect(201)
     ).body.id;
     const v = await waitFor(async () => {

@@ -1,16 +1,19 @@
 import { DialogRef } from '@angular/cdk/dialog';
-import { Component, inject, signal } from '@angular/core';
+import { httpResource } from '@angular/common/http';
+import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
-import { Api } from '../../core/api';
+import type { SupplyView } from '@orbot/shared';
+import { Api, apiUrl } from '../../core/api';
 import { toUserError, type UserFacingError } from '../../core/api-error';
 import { Term } from '../../ui/term';
 import { Toasts } from '../../ui/toast';
+import { ResourcePicker } from './resource-picker';
 
 /** State intent: HQ turns it into an operation with a mission for each unit. */
 @Component({
   selector: 'orb-intent-dialog',
-  imports: [FormsModule, Term],
+  imports: [FormsModule, ResourcePicker, Term],
   template: `
     <form class="form" (ngSubmit)="submit()">
       <h2>State your <orb-term key="intent">intent</orb-term></h2>
@@ -42,6 +45,15 @@ import { Toasts } from '../../ui/toast';
         step="1"
         [(ngModel)]="budget"
       />
+      @if (supply.value(); as list) {
+        <orb-resource-picker [supply]="list" [(selected)]="supplyIds" />
+        @if (!hasRepo()) {
+          <p class="hint">
+            It needs at least one repository to work in: without one it waits at the O Group (you
+            can assign it later, on the operation's page or in chat).
+          </p>
+        }
+      }
       <label class="check"
         ><input type="checkbox" name="reconFirst" [(ngModel)]="reconFirst" />
         <span
@@ -80,6 +92,13 @@ export class IntentDialog {
   protected name = '';
   protected budget: number | null = null;
   protected reconFirst = false;
+  protected readonly supply = httpResource<SupplyView[]>(() => apiUrl.supply());
+  protected readonly supplyIds = signal<string[]>([]);
+  protected readonly hasRepo = computed(() =>
+    (this.supply.value() ?? []).some(
+      (s) => s.spec.kind === 'repository' && this.supplyIds().includes(s.id),
+    ),
+  );
   protected readonly busy = signal(false);
   protected readonly error = signal<UserFacingError | null>(null);
 
@@ -91,11 +110,14 @@ export class IntentDialog {
         this.name.trim() || undefined,
         this.budget ? Math.round(this.budget) : null,
         this.reconFirst,
+        this.supplyIds(),
       );
       this.toasts.show({
         tone: 'success',
         message: `Operation ${op.name} launched.`,
-        detail: 'HQ is holding the O Group.',
+        detail: this.hasRepo()
+          ? 'HQ is holding the O Group.'
+          : 'It waits at the O Group until it has a repository.',
       });
       this.ref.close();
       void this.router.navigate(['/operations', op.id]);

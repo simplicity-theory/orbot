@@ -111,6 +111,19 @@ export const routes: Routes = [
         loadComponent: () => import('./features/supply/supply.page').then((m) => m.SupplyPage),
       },
       {
+        path: 'supply/repositories/:repoId',
+        loadComponent: () =>
+          import('./features/code/repository.page').then((m) => m.RepositoryPage),
+      },
+      {
+        path: 'supply/repositories/:repoId/commits/:sha',
+        loadComponent: () => import('./features/code/commit.page').then((m) => m.CommitPage),
+      },
+      {
+        path: 'commits/:sha',
+        loadComponent: () => import('./features/code/commit.page').then((m) => m.CommitPage),
+      },
+      {
         path: 'supply/servers/:serverId',
         loadComponent: () => import('./features/supply/server.page').then((m) => m.ServerPage),
       },

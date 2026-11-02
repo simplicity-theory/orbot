@@ -65,6 +65,39 @@ export const ChatAction = z.discriminatedUnion('kind', [
     unitId: Id.nullable(),
     intent: z.string().min(1).max(1000),
     name: z.string().min(1).max(100),
+    /** Depot items to assign to it from the start (repositories first). */
+    supplyIds: z.array(Id).default([]),
+  }),
+  /** Through HQ: assign a depot item to an operation. A missing required one blocks it. */
+  z.object({
+    kind: z.literal('assign-resource'),
+    unitId: Id.nullable(),
+    operationId: Id,
+    supplyId: Id,
+  }),
+  /** Through HQ: take a depot item off an operation (units that hold it keep it). */
+  z.object({
+    kind: z.literal('release-resource'),
+    unitId: Id.nullable(),
+    operationId: Id,
+    supplyId: Id,
+  }),
+  /**
+   * Through HQ: make a repository the operation's main one (where work lands and deploys from).
+   * Once missions are out they are withdrawn and issued again there; work done stays on record.
+   */
+  z.object({
+    kind: z.literal('set-main-repository'),
+    unitId: Id.nullable(),
+    operationId: Id,
+    supplyId: Id,
+  }),
+  /** Through HQ: call an operation off. Its work stands down; it closes without a review. */
+  z.object({
+    kind: z.literal('cancel-operation'),
+    unitId: Id.nullable(),
+    operationId: Id,
+    note: z.string().max(500).default(''),
   }),
   /** Approve (or reject) a production deploy waiting on the Commander. */
   z.object({ kind: z.literal('approve-deploy'), unitId: Id, taskId: Id, approve: z.boolean() }),

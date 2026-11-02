@@ -62,6 +62,103 @@ const input = (message: string, over: Partial<InterpretInput> = {}): InterpretIn
 const i = new SimulatedInterpreter();
 
 describe('SimulatedInterpreter', () => {
+  describe('operation resources', () => {
+    const OP = '00000000-0000-4000-8000-0000000000e1';
+    const REPO = '00000000-0000-4000-8000-0000000000c1';
+    const PROD = '00000000-0000-4000-8000-0000000000c2';
+    const hq = (message: string) =>
+      input(message, {
+        channelUnitId: null,
+        operations: [{ id: OP, name: 'Ledger', phase: 'o-group', supplyIds: [] }],
+      });
+
+    it('assigns depot items to an operation, by name', () => {
+      const r = i.interpret(hq('Use payments-service and production for Operation Ledger.'));
+      expect(r.actions).toEqual([
+        { kind: 'assign-resource', unitId: null, operationId: OP, supplyId: REPO },
+        { kind: 'assign-resource', unitId: null, operationId: OP, supplyId: PROD },
+      ]);
+      expect(r.missing).toEqual([]);
+    });
+
+    it('takes one off, and says what it could not find', () => {
+      const r = i.interpret(hq('Take the production environment off Operation Ledger.'));
+      expect(r.actions).toEqual([
+        { kind: 'release-resource', unitId: null, operationId: OP, supplyId: PROD },
+      ]);
+      const m = i.interpret(hq('Assign billing-api to Operation Ledger.'));
+      expect(m.actions).toEqual([]);
+      expect(m.missing).toEqual([{ what: 'billing-api', kind: 'supply' }]);
+    });
+
+    it('asks which operation when none matches', () => {
+      const r = i.interpret(
+        input('Use payments-service for operation Nowhere.', {
+          channelUnitId: null,
+          operations: [
+            { id: OP, name: 'Ledger', phase: 'o-group' },
+            { id: '00000000-0000-4000-8000-0000000000e2', name: 'Audit', phase: 'execution' },
+          ],
+        }),
+      );
+      expect(r.unclear[0]).toContain('which operation? Under way: Ledger, Audit.');
+    });
+
+    it('changes the main repository: named, or found by the repository it moves from', () => {
+      const SUB = '00000000-0000-4000-8000-0000000000c3';
+      const two = (message: string) =>
+        input(message, {
+          channelUnitId: null,
+          depot: [
+            ...input('').depot,
+            { id: SUB, name: 'subframe', kind: 'repository', connected: true, tier: null },
+          ],
+          operations: [
+            { id: OP, name: 'whispering willows', phase: 'execution', supplyIds: [REPO] },
+            { id: '00000000-0000-4000-8000-0000000000e2', name: 'Audit', phase: 'execution' },
+          ],
+        });
+      const want = [{ kind: 'set-main-repository', unitId: null, operationId: OP, supplyId: SUB }];
+      expect(i.interpret(two('change the repo from payments-service to subframe')).actions).toEqual(
+        want,
+      );
+      expect(
+        i.interpret(two('Make subframe the main repository of Operation whispering willows.'))
+          .actions,
+      ).toEqual(want);
+      expect(i.interpret(two('Move operation whispering willows to subframe.')).actions).toEqual(
+        want,
+      );
+      // Not a repository, or not in the depot: said, not done.
+      expect(
+        i.interpret(two('change the repo from payments-service to production')).missing,
+      ).toEqual([{ what: 'production', kind: 'supply' }]);
+      expect(i.interpret(two('change the repo to subframe')).unclear[0]).toContain(
+        'which operation? Under way: whispering willows, Audit.',
+      );
+    });
+
+    it('cancels an operation, with why', () => {
+      expect(i.interpret(hq('Cancel operation Ledger: wrong approach.')).actions).toEqual([
+        { kind: 'cancel-operation', unitId: null, operationId: OP, note: 'wrong approach' },
+      ]);
+      expect(i.interpret(hq('Call off the operation.')).actions).toEqual([
+        { kind: 'cancel-operation', unitId: null, operationId: OP, note: '' },
+      ]);
+    });
+
+    it('launches an operation with resources named in the intent', () => {
+      const r = i.interpret(hq('Add audit logging to payments, using payments-service.'));
+      expect(r.actions).toEqual([
+        expect.objectContaining({
+          kind: 'create-operation',
+          intent: 'Add audit logging to payments.',
+          supplyIds: [REPO],
+        }),
+      ]);
+    });
+  });
+
   it('splits a message into a rule change and a supply grant', () => {
     const r = i.interpret(
       input('Stop blocking on low-severity findings. I’ll give you access to the payments repo.'),

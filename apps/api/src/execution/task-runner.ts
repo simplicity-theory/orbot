@@ -155,6 +155,63 @@ export class TaskRunner {
   }
 
   /** Start a task in the background. Resolves once the run has started. */
+  /**
+   * Carry on with a held task (unblocked, decided, ruled on): at once if its bot is free, else
+   * first in that bot's queue, for the Overseer to dispatch as soon as the bot finishes.
+   */
+  async resume(taskId: string, actor: string): Promise<'started' | 'queued'> {
+    const task = await this.record.requireActive('task', taskId);
+    const bot = task.body.botId ? await this.record.getActive('bot', task.body.botId) : null;
+    if (!bot || bot.body.status !== 'working' || bot.body.currentTaskId === taskId) {
+      await this.start(taskId, actor);
+      return 'started';
+    }
+    if (!STARTABLE.includes(task.body.status)) {
+      throw new ConflictException({
+        message: `Task #${task.body.number} is ${task.body.status} and cannot be started.`,
+        action: 'Only queued, blocked or stood-down tasks can be started.',
+      });
+    }
+    const allowed = await this.policy.check({
+      principal: { kind: 'bot', id: bot.entityId, displayName: bot.body.callsign },
+      action: 'task.start',
+      unitId: task.body.unitId,
+      taskId,
+      details: { startedBy: actor },
+    });
+    if (!allowed.allowed) {
+      throw new ConflictException({
+        message: `Task #${task.body.number} cannot start: ${allowed.reason}`,
+        action: allowed.action ?? 'Clear what is holding it, then start it again.',
+      });
+    }
+    const reason = `Resumes when ${bot.body.callsign} finishes task in hand`;
+    const mission = task.body.missionId
+      ? await this.record.getActive('mission', task.body.missionId)
+      : null;
+    const refs: RecordEventRefs = {
+      unitId: task.body.unitId,
+      botId: bot.entityId,
+      taskId,
+      missionId: task.body.missionId,
+      operationId: mission?.body.operationId ?? null,
+    };
+    await this.record.transaction(async (w) => {
+      await w.revise('task', taskId, (b) => ({ ...b, autoStart: true }), {
+        actor,
+        reason: 'Resumes from the queue',
+      });
+      await this.setStatus(w, taskId, 'queued', reason, refs, actor, reason);
+      await w.revise(
+        'bot',
+        bot.entityId,
+        (b) => ({ ...b, queue: [taskId, ...b.queue.filter((q) => q !== taskId)] }),
+        { actor, reason: `Task #${task.body.number} resumes next` },
+      );
+    });
+    return 'queued';
+  }
+
   async start(taskId: string, actor: string): Promise<RunHandle> {
     if (this.active.has(taskId)) throw new ConflictException('That task is already running.');
     const task = await this.record.requireActive('task', taskId);
@@ -684,8 +741,10 @@ export class TaskRunner {
           : outcome === 'stopped'
             ? 'stood-down'
             : 'failed';
-    const botStatus: BotStatus = botCrashed ? 'failed' : outcome === 'blocked' ? 'blocked' : 'idle';
-    const keepTask = outcome === 'blocked' || botCrashed;
+    // A held task does not hold its bot: the bot moves on to its queue, and the task resumes
+    // later (`resume`). Only a bot that itself crashed stays with its task, as failed.
+    const botStatus: BotStatus = botCrashed ? 'failed' : 'idle';
+    const keepTask = botCrashed;
     await this.record.transaction(async (w) => {
       await this.setStatus(w, refs.taskId!, taskStatus, reason, refs, actor, reason, spent);
       await this.setBot(
@@ -752,9 +811,9 @@ export class TaskRunner {
       await this.setBot(
         w,
         refs.botId!,
-        'blocked',
-        refs.taskId!,
-        `Task #${task.number}: awaiting approval`,
+        'idle',
+        null,
+        `Task #${task.number}: awaiting approval; on to the next task`,
         actor,
       );
       await w.event('run.finished', { runId, outcome: 'blocked' }, refs, actor);

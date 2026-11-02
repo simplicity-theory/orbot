@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Inject,
   Injectable,
   type OnApplicationBootstrap,
@@ -7,8 +8,15 @@ import {
 import type { Subscription } from 'rxjs';
 import {
   canTransition,
+  describeNeeds,
+  missingNeeds,
+  resourceKindOf,
   type BotRuntime,
   type OperationBody,
+  type OperationNeed,
+  type OperationPlan,
+  type SupplyBody,
+  type UnitBody,
   type OperationPhase,
   type RecordEvent,
   type RecordVersion,
@@ -25,8 +33,31 @@ import { OverseerService } from './overseer.service.js';
 import { ReconService } from './recon.service.js';
 import { SandTableService } from './sand-table.service.js';
 import { HQ_ACTOR } from './overseers.js';
+import { TaskRunner } from '../execution/task-runner.js';
 
 export { HQ_ACTOR };
+
+/**
+ * What an operation needs once planned: a repository always; a production environment if a
+ * mission deploys; and whatever else HQ's plan names. Duplicates are dropped.
+ */
+export function needsFor(current: OperationNeed[], plan: OperationPlan): OperationNeed[] {
+  const out: OperationNeed[] = [...current];
+  const add = (n: OperationNeed) => {
+    if (!out.some((x) => x.kind === n.kind && x.tier === n.tier)) out.push(n);
+  };
+  add({ kind: 'repository', label: 'A repository to work in', tier: null, optional: false });
+  if (plan.missions.some((m) => m.stage === 'deploy')) {
+    add({
+      kind: 'environment',
+      label: 'A production environment to deploy to',
+      tier: 'production',
+      optional: false,
+    });
+  }
+  for (const n of plan.needs ?? []) add({ ...n, tier: n.tier ?? null, optional: !!n.optional });
+  return out;
+}
 
 /**
  * HQ, the planning layer. Turns the Commander's intent into an operation, splits it into
@@ -52,6 +83,7 @@ export class HqService implements OnApplicationBootstrap, OnModuleDestroy {
     private readonly overseer: OverseerService,
     private readonly recon: ReconService,
     private readonly sandTables: SandTableService,
+    private readonly runner: TaskRunner,
   ) {}
 
   /** HQ's staff thinks through the default runtime (HQ has no unit of its own). */
@@ -119,12 +151,22 @@ export class HqService implements OnApplicationBootstrap, OnModuleDestroy {
     actor: string,
     budgetUnits: number | null = null,
     reconFirst = false,
+    supplyIds: string[] = [],
   ): Promise<RecordVersion<OperationBody>> {
     const opName = name ?? intent.split(/\s+/).slice(0, 3).join(' ');
+    const resources: RecordVersion<SupplyBody>[] = [];
+    for (const id of new Set(supplyIds)) resources.push(await this.assignable(id));
     const op = await this.record.transaction(async (w) => {
       const created = await w.create(
         'operation',
-        { name: opName, intent, phase: 'intent', supplyIds: [], budgetUnits, reconFirst },
+        {
+          name: opName,
+          intent,
+          phase: 'intent',
+          supplyIds: resources.map((r) => r.entityId),
+          budgetUnits,
+          reconFirst,
+        },
         { actor, reason: 'Commander stated intent' },
       );
       const doc = await w.create(
@@ -149,7 +191,8 @@ export class HqService implements OnApplicationBootstrap, OnModuleDestroy {
       await this.hqSitrep(
         w,
         created.entityId,
-        `Intent received for Operation ${opName}: “${intent}”. Convening the O Group.`,
+        `Intent received for Operation ${opName}: “${intent}”. Convening the O Group.` +
+          (resources.length ? ` Resources: ${resources.map((r) => r.body.name).join(', ')}.` : ''),
       );
       return created;
     });
@@ -157,75 +200,442 @@ export class HqService implements OnApplicationBootstrap, OnModuleDestroy {
     return op;
   }
 
-  /** O Group: plan the missions, issue them to the units, open the integration branch. */
-  private async oGroup(opId: string): Promise<void> {
+  // ---------- Resources ----------
+
+  /** A depot item that can be assigned to an operation: connected, and a kind an operation uses. */
+  private async assignable(supplyId: string) {
+    const s = await this.record.getActive('supply', supplyId);
+    if (!s) {
+      throw new BadRequestException({
+        message: 'That is not in the Supply Depot.',
+        action: 'Choose something the Supply Depot lists.',
+      });
+    }
+    if (!s.body.connected || !resourceKindOf(s.body)) {
+      throw new BadRequestException({
+        message: `${s.body.name} cannot be assigned to an operation${s.body.connected ? '' : ': it is not connected'}.`,
+        action: 'Assign a connected repository, server, environment, model or credential.',
+      });
+    }
+    return s;
+  }
+
+  /** The depot items assigned to an operation, in the order they were assigned. */
+  async resourcesOf(op: RecordVersion<OperationBody>): Promise<RecordVersion<SupplyBody>[]> {
+    const out: RecordVersion<SupplyBody>[] = [];
+    for (const id of op.body.supplyIds) {
+      const s = await this.record.getActive('supply', id);
+      if (s) out.push(s);
+    }
+    return out;
+  }
+
+  /**
+   * Assign a depot item to an operation. Waiting at the O Group, it may be what it needed: HQ
+   * checks again. Once missions are out, the units in the chain get it too (a production
+   * environment excepted: deploy rights are given by order, with confirmation).
+   */
+  async assignResource(opId: string, supplyId: string, actor: string, reason?: string) {
     const op = await this.record.requireActive('operation', opId);
+    this.assertOpen(op, 'Assign resources to');
+    const s = await this.assignable(supplyId);
+    if (op.body.supplyIds.includes(supplyId)) return { op, supply: s, added: false };
+    const revised = await this.record.revise(
+      'operation',
+      opId,
+      (o) => ({ ...o, supplyIds: [...o.supplyIds, supplyId] }),
+      { actor, reason: reason || `${s.body.name} assigned to Operation ${op.body.name}` },
+    );
+    if (op.body.missionIds.length) {
+      await this.equipChain(revised, [s]);
+    } else {
+      this.enqueue(opId, 'o-group', () => this.oGroup(opId));
+    }
+    return { op: revised, supply: s, added: true };
+  }
+
+  /** Changes to an operation's resources or course stop at its After Action review. */
+  private assertOpen(op: RecordVersion<OperationBody>, what: string) {
+    if (op.body.phase === 'after-action' || op.body.phase === 'closed') {
+      throw new BadRequestException({
+        message: `Operation ${op.body.name} is ${op.body.cancelled ? 'cancelled' : op.body.phase === 'closed' ? 'closed' : 'in its After Action review'}.`,
+        action: `${what} an operation that is still running.`,
+      });
+    }
+  }
+
+  /**
+   * Make a repository the operation's main one: where its work lands, is handed off and deploys
+   * from. Before the O Group that is all. Once missions are out, they are withdrawn (their work
+   * stands down; what was done stays on its branches) and HQ issues them again on the new
+   * repository from the same plan, so each unit briefs back afresh.
+   */
+  async setMainRepository(opId: string, supplyId: string, actor: string, reason?: string) {
+    const op = await this.record.requireActive('operation', opId);
+    this.assertOpen(op, 'Change the repository of');
+    const s = await this.assignable(supplyId);
+    if (s.body.spec.kind !== 'repository') {
+      throw new BadRequestException({
+        message: `${s.body.name} is not a repository.`,
+        action: 'Choose a connected repository from the Supply Depot.',
+      });
+    }
+    const current =
+      op.body.repoSupplyId ?? (await this.firstRepository(op.body.supplyIds))?.entityId;
+    const was = current ? await this.record.getActive('supply', current) : null;
+    if (current === supplyId) return { op, supply: s, was, restarted: false, changed: false };
+    let revised = await this.record.revise(
+      'operation',
+      opId,
+      (o) => ({ ...o, supplyIds: [supplyId, ...o.supplyIds.filter((x) => x !== supplyId)] }),
+      {
+        actor,
+        reason: reason || `${s.body.name} is now the main repository of Operation ${op.body.name}`,
+      },
+    );
+    if (!op.body.missionIds.length) {
+      this.enqueue(opId, 'o-group', () => this.oGroup(opId));
+      return { op: revised, supply: s, was, restarted: false, changed: true };
+    }
+    const missions = await this.withdrawMissions(
+      revised,
+      `Main repository changed to ${s.body.name}`,
+      actor,
+    );
+    // An operation planned before plans were kept: its missions are the plan.
+    const plan =
+      revised.body.plan ??
+      (missions.every((m) => m.body.stage)
+        ? missions.map((m) => ({
+            unitId: m.body.unitId,
+            stage: m.body.stage!,
+            goal: m.body.goal,
+            definitionOfDone: m.body.definitionOfDone,
+          }))
+        : null);
+    revised = await this.record.transaction(async (w) => {
+      const o = await w.revise(
+        'operation',
+        opId,
+        (x) => ({
+          ...x,
+          plan,
+          missionIds: [],
+          withdrawnMissionIds: [...x.withdrawnMissionIds, ...x.missionIds],
+          repoSupplyId: null,
+          integrationBranch: null,
+          deployment: null,
+        }),
+        { actor, reason: `Missions withdrawn to issue again on ${s.body.name}` },
+      );
+      await this.hqSitrep(
+        w,
+        opId,
+        `Operation ${op.body.name} moves from ${was?.body.name ?? 'its repository'} to ${s.body.name}: ${missions.length} mission(s) withdrawn and issued again there. Work already done stays on ${was?.body.name ?? 'the old repository'}'s branches.`,
+      );
+      return o;
+    });
+    await this.phase(opId, 'o-group', `Issued again on ${s.body.name}`);
+    this.enqueue(opId, 'o-group', () => this.oGroup(opId));
+    return { op: revised, supply: s, was, restarted: true, changed: true };
+  }
+
+  /** Call an operation off: its work stands down and it closes, without an After Action review. */
+  async cancelOperation(opId: string, note: string, actor: string) {
+    const op = await this.record.requireActive('operation', opId);
+    this.assertOpen(op, 'Cancel');
+    const missions = await this.withdrawMissions(op, `Operation ${op.body.name} cancelled`, actor);
+    const from = op.body.phase;
+    const revised = await this.record.transaction(async (w) => {
+      const o = await w.revise(
+        'operation',
+        opId,
+        (x) => ({
+          ...x,
+          phase: 'closed',
+          cancelled: { by: actor, note, at: new Date().toISOString() },
+        }),
+        { actor, reason: note ? `Cancelled: ${note}` : 'Cancelled' },
+      );
+      await w.event(
+        'operation.phase',
+        { from, to: 'closed', reason: note ? `Cancelled: ${note}` : 'Cancelled' },
+        { operationId: opId },
+        actor,
+      );
+      await this.hqSitrep(
+        w,
+        opId,
+        `Operation ${op.body.name} cancelled${note ? `: ${note}` : ''}. ${missions.length} mission(s) withdrawn; their work stood down and stays on record.`,
+      );
+      return o;
+    });
+    await this.renderRecord(opId);
+    return revised;
+  }
+
+  /**
+   * Withdraw an operation's missions: running work stops with a handover, waiting work stands
+   * down, pending backbriefs are rejected. Returns the missions as they were.
+   */
+  private async withdrawMissions(op: RecordVersion<OperationBody>, note: string, actor: string) {
+    const missions = (
+      await Promise.all(op.body.missionIds.map((id) => this.record.getActive('mission', id)))
+    ).filter((m) => !!m);
+    for (const m of missions) {
+      const tasks = await this.record.listActive('task', {
+        bodyContains: { missionId: m.entityId },
+      });
+      for (const t of tasks) {
+        if (this.runner.isRunning(t.entityId)) {
+          await this.runner.stop(t.entityId, note);
+          continue;
+        }
+        if (!['queued', 'blocked', 'failed', 'awaiting-approval'].includes(t.body.status)) continue;
+        await this.record.transaction(async (w) => {
+          await w.revise(
+            'task',
+            t.entityId,
+            (x) => ({ ...x, status: 'stood-down', statusReason: note }),
+            { actor, reason: note },
+          );
+          await w.event(
+            'task.status',
+            { from: t.body.status, to: 'stood-down', reason: note },
+            {
+              unitId: t.body.unitId,
+              botId: t.body.botId,
+              taskId: t.entityId,
+              missionId: m.entityId,
+              operationId: op.entityId,
+            },
+            actor,
+          );
+          if (t.body.botId) {
+            await w.revise(
+              'bot',
+              t.body.botId,
+              (b) => ({
+                ...b,
+                queue: b.queue.filter((q) => q !== t.entityId),
+                ...(b.currentTaskId === t.entityId
+                  ? { status: 'idle' as const, currentTaskId: null }
+                  : {}),
+              }),
+              { actor, reason: note },
+            );
+          }
+        });
+      }
+      await this.record.transaction(async (w) => {
+        const [bb] = await w.listActive('backbrief', { bodyContains: { missionId: m.entityId } });
+        if (bb?.body.status === 'awaiting-approval') {
+          await w.revise(
+            'backbrief',
+            bb.entityId,
+            (b) => ({
+              ...b,
+              status: 'rejected',
+              decision: { outcome: 'rejected', by: actor, note, at: new Date().toISOString() },
+            }),
+            { actor, reason: note },
+          );
+        }
+        if (m.body.status !== 'withdrawn') {
+          await w.revise('mission', m.entityId, (x) => ({ ...x, status: 'withdrawn' }), {
+            actor,
+            reason: note,
+          });
+        }
+      });
+    }
+    return missions;
+  }
+
+  /** Take a depot item off an operation. Units that hold it keep it. */
+  async releaseResource(opId: string, supplyId: string, actor: string, reason?: string) {
+    const op = await this.record.requireActive('operation', opId);
+    const s = await this.record.requireActive('supply', supplyId);
+    if (!op.body.supplyIds.includes(supplyId)) return { op, supply: s, removed: false };
+    if (op.body.repoSupplyId === supplyId && op.body.missionIds.length) {
+      throw new BadRequestException({
+        message: `${s.body.name} is where Operation ${op.body.name} hands off and deploys from.`,
+        action:
+          'Make another repository the main one first (its missions are issued again there), then take this one off.',
+      });
+    }
+    const revised = await this.record.revise(
+      'operation',
+      opId,
+      (o) => ({ ...o, supplyIds: o.supplyIds.filter((x) => x !== supplyId) }),
+      { actor, reason: reason || `${s.body.name} taken off Operation ${op.body.name}` },
+    );
+    return { op: revised, supply: s, removed: true };
+  }
+
+  /**
+   * Give the units in an operation's chain what it was assigned, and open the integration branch
+   * on each new repository. A production environment is not issued: that is deploy rights.
+   */
+  private async equipChain(op: RecordVersion<OperationBody>, items: RecordVersion<SupplyBody>[]) {
+    const missions = await Promise.all(
+      op.body.missionIds.map((id) => this.record.requireActive('mission', id)),
+    );
+    const unitIds = [...new Set(missions.map((m) => m.body.unitId))];
+    for (const s of items) {
+      if (s.body.spec.kind === 'repository' && op.body.integrationBranch) {
+        await this.workspaces.createBranch(s.body, op.body.integrationBranch);
+      }
+      if (s.body.spec.kind === 'environment' && s.body.spec.details['tier'] === 'production')
+        continue;
+      for (const unitId of unitIds) {
+        const u = await this.record.requireActive('unit', unitId);
+        if (!u.body.supplyIds.includes(s.entityId)) {
+          await this.supply.allotToUnit(s.entityId, unitId, {
+            actor: HQ_ACTOR,
+            reason: `Issued for Operation ${op.body.name}`,
+          });
+        }
+      }
+    }
+  }
+
+  /** Still missing something it must have: say what, and wait (each assignment checks again). */
+  private async waitingForResources(op: RecordVersion<OperationBody>): Promise<boolean> {
+    const assigned = (await this.resourcesOf(op)).map((s) => ({ id: s.entityId, body: s.body }));
+    const missing = missingNeeds(op.body.needs, assigned);
+    if (!missing.length) return false;
+    await this.hqSitrep(
+      null,
+      op.entityId,
+      `Operation ${op.body.name} is waiting for resources: ${describeNeeds(missing)}. Assign them on the operation's page or in chat; HQ carries on as soon as it has them.`,
+    );
+    return true;
+  }
+
+  // ---------- O Group ----------
+
+  /**
+   * O Group: plan the missions, check the operation has what it needs, then issue them and open
+   * the integration branch. It runs again whenever a resource is assigned while it waits.
+   */
+  private async oGroup(opId: string): Promise<void> {
+    let op = await this.record.requireActive('operation', opId);
+    if (op.body.missionIds.length || !['intent', 'o-group'].includes(op.body.phase)) return;
     await this.phase(opId, 'o-group', 'Planning missions');
     const units = (await this.record.listActive('unit')).filter((u) => u.body.overseerBotId);
-    // Recon first: the report must be in (or the recon over) before HQ plans.
-    let recon: { unit: string; title: string; markdown: string }[] = [];
-    if (op.body.reconFirst && op.body.reconTaskId) {
-      const task = await this.record.requireActive('task', op.body.reconTaskId);
-      if (task.body.status !== 'done' && task.body.status !== 'failed') return;
-      const report = await this.recon.reportFor(task.entityId);
-      const unit = units.find((u) => u.entityId === task.body.unitId);
-      if (report) {
-        recon = [
-          { unit: unit?.body.name ?? '', title: report.body.title, markdown: report.body.markdown },
-        ];
-      } else {
-        await this.hqSitrep(
-          null,
-          opId,
-          `Recon #${task.body.number} ended without a report (${task.body.status}). Planning without it.`,
-        );
-      }
-    }
-    const plan = await this.staff.planOperation({
-      name: op.body.name,
-      intent: op.body.intent,
-      units: units.map((u) => ({
-        id: u.entityId,
-        name: u.body.name,
-        role: u.body.role,
-        standingMission: u.body.standingMission,
-      })),
-      recon,
-    });
-    if (op.body.reconFirst && !op.body.reconTaskId && plan.missions.length) {
-      // The unit that would build it looks first; HQ plans once its report is in.
-      const builder = units.find((u) => u.entityId === plan.missions[0]!.unitId)!;
-      try {
-        const task = await this.recon.order(
-          {
-            unitId: builder.entityId,
-            question: `What would it take to: ${op.body.intent.replace(/[.!]+$/, '')}?`,
-            repoSupplyId: null,
-          },
-          HQ_ACTOR,
-          `Recon before the O Group for Operation ${op.body.name}`,
-        );
-        await this.record.transaction(async (w) => {
-          await w.revise('operation', opId, (o) => ({ ...o, reconTaskId: task.entityId }), {
-            actor: HQ_ACTOR,
-            reason: 'Recon before planning',
-          });
+    // A repository before anything: recon and planning both need somewhere to look.
+    if (await this.waitingForResources(op)) return;
+    const resources = await this.resourcesOf(op);
+    const repos = resources.filter((r) => r.body.spec.kind === 'repository');
+
+    if (!op.body.plan) {
+      // Recon first: the report must be in (or the recon over) before HQ plans.
+      let recon: { unit: string; title: string; markdown: string }[] = [];
+      if (op.body.reconFirst && op.body.reconTaskId) {
+        const task = await this.record.requireActive('task', op.body.reconTaskId);
+        if (task.body.status !== 'done' && task.body.status !== 'failed') return;
+        const report = await this.recon.reportFor(task.entityId);
+        const unit = units.find((u) => u.entityId === task.body.unitId);
+        if (report) {
+          recon = [
+            {
+              unit: unit?.body.name ?? '',
+              title: report.body.title,
+              markdown: report.body.markdown,
+            },
+          ];
+        } else {
           await this.hqSitrep(
-            w,
+            null,
             opId,
-            `HQ sent ${builder.body.name} on recon (task #${task.body.number}) before planning Operation ${op.body.name}. The plan follows the report.`,
+            `Recon #${task.body.number} ended without a report (${task.body.status}). Planning without it.`,
           );
-        });
-        return;
-      } catch (err) {
+        }
+      }
+      const plan = await this.staff.planOperation({
+        name: op.body.name,
+        intent: op.body.intent,
+        units: units.map((u) => ({
+          id: u.entityId,
+          name: u.body.name,
+          role: u.body.role,
+          standingMission: u.body.standingMission,
+        })),
+        resources: resources.map((r) => ({
+          name: r.body.name,
+          kind: resourceKindOf(r.body) ?? r.body.spec.kind,
+        })),
+        recon,
+      });
+      if (op.body.reconFirst && !op.body.reconTaskId && plan.missions.length) {
+        // The unit that would build it looks first; HQ plans once its report is in.
+        const builder = units.find((u) => u.entityId === plan.missions[0]!.unitId)!;
+        try {
+          if (repos[0] && !builder.body.supplyIds.includes(repos[0].entityId)) {
+            await this.supply.allotToUnit(repos[0].entityId, builder.entityId, {
+              actor: HQ_ACTOR,
+              reason: `Issued for recon on Operation ${op.body.name}`,
+            });
+          }
+          const task = await this.recon.order(
+            {
+              unitId: builder.entityId,
+              question: `What would it take to: ${op.body.intent.replace(/[.!]+$/, '')}?`,
+              repoSupplyId: repos[0]?.entityId ?? null,
+            },
+            HQ_ACTOR,
+            `Recon before the O Group for Operation ${op.body.name}`,
+          );
+          await this.record.transaction(async (w) => {
+            await w.revise('operation', opId, (o) => ({ ...o, reconTaskId: task.entityId }), {
+              actor: HQ_ACTOR,
+              reason: 'Recon before planning',
+            });
+            await this.hqSitrep(
+              w,
+              opId,
+              `HQ sent ${builder.body.name} on recon (task #${task.body.number}) before planning Operation ${op.body.name}. The plan follows the report.`,
+            );
+          });
+          return;
+        } catch (err) {
+          await this.hqSitrep(
+            null,
+            opId,
+            `Could not send ${builder.body.name} on recon (${(err as Error).message}). Planning without it.`,
+          );
+        }
+      }
+      if (!plan.missions.length) {
         await this.hqSitrep(
           null,
           opId,
-          `Could not send ${builder.body.name} on recon (${(err as Error).message}). Planning without it.`,
+          'No unit can take this on: HQ found no matching units. Operation stays at O Group.',
         );
+        return;
       }
+      op = await this.record.revise(
+        'operation',
+        opId,
+        (o) => ({ ...o, plan: plan.missions, needs: needsFor(o.needs, plan) }),
+        { actor: HQ_ACTOR, reason: 'O Group plan: missions and what they need' },
+      );
+      if (await this.waitingForResources(op)) return;
+    } else if (await this.waitingForResources(op)) {
+      return;
     }
-    if (!plan.missions.length) {
+    await this.issueMissions(op, units);
+  }
+
+  /** Issue the planned missions, equip the chain, and open the integration branch. */
+  private async issueMissions(
+    op: RecordVersion<OperationBody>,
+    units: RecordVersion<UnitBody>[],
+  ): Promise<void> {
+    const opId = op.entityId;
+    const planned = (op.body.plan ?? []).filter((m) => units.some((u) => u.entityId === m.unitId));
+    if (!planned.length) {
       await this.hqSitrep(
         null,
         opId,
@@ -233,30 +643,16 @@ export class HqService implements OnApplicationBootstrap, OnModuleDestroy {
       );
       return;
     }
-
-    // Work lands in the building unit's repository, on one integration branch for the operation.
-    const builder = units.find((u) => u.entityId === plan.missions[0]!.unitId)!;
-    const repo = await this.firstRepository(builder.body.supplyIds);
-    let integrationBranch: string | null = null;
-    if (repo) {
-      integrationBranch = `orbot/op-${opId.slice(0, 8)}`;
-      await this.workspaces.createBranch(repo.body, integrationBranch);
-      // Every unit in the chain needs the repository to work on the branch.
-      for (const m of plan.missions) {
-        const u = units.find((x) => x.entityId === m.unitId)!;
-        if (!u.body.supplyIds.includes(repo.entityId)) {
-          await this.supply.allotToUnit(repo.entityId, u.entityId, {
-            actor: HQ_ACTOR,
-            reason: `Issued for Operation ${op.body.name}`,
-          });
-        }
-      }
-    }
+    // Work lands on one integration branch, opened in every repository the operation has; the
+    // first repository is where it is handed off and deployed from.
+    const resources = await this.resourcesOf(op);
+    const repo = resources.find((r) => r.body.spec.kind === 'repository') ?? null;
+    const integrationBranch = repo ? `orbot/op-${opId.slice(0, 8)}` : null;
 
     await this.record.transaction(async (w) => {
       const ids: string[] = [];
       let upstream: string | null = null;
-      for (const m of plan.missions) {
+      for (const m of planned) {
         const mission: RecordVersion<import('@orbot/shared').MissionBody> = await w.create(
           'mission',
           {
@@ -281,19 +677,20 @@ export class HqService implements OnApplicationBootstrap, OnModuleDestroy {
           missionIds: ids,
           repoSupplyId: repo?.entityId ?? null,
           integrationBranch,
-          supplyIds: repo ? [repo.entityId] : [],
         }),
         { actor: HQ_ACTOR, reason: 'Missions issued at the O Group' },
       );
-      const chain = plan.missions
+      const chain = planned
         .map((m) => units.find((u) => u.entityId === m.unitId)!.body.name)
         .join(' → ');
       await this.hqSitrep(
         w,
         opId,
-        `O Group done: ${plan.missions.length} missions issued (${chain}). Waiting for each unit's backbrief.`,
+        `O Group done: ${planned.length} missions issued (${chain}). Waiting for each unit's backbrief.`,
       );
     });
+    // Every unit in the chain gets what the operation was given, and the branch in each repo.
+    await this.equipChain(await this.record.requireActive('operation', opId), resources);
     await this.phase(opId, 'backbrief', 'Missions issued; units are briefing back');
     await this.renderRecord(opId);
     // Rehearse the plan on the sand table while it can still be put right.
@@ -344,7 +741,12 @@ export class HqService implements OnApplicationBootstrap, OnModuleDestroy {
   /** Merge a finished task's branch into the operation's integration branch. */
   private async integrate(op: RecordVersion<OperationBody>, task: RecordVersion<TaskBody>) {
     if (!op.body.integrationBranch || !op.body.repoSupplyId || !task.body.workspace) return;
-    const repo = await this.record.requireActive('supply', op.body.repoSupplyId);
+    // Into the integration branch of the repository the task worked in (each of the
+    // operation's repositories has one).
+    const repoId = op.body.supplyIds.includes(task.body.workspace.repoSupplyId)
+      ? task.body.workspace.repoSupplyId
+      : op.body.repoSupplyId;
+    const repo = await this.record.requireActive('supply', repoId);
     const commit = await this.workspaces.integrate(
       repo.body,
       op.body.integrationBranch,
@@ -411,7 +813,11 @@ export class HqService implements OnApplicationBootstrap, OnModuleDestroy {
           botId: bot?.entityId ?? null,
           status: 'queued',
           budget: { limitUnits: null, spentUnits: 0 },
-          repoSupplyId: op.body.repoSupplyId,
+          // The fix lands where the check found the problem.
+          repoSupplyId:
+            task.body.repoSupplyId && op.body.supplyIds.includes(task.body.repoSupplyId)
+              ? task.body.repoSupplyId
+              : op.body.repoSupplyId,
           workspace: null,
           credentialNames: [],
           scenario: 'fix',

@@ -1,6 +1,9 @@
 import { randomBytes } from 'node:crypto';
+import { writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { io, type Socket } from 'socket.io-client';
 import type { TaskDetailView } from '@orbot/shared';
+import { git } from '../src/common/git.js';
 import { RecordService } from '../src/record/record.service.js';
 import { RedactingLogger } from '../src/redaction/redacting-logger.js';
 import { makeRepo, makeUnitWithBot, waitFor } from './fixtures.js';
@@ -121,6 +124,26 @@ describe('secrets never leak', () => {
     const diary = d.events.find((e) => e.kind === 'diary.entry')!;
     expect(JSON.stringify(diary.body)).toContain('[REDACTED:secret]');
     expect(d.handover!.markdown).toContain('[REDACTED:secret]');
+  });
+
+  it('via code: a secret a bot commits (or leaves uncommitted) is masked in every diff', async () => {
+    const d = await runTask('happy-path');
+    const ws = d.task.workspace!;
+    writeFileSync(join(ws.path, 'config.ts'), `export const token = '${SECRET}';\n`);
+    await git(ws.path, ['add', 'config.ts']);
+    await git(ws.path, ['commit', '--quiet', '-m', `Add token ${SECRET}`]);
+    writeFileSync(join(ws.path, 'later.ts'), `// ${SECRET_B64}\n`);
+    const sha = await git(ws.path, ['rev-parse', 'HEAD']);
+    const changes = (await t.agent.get(`/api/tasks/${d.task.id}/changes`).expect(200)).body;
+    expect(JSON.stringify(changes)).toContain('[REDACTED:secret]');
+    assertClean(JSON.stringify(changes), 'task changes');
+    for (const url of [`/api/repositories/${repoId}/commits/${sha}`, `/api/commits/${sha}`]) {
+      assertClean(JSON.stringify((await t.agent.get(url).expect(200)).body), url);
+    }
+    const history = await t.agent
+      .get(`/api/repositories/${repoId}/history?ref=${encodeURIComponent(ws.branch)}`)
+      .expect(200);
+    assertClean(JSON.stringify(history.body), 'history');
   });
 
   it('via errors: a runtime crash quoting the secret is masked in the task, the log and the response', async () => {

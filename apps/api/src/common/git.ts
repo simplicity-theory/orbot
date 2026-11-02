@@ -18,12 +18,13 @@ export async function git(
   cwd: string,
   args: string[],
   env: Record<string, string> = {},
+  opts: { maxBuffer?: number } = {},
 ): Promise<string> {
   try {
     const { stdout } = await run('git', args, {
       cwd,
       timeout: 120_000,
-      maxBuffer: 16 * 1024 * 1024,
+      maxBuffer: opts.maxBuffer ?? 16 * 1024 * 1024,
       env: {
         ...process.env,
         GIT_TERMINAL_PROMPT: '0',

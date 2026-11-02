@@ -31,6 +31,27 @@ const RECON =
   /^(recon|reconnoitre|reconnoiter|scout(?: out)?|survey|find out|look into)\b[:,]?\s*/i;
 const REHEARSE = /\b(rehearse|rehearsal|sand ?table|walk (me )?through the plan|war-?game)\b/i;
 const MAIN_EFFORT = /\bmain effort\b/i;
+/** "Use payments-service and gpu1 for Operation Ledger" / "Take gpu1 off Operation Ledger". */
+const RESOURCE_ASSIGN =
+  /^(?:please\s+)?(?:use|assign|give|add|allocate|attach)\s+(.+?)\s+(?:to|for|on)\s+(?:the\s+)?(?:operation|op)\b\s*(.*)$/i;
+const RESOURCE_RELEASE =
+  /^(?:please\s+)?(?:release|remove|take|detach|drop)\s+(.+?)\s+(?:from|off)\s+(?:of\s+)?(?:the\s+)?(?:operation|op)\b\s*(.*)$/i;
+/** "Make subframe the main repository of Operation Ledger". */
+const MAIN_REPO_MAKE =
+  /^(?:please\s+)?make\s+(.+?)\s+(?:the\s+)?main\s+repo(?:sitory)?(?:\s+(?:of|for|on)\s+(?:the\s+)?(?:operation|op)\b\s*(.*))?$/i;
+/** "Change the repo (of Operation Ledger) from demo-app to subframe". */
+const MAIN_REPO_CHANGE =
+  /^(?:please\s+)?(?:change|switch|move|set)\s+(?:the\s+)?(?:main\s+)?repo(?:sitory)?(?:\s+(?:of|for|on)\s+(?:the\s+)?(?:operation|op)\b\s*(.+?))?(?:\s+from\s+(.+?))?\s+to\s+(.+)$/i;
+/** "Move Operation Ledger to subframe". */
+const MAIN_REPO_MOVE =
+  /^(?:please\s+)?(?:move|switch)\s+(?:the\s+)?(?:operation|op)\b\s*(.+?)\s+(?:over\s+)?(?:to|onto)\s+(?:the\s+)?(.+?)(?:\s+repo(?:sitory)?)?$/i;
+/** "Cancel Operation Ledger: wrong approach". */
+const CANCEL_OPERATION =
+  /^(?:please\s+)?(?:cancel|call off|abort|scrub)\s+(?:the\s+)?(?:operation|op)\b\s*([^:]*?)(?:\s*(?::|—|\bbecause\b)\s*(.+))?$/i;
+/** "…, using payments-service and gpu1" at the end of a statement of intent. */
+const INTENT_RESOURCES = /,?\s+(?:using|with|on|against)\s+(?:the\s+|our\s+)?(.+)$/i;
+const KIND_WORDS =
+  /\b(repo|repository|repositories|server|environment|env|model|credential|token|key)\b/gi;
 const MAIN_EFFORT_CLEAR =
   /\b(no|clear|drop|end|cancel|lift|remove)\b.*\bmain effort\b|\bmain effort\b.*\b(is over|has ended|ended|cleared|lifted)\b/i;
 const MAIN_EFFORT_FILLER =
@@ -178,6 +199,33 @@ export class SimulatedInterpreter {
         }
         continue;
       }
+      const course = this.mainRepository(sentence, input) ?? this.cancelOperation(sentence, input);
+      if (course) {
+        if ('unclear' in course) {
+          out.unclear.push(course.unclear);
+        } else if ('missing' in course) {
+          out.missing.push({ what: course.missing, kind: 'supply' });
+        } else {
+          kinds.add(hedged ? 'musing' : 'order');
+          (hedged ? out.musings : out.actions).push(course);
+        }
+        continue;
+      }
+      const res = this.resource(sentence, input);
+      if (res) {
+        if ('unclear' in res) {
+          out.unclear.push(res.unclear);
+        } else {
+          for (const a of res.actions) {
+            kinds.add(hedged ? 'musing' : 'order');
+            (hedged ? out.musings : out.actions).push(a);
+          }
+          for (const what of res.missing) {
+            out.missing.push({ what, kind: 'supply' });
+          }
+        }
+        continue;
+      }
       const rehearse = this.rehearse(sentence, input);
       if (rehearse) {
         if ('unclear' in rehearse) out.unclear.push(rehearse.unclear);
@@ -219,14 +267,25 @@ export class SimulatedInterpreter {
           !input.channelUnitId &&
           (IMPERATIVE.test(sentence) || /\boperation\b/i.test(sentence))
         ) {
-          const intent = sentenceCase(
-            sentence.replace(/^(launch an? |start an? )?operation[:,]?\s*/i, ''),
-          );
+          let text = sentence.replace(/^(launch an? |start an? )?operation[:,]?\s*/i, '');
+          // "…, using payments-service and gpu1": resources assigned from the start.
+          let supplyIds: string[] = [];
+          const using = INTENT_RESOURCES.exec(text);
+          if (using) {
+            const found = this.depotItems(using[1]!, input);
+            if (found.hits.length) {
+              supplyIds = found.hits;
+              text = text.slice(0, using.index);
+              for (const what of found.missing) out.missing.push({ what, kind: 'supply' });
+            }
+          }
+          const intent = sentenceCase(text);
           const action: ChatAction = {
             kind: 'create-operation',
             unitId: null,
             intent: `${intent}.`,
             name: operationName(intent),
+            supplyIds,
           };
           if (hedged) {
             kinds.add('musing');
@@ -267,6 +326,158 @@ export class SimulatedInterpreter {
     out.kinds = [...kinds];
     out.answer = answers.length ? answers.join(' ') : null;
     return out;
+  }
+
+  /**
+   * Depot items named in a phrase ("payments-service and the gpu1 server"): the ones found, and
+   * what was named but is not in the depot.
+   */
+  private depotItems(phrase: string, input: InterpretInput) {
+    const hits: string[] = [];
+    const missing: string[] = [];
+    for (const part of phrase.split(/\s*(?:,|\band\b|&)\s*/i)) {
+      const name = part
+        .replace(/^(?:the|our|a|an)\s+/i, '')
+        .replace(KIND_WORDS, '')
+        .trim();
+      if (!name) continue;
+      const plain = (x: string) =>
+        x
+          .toLowerCase()
+          .replace(/[-_.]+/g, ' ')
+          .trim();
+      const want = topic(plain(name));
+      const connected = input.depot.filter((d) => d.connected);
+      // The exact name wins; otherwise the best word overlap.
+      const exact = connected.find((d) => plain(d.name) === plain(name));
+      const hit = exact
+        ? { d: exact, score: 1 }
+        : connected
+            .map((d) => ({ d, score: overlap(want, plain(d.name)) }))
+            .sort((a, b) => b.score - a.score)[0];
+      // A short name must match whole ("billing-api" is not "ledger-api").
+      if (hit && hit.score >= (want.size <= 2 ? 1 : 0.6)) {
+        if (!hits.includes(hit.d.id)) hits.push(hit.d.id);
+      } else {
+        missing.push(part.trim());
+      }
+    }
+    return { hits, missing };
+  }
+
+  /** The operation a phrase names, or the only one under way when it names none. */
+  private operationNamed(phrase: string, input: InterpretInput) {
+    const open = input.operations.filter((o) => o.phase !== 'closed');
+    const best = open
+      .map((o) => ({ o, score: overlap(topic(o.name), phrase) }))
+      .sort((a, b) => b.score - a.score)[0];
+    if (best && best.score >= 0.5) return best.o;
+    return !topic(phrase).size && open.length === 1 ? open[0]! : null;
+  }
+
+  /** "Use payments-service for Operation Ledger" / "Take gpu1 off Operation Ledger". */
+  private resource(
+    sentence: string,
+    input: InterpretInput,
+  ):
+    | {
+        actions: Extract<ChatAction, { kind: 'assign-resource' | 'release-resource' }>[];
+        missing: string[];
+      }
+    | { unclear: string }
+    | null {
+    const assign = RESOURCE_ASSIGN.exec(sentence);
+    const release = assign ? null : RESOURCE_RELEASE.exec(sentence);
+    const m = assign ?? release;
+    if (!m) return null;
+    const op = this.operationNamed(m[2] ?? '', input);
+    const closed = input.operations.find(
+      (o) => o.phase === 'closed' && overlap(topic(o.name), m[2] ?? '') >= 0.5,
+    );
+    if (!op && closed) return { unclear: `${sentence} — Operation ${closed.name} is closed.` };
+    if (!op) {
+      const open = input.operations.filter((o) => o.phase !== 'closed');
+      return {
+        unclear: `${sentence} — which operation? ${open.length ? `Under way: ${open.map((o) => o.name).join(', ')}.` : 'None is under way.'}`,
+      };
+    }
+    const { hits, missing } = this.depotItems(m[1]!, input);
+    return {
+      actions: hits.map((supplyId) => ({
+        kind: assign ? ('assign-resource' as const) : ('release-resource' as const),
+        unitId: null,
+        operationId: op.id,
+        supplyId,
+      })),
+      missing,
+    };
+  }
+
+  /** The open operation a phrase names; failing that, the one whose resources include `from`. */
+  private operationFor(
+    phrase: string,
+    from: string | null,
+    input: InterpretInput,
+  ): InterpretInput['operations'][number] | { unclear: string } {
+    const named = this.operationNamed(phrase, input);
+    if (named) return named;
+    const closed = input.operations.find(
+      (o) => o.phase === 'closed' && phrase && overlap(topic(o.name), phrase) >= 0.5,
+    );
+    if (closed) return { unclear: `Operation ${closed.name} is closed.` };
+    const open = input.operations.filter((o) => o.phase !== 'closed');
+    if (from && !topic(phrase).size) {
+      const ids = this.depotItems(from, input).hits;
+      const using = open.filter((o) => ids.some((id) => o.supplyIds?.includes(id)));
+      if (using.length === 1) return using[0]!;
+    }
+    return {
+      unclear: `which operation? ${open.length ? `Under way: ${open.map((o) => o.name).join(', ')}.` : 'None is under way.'}`,
+    };
+  }
+
+  /** "Change the repo from demo-app to subframe" / "Make subframe the main repository of …". */
+  private mainRepository(
+    sentence: string,
+    input: InterpretInput,
+  ):
+    | Extract<ChatAction, { kind: 'set-main-repository' }>
+    | { unclear: string }
+    | { missing: string }
+    | null {
+    const make = MAIN_REPO_MAKE.exec(sentence);
+    const change = make ? null : MAIN_REPO_CHANGE.exec(sentence);
+    const move = make || change ? null : MAIN_REPO_MOVE.exec(sentence);
+    if (!make && !change && !move) return null;
+    const [opPhrase, from, to] = make
+      ? [make[2] ?? '', null, make[1]!]
+      : change
+        ? [change[1] ?? '', change[2] ?? null, change[3]!]
+        : [move![1]!, null, move![2]!];
+    const op = this.operationFor(opPhrase, from, input);
+    if ('unclear' in op) return { unclear: `${sentence} — ${op.unclear}` };
+    const repos = this.depotItems(to, input).hits.filter(
+      (id) => input.depot.find((d) => d.id === id)?.kind === 'repository',
+    );
+    if (!repos.length) return { missing: to.replace(/[.!]+$/, '').trim() };
+    return { kind: 'set-main-repository', unitId: null, operationId: op.id, supplyId: repos[0]! };
+  }
+
+  /** "Cancel Operation Ledger: wrong approach". */
+  private cancelOperation(
+    sentence: string,
+    input: InterpretInput,
+  ): Extract<ChatAction, { kind: 'cancel-operation' }> | { unclear: string } | null {
+    const m = CANCEL_OPERATION.exec(sentence);
+    if (!m) return null;
+    const op = this.operationFor(m[1] ?? '', null, input);
+    if ('unclear' in op) return { unclear: `${sentence} — ${op.unclear}` };
+    return {
+      kind: 'cancel-operation',
+      unitId: null,
+      operationId: op.id,
+      note: (m[2] ?? '').replace(/[.!]+$/, '').trim(),
+    };
   }
 
   /** "Rehearse Gatekeeper on the sand table": changes nothing, so never a musing. */

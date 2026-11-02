@@ -24,6 +24,7 @@ import {
   type RulesOfEngagement,
   type RunContext,
   type TaskBrief,
+  OperationNeed,
 } from '@orbot/shared';
 import { git } from '../common/git.js';
 
@@ -519,6 +520,7 @@ export abstract class ClaudeFamilyRuntime implements BotRuntime {
           description: z.string(),
           botId: z.string().nullable(),
           kind: z.enum(['work', 'fix', 'check', 'deploy']),
+          repoSupplyId: z.string().nullable(),
         }),
       ),
     });
@@ -528,10 +530,18 @@ export abstract class ClaudeFamilyRuntime implements BotRuntime {
       JSON.stringify({
         ...input,
         instructions:
-          'Split the mission into tasks (one per definition-of-done item unless a better split is obvious), assign each to the least busy suitable bot by id, and list real risks. For stage "inspect"/"guard" use one "check" task; for stage "deploy" one "deploy" task.',
+          'Split the mission into tasks (one per definition-of-done item unless a better split is obvious), assign each to the least busy suitable bot by id, and list real risks. For stage "inspect"/"guard" use one "check" task; for stage "deploy" one "deploy" task. If there is more than one repository, set repoSupplyId to the id of the one each task changes (null = the first).',
       }),
     );
-    return { ...d, proposedTasks: d.proposedTasks.map((t) => ({ ...t, scenario: null })) };
+    const repos = new Set(input.repositories.map((r) => r.id));
+    return {
+      ...d,
+      proposedTasks: d.proposedTasks.map((t) => ({
+        ...t,
+        scenario: null,
+        repoSupplyId: t.repoSupplyId && repos.has(t.repoSupplyId) ? t.repoSupplyId : null,
+      })),
+    };
   }
 
   async curate(input: CurationInput): Promise<CurationAction[]> {
@@ -607,7 +617,7 @@ export abstract class ClaudeFamilyRuntime implements BotRuntime {
     });
     return this.structured(
       I,
-      'You are an Overseer (or HQ) in ORBOT. The Commander commands by chat. Turn the message into typed actions; answer questions from the context. Hedged statements ("I might…", "maybe") are musings, not orders. Only reference ids that appear in the context. If promised supply is not in the depot, list it as missing instead of acting.',
+      'You are an Overseer (or HQ) in ORBOT. The Commander commands by chat. Turn the message into typed actions; answer questions from the context. Hedged statements ("I might…", "maybe") are musings, not orders. Only reference ids that appear in the context. If promised supply is not in the depot, list it as missing instead of acting. Operations get resources from the depot: assign-resource gives one to an operation (create-operation may also list supplyIds to start with, repositories first); release-resource takes one off. The first repository is the main one, where work lands: to change an operation’s repository ("change the repo from A to B") use set-main-repository with B (it is assigned if it is not yet; once missions are out they are issued again there), never only assign-resource. cancel-operation calls an operation off (note: why, if given).',
       JSON.stringify(input),
     );
   }
@@ -623,6 +633,7 @@ export abstract class ClaudeFamilyRuntime implements BotRuntime {
           definitionOfDone: z.array(z.string()),
         }),
       ),
+      needs: z.array(OperationNeed),
     });
     return this.structured(
       P,
@@ -630,7 +641,7 @@ export abstract class ClaudeFamilyRuntime implements BotRuntime {
       JSON.stringify({
         ...input,
         instructions:
-          'Give each unit one mission, in handoff order build → inspect → guard → deploy, matched to the unit roles. Use only the unit ids given.',
+          'Give each unit one mission, in handoff order build → inspect → guard → deploy, matched to the unit roles. Use only the unit ids given. In needs, list what else the operation must have from the Supply Depot to succeed, beyond a repository and (for a deploy) a production environment, which are always added: e.g. a dev server with a GPU, a model, a staging environment, a credential for an outside service. Mark nice-to-haves optional. List nothing it does not need; resources already assigned are given.',
       }),
     );
   }

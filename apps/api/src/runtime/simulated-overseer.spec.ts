@@ -17,6 +17,7 @@ describe('SimulatedOverseer', () => {
     const d = o.draftBackbrief({
       mission: { id: 'm', goal: 'G', definitionOfDone: ['a', 'b', 'c'], stage: null },
       unit: { id: 'u', name: 'Engineers', standingOrders: [] },
+      repositories: [],
       bots: [
         { id: '1', callsign: 'E-1', role: 'dev', status: 'working', queueLength: 2 },
         { id: '2', callsign: 'E-2', role: 'dev', status: 'idle', queueLength: 0 },

@@ -19,12 +19,23 @@ describe('Sand table', () => {
   const texts = (v: OperationDetailView, severity: string) =>
     v.sandTable!.body.findings.filter((f) => f.severity === severity).map((f) => f.text);
 
+  let repo: string;
+  let envId: string;
+
   beforeAll(async () => {
     t = await startTestApp();
     const repoId = (
       await t.agent
         .post('/api/supply/repositories')
         .send({ name: 'app', location: await makeRepo() })
+        .expect(201)
+    ).body.id;
+    repo = repoId;
+    // In the depot from the start (an operation needs it to plan a deploy), not yet issued.
+    envId = (
+      await t.agent
+        .post('/api/supply/environments')
+        .send({ name: 'production', tier: 'production' })
         .expect(201)
     ).body.id;
     engId = (await makeUnitWithBot(t.app, { supplyIds: [repoId] })).unit.entityId;
@@ -52,7 +63,11 @@ describe('Sand table', () => {
     opId = (
       await t.agent
         .post('/api/operations')
-        .send({ intent: 'Ship audit logging to production.', name: 'Ledger' })
+        .send({
+          intent: 'Ship audit logging to production.',
+          name: 'Ledger',
+          supplyIds: [repo, envId],
+        })
         .expect(201)
     ).body.id;
     const v = await waitFor(async () => {
@@ -86,13 +101,7 @@ describe('Sand table', () => {
 
   it('put the blockers right and rehearse again: go', async () => {
     await settled(t.app);
-    const env = (
-      await t.agent
-        .post('/api/supply/environments')
-        .send({ name: 'production', tier: 'production' })
-        .expect(201)
-    ).body.id;
-    await t.agent.post('/api/supply/allot').send({ supplyId: env, unitId: logId }).expect(200);
+    await t.agent.post('/api/supply/allot').send({ supplyId: envId, unitId: logId }).expect(200);
     await t.agent
       .put(`/api/units/${engId}/budget`)
       .send({ units: 100, reason: 'Enough for Ledger' })

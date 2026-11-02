@@ -80,6 +80,10 @@ export class OverseerService implements OnApplicationBootstrap, OnModuleDestroy 
         }
       }
     });
+    // On start, every Overseer looks at its bots once: work held up before a restart moves on.
+    this.background.run('startup', 'overseer:sweep', async () => {
+      for (const u of await this.record.listActive('unit')) this.dispatchSoon(u.entityId);
+    });
   }
 
   onModuleDestroy(): void {
@@ -113,6 +117,19 @@ export class OverseerService implements OnApplicationBootstrap, OnModuleDestroy 
     );
   }
 
+  /** Where a mission's work can land: its operation's repositories, else the unit's. */
+  private async repositoriesFor(operationId: string | null, unitSupplyIds: string[]) {
+    const op = operationId ? await this.record.getActive('operation', operationId) : null;
+    const out: { id: string; name: string }[] = [];
+    for (const id of op?.body.supplyIds.length ? op.body.supplyIds : unitSupplyIds) {
+      const s = await this.record.getActive('supply', id);
+      if (s?.body.connected && s.body.spec.kind === 'repository') {
+        out.push({ id: s.entityId, name: s.body.name });
+      }
+    }
+    return out;
+  }
+
   /** Draft (or re-draft) the backbrief for a mission, then gate it. */
   async plan(missionId: string, note: string | null = null): Promise<RecordVersion<BackbriefBody>> {
     const mission = await this.record.requireActive('mission', missionId);
@@ -125,6 +142,10 @@ export class OverseerService implements OnApplicationBootstrap, OnModuleDestroy 
       (b) => !b.body.isOverseer,
     );
     const draft = await cmd.runtime.draftBackbrief({
+      repositories: await this.repositoriesFor(
+        mission.body.operationId ?? null,
+        cmd.unit.body.supplyIds,
+      ),
       mission: {
         id: missionId,
         goal: mission.body.goal,
@@ -314,7 +335,14 @@ export class OverseerService implements OnApplicationBootstrap, OnModuleDestroy 
             missionId: bb.body.missionId,
             title: t.title,
             description: t.description,
-            repoSupplyId: op?.body.repoSupplyId ?? repo?.entityId ?? null,
+            // One of the operation's repositories if the backbrief named it, else its first.
+            repoSupplyId:
+              (t.repoSupplyId && op?.body.supplyIds.includes(t.repoSupplyId)
+                ? t.repoSupplyId
+                : null) ??
+              op?.body.repoSupplyId ??
+              repo?.entityId ??
+              null,
             credentialNames,
             scenario: t.scenario,
             budgetLimitUnits: null,
@@ -377,12 +405,61 @@ export class OverseerService implements OnApplicationBootstrap, OnModuleDestroy 
 
   // ---------- Work in progress ----------
 
+  /**
+   * No bot sits on a held task while its queue waits. A bot still holding a blocked task (or one
+   * awaiting a decision) goes back to work; the task resumes later. A bot that crashed keeps its
+   * task, but the Overseer moves the rest of its queue to bots that can work.
+   */
+  private async freeHeldBots(unitId: string, actor: string): Promise<void> {
+    const bots = (await this.record.listActive('bot', { unitId })).filter(
+      (b) => !b.body.isOverseer,
+    );
+    for (const b of bots.filter((x) => x.body.status === 'blocked' && x.body.currentTaskId)) {
+      const t = await this.record.getActive('task', b.body.currentTaskId!);
+      if (this.runner.isRunning(b.body.currentTaskId!)) continue;
+      if (t && !['blocked', 'awaiting-approval', 'failed', 'stood-down'].includes(t.body.status))
+        continue;
+      await this.record.revise(
+        'bot',
+        b.entityId,
+        (x) => ({ ...x, status: 'idle', currentTaskId: null }),
+        {
+          actor,
+          reason: t
+            ? `Task #${t.body.number} is ${t.body.status}: on to the next task while it waits`
+            : 'Its task is gone: on to the next task',
+        },
+      );
+    }
+    const able = (await this.record.listActive('bot', { unitId })).filter(
+      (b) => !b.body.isOverseer && !b.body.halt && ['idle', 'working'].includes(b.body.status),
+    );
+    if (!able.length) return;
+    for (const b of bots.filter((x) => x.body.status === 'failed' && x.body.queue.length)) {
+      for (const taskId of b.body.queue) {
+        const t = await this.record.getActive('task', taskId);
+        if (!t || t.body.status !== 'queued') continue;
+        const to = [...able].sort((x, y) => x.body.queue.length - y.body.queue.length)[0]!;
+        await this.reassign(
+          taskId,
+          {
+            botId: to.entityId,
+            reason: `${b.body.callsign} failed; ${to.body.callsign} takes its queue`,
+          },
+          actor,
+        );
+        to.body.queue.push(taskId);
+      }
+    }
+  }
+
   /** Start the next auto-start task for every idle bot in the unit. */
   async dispatch(unitId: string): Promise<void> {
     const cmd = await this.overseers.of(unitId);
     // A stand-down order on everything or on this unit: nothing starts.
     if ((await this.record.getActive('settings', SETTINGS_ID))?.body.halt) return;
     if ((await this.record.getActive('unit', unitId))?.body.halt) return;
+    await this.freeHeldBots(unitId, cmd.actor);
     const bots = (await this.record.listActive('bot', { unitId })).filter(
       (b) => !b.body.isOverseer && b.body.status === 'idle' && !b.body.halt,
     );
@@ -652,7 +729,7 @@ export class OverseerService implements OnApplicationBootstrap, OnModuleDestroy 
       );
       return t;
     });
-    await this.runner.start(taskId, actor).catch(async (err: Error) => {
+    await this.runner.resume(taskId, actor).catch(async (err: Error) => {
       await this.record.event(
         'sitrep',
         {
@@ -841,7 +918,7 @@ export class OverseerService implements OnApplicationBootstrap, OnModuleDestroy 
           { unitId, taskId: t.entityId, botId: t.body.botId, missionId: t.body.missionId },
           cmd.actor,
         );
-        await this.runner.start(t.entityId, cmd.actor).catch(async (err: Error) => {
+        await this.runner.resume(t.entityId, cmd.actor).catch(async (err: Error) => {
           await this.record.event(
             'sitrep',
             {

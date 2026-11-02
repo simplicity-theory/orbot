@@ -9,3 +9,5 @@ coverage/
 /apps/web/playwright-report/
 /apps/api/.workspaces/
 .DS_Store
+/e2e/
+apps/web/e2e/.auth/

@@ -21,6 +21,9 @@ describe('Phase 4: intent to deployment across the whole force', () => {
   let repoPath: string;
   let opId: string;
   let op: OperationDetailView;
+  /** The operation while it waited for resources, and HQ's read-backs as they were assigned. */
+  const waits: OperationDetailView[] = [];
+  const reads: { items: { summary: string; routedVia: string | null }[] }[] = [];
 
   const chat = async (channel: string, text: string): Promise<ChatSendResult> => {
     const r = (await t.agent.post(`/api/chat/${channel}`).send({ text }).expect(201)).body;
@@ -69,6 +72,17 @@ describe('Phase 4: intent to deployment across the whole force', () => {
     const r = await chat('hq', INTENT);
     expect(r.readback.body.items[0]!.summary).toMatch(/^Operation .+ launched/);
     opId = r.readback.body.items[0]!.links[0]!.link.split('/').pop()!;
+    await settled(t.app);
+
+    // It has no resources: it waits at the O Group for a repository. Assigned in chat, HQ
+    // plans, finds the plan deploys, and waits again for a production environment.
+    waits.push(await detail());
+    const name = waits[0]!.operation.name;
+    reads.push((await chat('hq', `Use app for Operation ${name}.`)).readback.body);
+    await settled(t.app);
+    waits.push(await detail());
+    reads.push((await chat('hq', `Use production for Operation ${name}.`)).readback.body);
+    await settled(t.app);
 
     // 2. Backbriefs: Inspection's gate approves its own; the Commander approves the other three.
     op = await detail();
@@ -121,6 +135,46 @@ describe('Phase 4: intent to deployment across the whole force', () => {
       op.missions[2]!.mission.id,
     ]);
     expect(op.missions.every((m) => m.mission.status === 'done')).toBe(true);
+  });
+
+  it('waited at the O Group until it had the resources its plan needs, given in chat', () => {
+    const [first, second] = waits;
+    expect(first!.operation.phase).toBe('o-group');
+    expect(first!.missions).toEqual([]);
+    expect(first!.resources).toMatchObject({
+      blocked: true,
+      missing: [{ kind: 'repository', label: 'A repository to work in' }],
+    });
+    expect(first!.needsYou[0]).toMatchObject({
+      kind: 'resources',
+      label: `Operation ${first!.operation.name} is waiting for resources: a repository to work in`,
+      link: `/operations/${opId}#resources`,
+    });
+    // Planned with the repository: the plan deploys, so it needs production too.
+    expect(second!.missions).toEqual([]);
+    expect(second!.resources.missing).toEqual([
+      expect.objectContaining({ kind: 'environment', tier: 'production' }),
+    ]);
+    expect(reads.map((r) => r.items[0])).toEqual([
+      expect.objectContaining({
+        summary: `app assigned to Operation ${first!.operation.name}.`,
+        routedVia: 'hq',
+      }),
+      expect.objectContaining({
+        summary: `production assigned to Operation ${first!.operation.name}.`,
+      }),
+    ]);
+    // Once it had them, the missions went out; production stayed off the units (deploy rights
+    // are given by order, with confirmation).
+    expect(op.resources).toMatchObject({ blocked: false, missing: [] });
+    expect(op.resources.assigned.map((s) => s.name)).toEqual(['app', 'production']);
+    const sitreps = op.timeline
+      .filter((e) => e.kind === 'sitrep')
+      .map((e) => (e.body as { text: string }).text);
+    expect(sitreps.filter((x) => x.includes('is waiting for resources'))).toEqual([
+      expect.stringContaining('a repository to work in'),
+      expect.stringContaining('a production environment to deploy to'),
+    ]);
   });
 
   it('went through every phase of the operation lifecycle, in order', () => {

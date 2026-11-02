@@ -44,6 +44,10 @@ const COMMANDER_ONLY: ChatAction['kind'][] = [
   'budget-grant',
   'grant-deploy-rights',
   'create-operation',
+  'assign-resource',
+  'release-resource',
+  'set-main-repository',
+  'cancel-operation',
   'main-effort',
 ];
 
@@ -108,7 +112,7 @@ export class ChatService {
     };
     for (const action of interpretation.actions) {
       if (!(await allowed(action))) continue;
-      if (settings.irreversibleActions.includes(action.kind)) {
+      if (settings.irreversibleActions.includes(action.kind) || (await this.drastic(action))) {
         pending.push(
           await this.hold(
             action,
@@ -162,7 +166,14 @@ export class ChatService {
     const channelUnit = channel === HQ ? null : channel;
     // Orders for another unit — and new operations — go through HQ.
     const routedVia =
-      action.unitId !== channelUnit || action.kind === 'create-operation' ? HQ : null;
+      action.unitId !== channelUnit ||
+      action.kind === 'create-operation' ||
+      action.kind === 'assign-resource' ||
+      action.kind === 'release-resource' ||
+      action.kind === 'set-main-repository' ||
+      action.kind === 'cancel-operation'
+        ? HQ
+        : null;
     const result = await this.actions.run(action, { actor, reason: opts.reason });
     const entry = await this.record.event(
       'orders.log',
@@ -487,6 +498,7 @@ export class ChatService {
         id: o.entityId,
         name: o.body.name,
         phase: o.body.phase,
+        supplyIds: o.body.supplyIds,
       })),
       allHalted: !!settings?.body.halt,
       mainEffortOperationId: settings?.body.mainEffort?.operationId ?? null,
@@ -512,9 +524,36 @@ export class ChatService {
     return p as RecordEvent<'pending.action'>;
   }
 
+  /**
+   * Orders that throw work away always need the typed confirmation, whatever the settings say:
+   * cancelling an operation, or moving one whose missions are out to another repository.
+   */
+  private async drastic(a: ChatAction): Promise<boolean> {
+    if (a.kind === 'cancel-operation') return true;
+    if (a.kind !== 'set-main-repository') return false;
+    const op = await this.record.getActive('operation', a.operationId);
+    return !!op?.body.missionIds.length && op.body.repoSupplyId !== a.supplyId;
+  }
+
   /** A one-line, human description of an action that has not run yet. */
   private async describe(a: ChatAction): Promise<string> {
     if (a.kind === 'create-operation') return `Launch Operation ${a.name}: “${a.intent}”`;
+    if (a.kind === 'assign-resource' || a.kind === 'release-resource') {
+      const op = await this.record.requireActive('operation', a.operationId);
+      const s = await this.record.requireActive('supply', a.supplyId);
+      return a.kind === 'assign-resource'
+        ? `Assign ${s.body.name} to Operation ${op.body.name}`
+        : `Take ${s.body.name} off Operation ${op.body.name}`;
+    }
+    if (a.kind === 'set-main-repository') {
+      const op = await this.record.requireActive('operation', a.operationId);
+      const s = await this.record.requireActive('supply', a.supplyId);
+      return `Make ${s.body.name} the main repository of Operation ${op.body.name}${op.body.missionIds.length ? ' (its missions are withdrawn and issued again there)' : ''}`;
+    }
+    if (a.kind === 'cancel-operation') {
+      const op = await this.record.requireActive('operation', a.operationId);
+      return `Cancel Operation ${op.body.name}${a.note ? `: ${a.note}` : ''}`;
+    }
     if (a.kind === 'rehearse') {
       const op = await this.record.requireActive('operation', a.operationId);
       return `Rehearse Operation ${op.body.name} on the sand table`;

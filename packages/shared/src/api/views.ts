@@ -13,10 +13,11 @@ import type {
   TaskBody,
   TaskPermission,
   UnitBody,
+  OperationNeed,
 } from '../domain/entities.js';
 import type { AppManifest } from '../domain/apps.js';
 import type { RecordEvent } from '../record/events.js';
-import type { VersionWithStatus } from '../record/record.js';
+import type { DiffLine, VersionWithStatus } from '../record/record.js';
 import type { BotStatus, Status } from '../status/status.js';
 import type { Principal, Rank } from '../domain/principal.js';
 
@@ -59,7 +60,8 @@ export type AttentionKind =
   | 'escalation'
   | 'budget'
   | 'dispute'
-  | 'sand-table';
+  | 'sand-table'
+  | 'resources';
 
 /** A compute budget and what has been spent against it. */
 export interface BudgetView {
@@ -135,7 +137,8 @@ export interface UnitDetailView {
 
 export interface ApprovalsView {
   backbriefs: BackbriefView[];
-  attention: (AttentionItem & { unitName: string; unitId: string })[];
+  /** `unitId` is null for HQ's own items, such as an operation waiting for resources. */
+  attention: (AttentionItem & { unitName: string; unitId: string | null })[];
 }
 
 export interface PaletteItem {
@@ -254,6 +257,19 @@ export interface OperationSummary {
   missions: OperationMissionView[];
   /** Things on this operation waiting on the Commander. */
   needsYou: AttentionItem[];
+  resources: OperationResourcesView;
+}
+
+/** What an operation needs, what is assigned to it, and what is missing. */
+export interface OperationResourcesView {
+  needs: { need: OperationNeed; metBy: string[] }[];
+  assigned: SupplyView[];
+  /** Where the work lands, is handed off and deploys from (the first repository assigned). */
+  mainRepositoryId: string | null;
+  /** Required needs nothing assigned meets: the operation holds at the O Group until they are. */
+  missing: OperationNeed[];
+  /** It is waiting at the O Group for them. */
+  blocked: boolean;
 }
 
 export interface OperationDetailView extends OperationSummary {
@@ -371,8 +387,10 @@ export interface ConnectionView {
 export interface ServerDetailView {
   supply: SupplyView;
   /** Installs, the workspace and commands run on it, newest last. */
-  events: RecordEvent<'app.install' | 'server.command' | 'server.workspace'>[];
+  events: RecordEvent<'app.install' | 'server.command' | 'server.workspace' | 'server.health'>[];
   catalog: AppManifest[];
+  /** The last health check, if any. */
+  health: RecordEvent<'server.health'> | null;
 }
 
 /** An install in progress, read live from the server (redacted). */
@@ -390,4 +408,89 @@ export interface ModelCheckView {
   /** The models it serves. */
   models: string[];
   message: string;
+}
+
+// ---------- Code: commits and diffs in the operation's repositories ----------
+
+/** Who made a commit, from the record: the task (and bot, unit, operation) it belongs to. */
+export interface CommitOrigin {
+  /** `commit` a bot made; `integration`/`handoff`/`deployment` HQ recorded at that commit. */
+  kind: 'commit' | 'integration' | 'handoff' | 'deployment';
+  taskId: string | null;
+  taskNumber: number | null;
+  taskTitle: string | null;
+  unitId: string | null;
+  unitName: string | null;
+  botId: string | null;
+  botCallsign: string | null;
+  operationId: string | null;
+  operationName: string | null;
+}
+
+export interface CommitSummary {
+  sha: string;
+  subject: string;
+  author: string;
+  date: string;
+  parents: string[];
+  /** Branches whose tip it is. */
+  refs: string[];
+  origin: CommitOrigin | null;
+}
+
+export interface DiffHunk {
+  /** `@@ -12,7 +12,9 @@ function name` */
+  header: string;
+  lines: DiffLine[];
+}
+
+export interface FileDiff {
+  path: string;
+  /** For a rename or copy: where it came from. */
+  oldPath: string | null;
+  status: 'added' | 'modified' | 'deleted' | 'renamed';
+  binary: boolean;
+  added: number;
+  removed: number;
+  hunks: DiffHunk[];
+  /** Too long to show in full: the first lines only. */
+  truncated: boolean;
+}
+
+export interface RepositoryRef {
+  id: string;
+  name: string;
+}
+
+export interface CommitDetailView {
+  repository: RepositoryRef;
+  commit: CommitSummary;
+  /** The message after the subject line. */
+  body: string;
+  /** Against its first parent (a merge shows what it brought in). */
+  files: FileDiff[];
+  /** More files changed than are shown. */
+  truncated: boolean;
+}
+
+export interface TaskChangesView {
+  repository: RepositoryRef | null;
+  branch: string | null;
+  /** Where the task branched from (its base). */
+  base: string | null;
+  /** The task's own commits, oldest first. */
+  commits: CommitSummary[];
+  /** Everything the task changed since its base, committed. */
+  files: FileDiff[];
+  /** Changes in its worktree not committed yet. */
+  uncommitted: FileDiff[];
+  truncated: boolean;
+}
+
+export interface RepositoryHistoryView {
+  repository: RepositoryRef & { defaultBranch: string };
+  /** Branches to look at: the default one, operations' integration branches, tasks' branches. */
+  refs: { name: string; kind: 'default' | 'operation' | 'task' | 'other' }[];
+  ref: string;
+  commits: CommitSummary[];
 }

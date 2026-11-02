@@ -74,6 +74,12 @@ class FakeGpuServer {
   bundle: Buffer | null = null;
   envFile = '';
   workspaceKey = '';
+  /** Disk lines as deploy/server/disk.sh prints them. */
+  disks =
+    'disk=/|1000000000000|450000000000|550000000000\ndisk=/var/lib/orbot|2000000000000|600000000000|1400000000000';
+  status =
+    'service=active\nhealth=ok\nmodels=qwen3-14b\ngpu=NVIDIA GeForce RTX 3090, 20112 MiB, 24576 MiB, 0 %\n';
+  loginFails = false;
 
   /** The public half of a private key, as sshd would check it. */
   private async publicOf(privateKey: string): Promise<string> {
@@ -98,6 +104,12 @@ class FakeGpuServer {
         ? ok(command === 'echo orbot-ok' ? 'orbot-ok\n' : `ran as orbot-dev: ${command}\n`)
         : { exitCode: 255, output: 'Permission denied (publickey).' };
     }
+    if (this.loginFails)
+      return {
+        exitCode: 255,
+        output: 'ssh: connect to host 127.0.0.1 port 22: Connection refused',
+      };
+    if (command.includes("<<'ORBOT_DISK'")) return ok(`orbot-ok\n${this.disks}\n`);
     if (target.user === 'nobody')
       return { exitCode: 255, output: 'Permission denied (publickey).' };
     if (command.startsWith('echo orbot-ok')) {
@@ -125,9 +137,7 @@ class FakeGpuServer {
       );
     }
     if (command.includes('/opt/orbot/apps/vllm/status.sh')) {
-      return ok(
-        'service=active\nhealth=ok\nmodels=qwen3-14b\ngpu=NVIDIA GeForce RTX 3090, 20112 MiB, 24576 MiB, 0 %\n',
-      );
+      return ok(this.status);
     }
     if (command.startsWith('sudo -n bash -s  # deploy/server/workspace.sh')) {
       const text = stdin?.toString('utf8') ?? '';
@@ -349,6 +359,64 @@ describe('Apps on servers: install vLLM from deploy/apps and serve a model to th
       message: `qwen3-14b answers at http://127.0.0.1:${apiPort}/v1.`,
     });
     expect(JSON.stringify(check.body)).not.toContain(apiKey);
+  });
+
+  it('a health check logs in, asks each app how it is doing, and reads the disks', async () => {
+    const health = async () =>
+      (await t.agent.post(`/api/supply/servers/${serverId}/health`).expect(200))
+        .body as RecordEvent<'server.health'>;
+    const h = await health();
+    expect(h.body).toMatchObject({
+      status: 'healthy',
+      login: { ok: true, message: 'Logged in as admin@127.0.0.1.' },
+      workspace: null,
+      disks: [
+        { mount: '/', sizeBytes: 1e12, usedPercent: 45, status: 'healthy' },
+        { mount: '/var/lib/orbot', usedPercent: 30, status: 'healthy' },
+      ],
+      apps: [
+        {
+          name: 'vLLM',
+          status: 'healthy',
+          message: 'service active · API ok · serves qwen3-14b · answers from ORBOT',
+        },
+      ],
+    });
+    expect(JSON.stringify(h)).not.toContain(apiKey);
+    // Reading the server changes nothing on it, and no command is on the record for it.
+    expect(gpu.runs.at(-1)!.command).toContain('/opt/orbot/apps/vllm/status.sh');
+    const d = await detail();
+    expect(d.health?.id).toBe(h.id);
+
+    // A nearly full disk, and the service down: both are said, the worst decides.
+    gpu.disks = 'disk=/|1000000000000|960000000000|40000000000';
+    gpu.status = 'service=failed\nhealth=down\nmodels=\n';
+    const bad = await health();
+    expect(bad.body.status).toBe('down');
+    expect(bad.body.disks[0]).toMatchObject({ usedPercent: 96, status: 'down' });
+    expect(bad.body.apps[0]).toMatchObject({
+      status: 'down',
+      message: expect.stringContaining('service failed · API down'),
+    });
+    gpu.disks = 'disk=/|1000000000000|880000000000|120000000000';
+    gpu.status = 'service=active\nhealth=ok\nmodels=qwen3-14b\n';
+    expect((await health()).body).toMatchObject({
+      status: 'degraded',
+      disks: [{ usedPercent: 88, status: 'degraded' }],
+    });
+
+    // No login: down, with what to do; the apps are not checked.
+    gpu.loginFails = true;
+    const down = await health();
+    gpu.loginFails = false;
+    expect(down.body).toMatchObject({
+      status: 'down',
+      login: { ok: false, message: expect.stringContaining('Connection refused') },
+      disks: [],
+      apps: [{ status: 'down', message: 'Not checked: ORBOT could not log in.' }],
+    });
+    expect(down.body.login.message).toContain('check it is on and reachable');
+    gpu.disks = 'disk=/|1000000000000|450000000000|550000000000';
   });
 
   it('a failed step is recorded with why; a second install while one runs is refused', async () => {

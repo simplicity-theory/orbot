@@ -83,7 +83,9 @@ import { scrollToFragment } from './scroll-to-fragment';
                             ? 'arrow-right'
                             : a.kind === 'dispute'
                               ? 'users'
-                              : 'octagon-pause'
+                              : a.kind === 'resources'
+                                ? 'key'
+                                : 'octagon-pause'
                     "
                   />
                   <span class="meta">{{ a.unitName }}</span>
@@ -92,7 +94,7 @@ import { scrollToFragment } from './scroll-to-fragment';
                     <orb-deploy-approval
                       class="inline"
                       [taskId]="a.entityId"
-                      [unitId]="a.unitId"
+                      [unitId]="a.unitId ?? ''"
                       [label]="a.label"
                     />
                   } @else if (a.action === 'decide-permission' && a.permission) {
@@ -100,14 +102,14 @@ import { scrollToFragment } from './scroll-to-fragment';
                       class="inline"
                       [taskId]="a.entityId"
                       [permission]="a.permission"
-                      [unitId]="a.unitId"
+                      [unitId]="a.unitId ?? ''"
                       [label]="a.label"
                     />
                   } @else if (a.action === 'acknowledge' && a.chainId) {
                     <orb-acknowledge
                       class="inline"
                       [chainId]="a.chainId"
-                      [unitId]="a.unitId"
+                      [unitId]="a.unitId ?? ''"
                       [label]="a.label"
                     />
                   }

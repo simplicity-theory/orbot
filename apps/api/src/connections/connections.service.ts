@@ -502,7 +502,7 @@ export class ConnectionsService implements OnModuleInit, OnApplicationBootstrap,
         t.body.status === 'blocked' &&
         t.body.statusReason?.includes(PIPELINE_HELD),
     );
-    for (const t of tasks) await this.runner.start(t.entityId, HQ_ACTOR).catch(() => undefined);
+    for (const t of tasks) await this.runner.resume(t.entityId, HQ_ACTOR).catch(() => undefined);
   }
 
   /** Nothing ships while the pipeline is red (or still running) on what is being deployed. */

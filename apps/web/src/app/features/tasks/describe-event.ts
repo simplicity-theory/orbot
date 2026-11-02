@@ -10,6 +10,18 @@ export interface EventSummary {
   tone: 'neutral' | 'info' | 'warning' | 'danger' | 'success';
 }
 
+/** The commit an event is about (a bot's commit, an integration, a handoff, a deploy), if any. */
+export function commitOf(e: RecordEvent): string | null {
+  const b = e.body as Record<string, unknown>;
+  const sha =
+    e.kind === 'artifact' && b['kind'] === 'commit'
+      ? b['ref']
+      : ['integration', 'handoff', 'deployment'].includes(e.kind)
+        ? b['commit']
+        : null;
+  return typeof sha === 'string' && /^[0-9a-f]{7,40}$/i.test(sha) ? sha : null;
+}
+
 /** One line per record event, in the Commander's vocabulary. */
 export function describeEvent(e: RecordEvent): EventSummary {
   const b = e.body as Record<string, unknown>;
@@ -103,6 +115,17 @@ export function describeEvent(e: RecordEvent): EventSummary {
         label: 'App',
         text: `${s('app')} on ${s('server')}: ${verb}${b['message'] ? ` — ${s('message')}` : ''}`,
         tone: st === 'failed' ? 'danger' : st === 'installed' ? 'success' : 'neutral',
+      };
+    }
+    case 'server.health': {
+      const h = e.body as RecordEvent<'server.health'>['body'];
+      const disks = h.disks.map((d) => `${d.mount} ${d.usedPercent}% used`).join(', ');
+      const apps = h.apps.filter((a) => a.status !== 'healthy').map((a) => `${a.name} ${a.status}`);
+      return {
+        icon: 'activity',
+        label: 'Health',
+        text: `${h.server}: ${h.status}${h.login.ok ? '' : ' (no login)'}${apps.length ? ` — ${apps.join(', ')}` : ''}${disks ? ` · ${disks}` : ''}`,
+        tone: h.status === 'healthy' ? 'success' : h.status === 'down' ? 'danger' : 'warning',
       };
     }
     case 'server.workspace':

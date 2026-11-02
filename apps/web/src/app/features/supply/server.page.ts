@@ -1,6 +1,15 @@
 import { Dialog } from '@angular/cdk/dialog';
 import { httpResource } from '@angular/common/http';
-import { Component, computed, effect, inject, input, signal } from '@angular/core';
+import {
+  Component,
+  computed,
+  effect,
+  inject,
+  input,
+  signal,
+  untracked,
+  viewChild,
+} from '@angular/core';
 import { RouterLink } from '@angular/router';
 import type {
   AppManifest,
@@ -12,6 +21,7 @@ import type {
 } from '@orbot/shared';
 import { Api, apiUrl } from '../../core/api';
 import { toUserError } from '../../core/api-error';
+import { Auth } from '../../core/auth';
 import { Breadcrumbs, ORBAT_CRUMB } from '../../core/breadcrumbs';
 import { reloadOnLive, touchedIds } from '../../core/live';
 import { PageTitle } from '../../core/title';
@@ -25,6 +35,7 @@ import { RecordTimeline } from '../tasks/record-timeline';
 import { EnvironmentDialog, type EnvironmentDialogData } from './environment.dialog';
 import { InstallAppDialog, type InstallAppData } from './install-app.dialog';
 import { ServerAppCard } from './server-app';
+import { ServerHealth } from './server-health';
 
 const FACTS: [key: string, label: string][] = [
   ['os', 'System'],
@@ -39,7 +50,16 @@ const FACTS: [key: string, label: string][] = [
 /** A server: what it is, the bot workspace on it, the apps installed there, and its record. */
 @Component({
   selector: 'orb-server-page',
-  imports: [Can, Icon, LoadError, RecordTimeline, RouterLink, ServerAppCard, Skeleton],
+  imports: [
+    Can,
+    Icon,
+    LoadError,
+    RecordTimeline,
+    RouterLink,
+    ServerAppCard,
+    ServerHealth,
+    Skeleton,
+  ],
   template: `
     <div class="page page--detail">
       @if (view.error(); as err) {
@@ -64,6 +84,8 @@ const FACTS: [key: string, label: string][] = [
             <button type="button" class="btn btn--primary" (click)="edit()">Edit</button>
           </div>
         </header>
+
+        <orb-server-health [serverId]="v.supply.id" [health]="v.health" (checked)="view.reload()" />
 
         @if (sv.facts && sv.facts['sudo'] !== 'passwordless') {
           <p class="panel notice" role="status">
@@ -286,6 +308,8 @@ export class ServerPage {
   private readonly units = httpResource<UnitView[]>(() => apiUrl.units());
   private readonly supply = httpResource<SupplyView[]>(() => apiUrl.supply());
   protected readonly facts = FACTS;
+  private readonly auth = inject(Auth);
+  private readonly healthPanel = viewChild(ServerHealth);
   protected readonly busy = signal(false);
 
   protected readonly server = computed<ServerAccess | null>(() => {
@@ -323,6 +347,14 @@ export class ServerPage {
         { label: name },
       ]);
       title.set(`${name} · Supply Depot`);
+    });
+    // Opening the page checks the server if the last check is old (and you may run one).
+    let autoChecked = false;
+    effect(() => {
+      const panel = this.healthPanel();
+      if (!panel || autoChecked || !this.view.value() || !this.auth.isCommander()) return;
+      autoChecked = true;
+      if (untracked(() => panel.stale())) void panel.run();
     });
     reloadOnLive(
       (n) =>

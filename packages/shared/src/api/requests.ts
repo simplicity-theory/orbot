@@ -170,8 +170,22 @@ export const CreateOperationRequest = z.object({
   budgetUnits: z.number().int().positive().max(1_000_000).nullable().optional(),
   /** Send the building unit to recon first; HQ plans once the report is in. */
   reconFirst: z.boolean().optional(),
+  /** Depot items to assign from the start; it holds at the O Group until it has what it needs. */
+  supplyIds: z.array(Id).max(50).optional(),
 });
 export type CreateOperationRequest = z.input<typeof CreateOperationRequest>;
+
+/** Assign a depot item to an operation, or take it off. */
+export const OperationResourceRequest = z.object({
+  supplyId: Id,
+  reason: z.string().trim().max(500).optional(),
+});
+export type OperationResourceRequest = z.input<typeof OperationResourceRequest>;
+
+export const CancelOperationRequest = z.object({
+  note: z.string().trim().max(500).default(''),
+});
+export type CancelOperationRequest = z.input<typeof CancelOperationRequest>;
 
 export const DeployDecisionRequest = z.object({
   approve: z.boolean(),

@@ -16,7 +16,9 @@ export const missionStatus = (s: MissionStatus): Status =>
       @for (m of missions(); track m.mission.id; let last = $last) {
         <li>
           <div class="unit">
-            <a [routerLink]="['/units', m.unit.id]">{{ m.unit.name }}</a>
+            <a [routerLink]="['/units', m.unit.id]" [queryParams]="{ mission: m.mission.id }">{{
+              m.unit.name
+            }}</a>
             <span class="meta">{{ m.mission.stage ?? 'mission' }}</span>
             <orb-status [status]="status(m.mission.status)" />
             @if (m.mission.status === 'waiting') {

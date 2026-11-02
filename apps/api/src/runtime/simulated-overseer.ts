@@ -10,6 +10,7 @@ import {
 } from '@orbot/shared';
 import { DUPLICATE_THRESHOLD, similarity, titleFrom, words } from '../common/similarity.js';
 import type {
+  OperationNeed,
   AfterActionInput,
   AfterActionReview,
   DisputeInput,
@@ -44,6 +45,12 @@ export class SimulatedOverseer {
       if (bot) bot.load++;
       return bot?.id ?? null;
     };
+    // With more than one repository, a task goes where its text names one.
+    const repoFor = (text: string) =>
+      input.repositories.length > 1
+        ? (input.repositories.find((r) => text.toLowerCase().includes(r.name.toLowerCase()))?.id ??
+          null)
+        : null;
     // In an operation, each stage has its own kind of work.
     const stage = input.mission.stage;
     const proposedTasks: ProposedTask[] =
@@ -60,6 +67,7 @@ export class SimulatedOverseer {
                     ? 'guard-check'
                     : 'deploy',
               kind: stage === 'deploy' ? 'deploy' : 'check',
+              repoSupplyId: null,
             },
           ]
         : input.mission.definitionOfDone.map((item) => ({
@@ -68,6 +76,7 @@ export class SimulatedOverseer {
             botId: pick(),
             scenario: 'happy-path',
             kind: 'work' as const,
+            repoSupplyId: repoFor(item),
           }));
 
     const risks: string[] = [];
@@ -235,7 +244,20 @@ export class SimulatedOverseer {
         ? [{ unitId: unit.id, stage, goal: goals[stage].goal, definitionOfDone: goals[stage].dod }]
         : [];
     });
-    return { name: input.name, missions };
+    // Beyond a repository (and production for a deploy, which HQ adds): what the intent asks for.
+    const needs: OperationNeed[] = [];
+    if (/\b(gpu|cuda|train(ing)?|fine-?tun\w*)\b/i.test(intent)) {
+      needs.push({
+        kind: 'server',
+        label: 'A dev server with a GPU',
+        tier: 'dev',
+        optional: false,
+      });
+    }
+    if (/\b(llm|language model|model endpoint)\b/i.test(intent)) {
+      needs.push({ kind: 'model', label: 'A language model to call', tier: null, optional: true });
+    }
+    return { name: input.name, missions, needs };
   }
 
   /**

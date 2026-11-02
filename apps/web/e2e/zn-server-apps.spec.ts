@@ -125,3 +125,23 @@ test('a plain environment has Edit too, and its form can make it a server', asyn
   await expectAccessible(page, 'edit a plain environment');
   await dialog.getByRole('button', { name: 'Cancel' }).click();
 });
+
+test('the server page checks health when opened: an unreachable server is down, with why', async ({
+  page,
+}) => {
+  await page.goto('/supply?section=environments');
+  await page
+    .getByRole('list', { name: 'Servers & environments' })
+    .getByRole('link', { name: 'gpu1', exact: true })
+    .click();
+  const health = page.getByRole('region', { name: 'Health' });
+  await expect(health.getByText('Down', { exact: true })).toBeVisible({ timeout: 20_000 });
+  await expect(health).toContainText('Could not log in as admin@gpu1.invalid');
+  await expect(health).toContainText('check it is on and reachable');
+  await expect(health).toContainText(/checked (now|\d+ seconds? ago)/);
+  await expect(page.getByRole('region', { name: 'Record' })).toContainText('gpu1: down (no login)');
+  await expectAccessible(page, 'server health (down)');
+  // Run again on demand.
+  await health.getByRole('button', { name: 'Run health check' }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'gpu1 is down.' }).first()).toBeVisible();
+});

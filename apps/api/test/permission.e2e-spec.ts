@@ -111,8 +111,8 @@ describe('Rules of engagement: permission requests', () => {
     });
     expect(statuses(d)).toEqual(['working', 'awaiting-approval']);
     expect(d.events.some((e) => e.kind === 'permission.requested')).toBe(true);
-    // The bot holds the task while it waits, so the work resumes where it stopped.
-    expect(d.bot).toMatchObject({ status: 'blocked', currentTaskId: approved.id });
+    // The bot moves on while it waits (D101); the task resumes from its handover and worktree.
+    expect(d.bot).toMatchObject({ status: 'idle', currentTaskId: null });
 
     const inbox: ApprovalsView = (await t.agent.get('/api/approvals').expect(200)).body;
     const item = inbox.attention.find((a) => a.entityId === approved.id);

@@ -20,6 +20,8 @@ import { RecordTimeline } from '../tasks/record-timeline';
 import { MainEfforts } from '../../core/main-effort';
 import { MainEffortBadge, MainEffortButton } from '../../ui/main-effort';
 import { MissionChain } from './mission-chain';
+import { CancelOperationButton } from './operation-course';
+import { OperationResources } from './operation-resources';
 import { SandTable } from './sand-table';
 
 @Component({
@@ -40,6 +42,8 @@ import { SandTable } from './sand-table';
     MainEffortBadge,
     MainEffortButton,
     SandTable,
+    OperationResources,
+    CancelOperationButton,
   ],
   template: `
     @if (view.error(); as err) {
@@ -56,6 +60,9 @@ import { SandTable } from './sand-table';
             <p class="page-header__lede">
               <orb-term key="intent">Intent</orb-term>: {{ v.operation.intent }}
             </p>
+            @if (v.operation.cancelled; as c) {
+              <p><orb-status status="stood-down" /> Cancelled{{ c.note ? ': ' + c.note : '' }}</p>
+            }
             @if (v.operation.reconTaskId) {
               <p>
                 <orb-term key="recon">Recon</orb-term> first:
@@ -77,16 +84,32 @@ import { SandTable } from './sand-table';
             }
           </div>
           @if (v.operation.phase !== 'closed') {
-            <orb-main-effort-button
-              *orbCan="null"
-              [operationId]="v.operation.id"
-              [name]="'Operation ' + v.operation.name"
-            />
+            <div class="header-actions" *orbCan="null">
+              <orb-main-effort-button
+                [operationId]="v.operation.id"
+                [name]="'Operation ' + v.operation.name"
+              />
+              @if (v.operation.phase !== 'after-action') {
+                <orb-cancel-operation
+                  [operationId]="v.operation.id"
+                  [name]="v.operation.name"
+                  (cancelled)="view.reload()"
+                />
+              }
+            </div>
           }
         </header>
         <section class="panel" aria-label="Phase">
           <orb-phase-stepper [phase]="v.operation.phase" />
         </section>
+        <orb-operation-resources
+          [operationId]="v.operation.id"
+          [name]="v.operation.name"
+          [phase]="v.operation.phase"
+          [resources]="v.resources"
+          [missionsOut]="v.missions.length > 0"
+          (changed)="view.reload()"
+        />
         <orb-sand-table
           [operationId]="v.operation.id"
           [result]="v.sandTable"
@@ -213,6 +236,12 @@ import { SandTable } from './sand-table';
     }
   `,
   styles: `
+    .header-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--space-2);
+    }
     .attention {
       display: flex;
       flex-direction: column;
@@ -333,7 +362,9 @@ export class OperationPage {
       (n) =>
         (n.type === 'event' && n.event.operationId === this.operationId()) ||
         (n.type === 'version' &&
-          ['operation', 'mission', 'task', 'backbrief', 'document'].includes(n.version.entityType)),
+          ['operation', 'mission', 'task', 'backbrief', 'document', 'supply'].includes(
+            n.version.entityType,
+          )),
       () => {
         this.view.reload();
         this.connections.reload();

@@ -38,6 +38,54 @@
 
     @switch (section()) {
       @case ('overview') {
+        @if (focus(); as f) {
+          <section class="panel focus" aria-labelledby="focus-h">
+            <h2 id="focus-h" class="panel__title">
+              @if (f.mission.operationId) {
+                <orb-term key="mission">Mission</orb-term> in
+                <a [routerLink]="['/operations', f.mission.operationId]"
+                  >Operation {{ focusOperationName() ?? '…' }}</a
+                >
+              } @else {
+                <orb-term key="mission">Mission</orb-term>
+              }
+            </h2>
+            <div class="mission-head">
+              <span>{{ f.mission.goal }}</span>
+              <orb-status [status]="missionStatus(f.mission.status)" />
+            </div>
+            <p class="meta">
+              {{ f.mission.stage ?? 'mission' }} · {{ f.done }} of {{ f.total }} task(s) done
+            </p>
+            @if (f.mission.definitionOfDone.length) {
+              <h3 class="sub">Definition of done</h3>
+              <ul class="dod">
+                @for (d of f.mission.definitionOfDone; track $index) {
+                  <li>{{ d }}</li>
+                }
+              </ul>
+            }
+            <h3 class="sub">Tasks</h3>
+            <ul class="list-reset rows">
+              @for (t of f.tasks; track t.id) {
+                <li>
+                  <a
+                    [routerLink]="
+                      t.botId
+                        ? ['/units', v.unit.id, 'bots', t.botId, 'tasks', t.id]
+                        : ['/units', v.unit.id, 'tasks', t.id]
+                    "
+                    ><span class="mono">#{{ t.number }}</span> {{ t.title }}</a
+                  >
+                  <orb-status [status]="t.status" />
+                </li>
+              } @empty {
+                <li class="meta">No tasks yet.</li>
+              }
+            </ul>
+            <a [routerLink]="[]" [queryParams]="{ mission: null }">Show all of {{ v.unit.name }}</a>
+          </section>
+        }
         @if (v.backbriefs.length || v.attention.length) {
           <section class="panel attention" aria-labelledby="attention-h">
             <h2 id="attention-h" class="panel__title">Needs you</h2>
@@ -73,7 +121,7 @@
               <orb-term key="mission">Missions</orb-term>
             </h2>
             @for (m of activeMissions(); track m.mission.id) {
-              <div class="mission">
+              <div class="mission" [class.focused]="m.mission.id === mission()">
                 <div class="mission-head">
                   <span>{{ m.mission.goal }}</span>
                   <orb-status [status]="missionStatus(m.mission.status)" />

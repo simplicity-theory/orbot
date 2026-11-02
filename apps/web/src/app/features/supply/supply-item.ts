@@ -19,6 +19,8 @@ import { iconOf, tierOf } from './supply-sections';
       <h3 class="name">
         @if (server()) {
           <a [routerLink]="['/supply/servers', s.id]">{{ s.name }}</a>
+        } @else if (s.spec.kind === 'repository') {
+          <a [routerLink]="['/supply/repositories', s.id]">{{ s.name }}</a>
         } @else {
           {{ s.name }}
         }
@@ -42,6 +44,8 @@ import { iconOf, tierOf } from './supply-sections';
         <button type="button" class="btn small end" [disabled]="busy()" (click)="checkModel()">
           Check it answers
         </button>
+      } @else if (s.spec.kind === 'repository') {
+        <a class="btn small end" [routerLink]="['/supply/repositories', s.id]">History & diffs</a>
       }
     </div>
 

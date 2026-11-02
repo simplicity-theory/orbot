@@ -21,9 +21,32 @@ test('state intent, approve the plans and the deploy, give deploy rights in chat
   const dialog = page.getByRole('dialog', { name: 'State intent' });
   await dialog.getByLabel('Intent').fill('Ship audit logging to production.');
   await dialog.getByLabel(/Code name/).fill('Ledger');
+  // Its repository from the start; production is forgotten, so it waits for it.
+  await expect(dialog.getByText(/needs at least one repository/)).toBeVisible();
+  await dialog.getByRole('group', { name: 'Repositories' }).getByLabel('demo-app').check();
+  await expect(dialog.getByText(/needs at least one repository/)).toHaveCount(0);
+  await expectAccessible(page, 'state intent with resources');
   await dialog.getByRole('button', { name: 'Launch operation' }).click();
 
   await expect(page.getByRole('heading', { level: 1, name: 'Operation Ledger' })).toBeVisible();
+  const resources = page.getByRole('region', { name: 'Resources' });
+  await expect(resources.getByRole('status')).toContainText('Waiting at the O Group', {
+    timeout: 15_000,
+  });
+  await expect(resources).toContainText('A production environment to deploy to');
+  await expect(resources.getByRole('list', { name: 'Assigned resources' })).toContainText(
+    'demo-app',
+  );
+  await expectAccessible(page, 'operation waiting for resources');
+  await resources
+    .getByLabel('Resource to assign')
+    .selectOption({ label: 'production (environment · production)' });
+  await resources.getByRole('button', { name: 'Assign' }).click();
+  await expect(
+    page.getByRole('status').filter({ hasText: 'production assigned to Operation Ledger.' }),
+  ).toBeVisible();
+  await expect(resources.getByRole('status')).toHaveCount(0, { timeout: 15_000 });
+
   const needs = page.getByRole('region', { name: 'Needs you' });
   // Three units brief back (Inspection's gate approves its own plan).
   await expect(needs.getByRole('article')).toHaveCount(3, { timeout: 15_000 });
@@ -70,4 +93,19 @@ test('state intent, approve the plans and the deploy, give deploy rights in chat
   await page.goto('/operations');
   await expect(page.getByRole('link', { name: 'Operation Ledger' })).toBeVisible();
   await expectAccessible(page, 'operations board');
+
+  // A unit in the chain opens on this operation's mission, not just the unit.
+  await page.getByRole('link', { name: 'Operation Ledger' }).click();
+  await page
+    .getByRole('list', { name: 'Missions in handoff order' })
+    .getByRole('link', { name: 'Engineers' })
+    .first()
+    .click();
+  await expect(page).toHaveURL(/\/units\/[^?]+\?mission=/);
+  const focus = page.getByRole('region', { name: /in Operation Ledger$/ });
+  await expect(focus).toBeVisible();
+  await expect(focus.getByRole('link', { name: /^#\d+/ }).first()).toBeVisible();
+  await expectAccessible(page, 'unit opened on a mission');
+  await focus.getByRole('link', { name: 'Show all of Engineers' }).click();
+  await expect(page.getByRole('region', { name: /in Operation Ledger$/ })).toHaveCount(0);
 });

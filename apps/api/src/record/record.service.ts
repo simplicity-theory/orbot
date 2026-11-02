@@ -503,6 +503,27 @@ export class RecordService {
     return opts.latest ? events.reverse() : events;
   }
 
+  /** Events of these kinds whose body field `field` (a top-level string) is one of `values`. */
+  async eventsByBodyField(
+    kinds: string[],
+    field: string,
+    values: string[],
+  ): Promise<RecordEvent[]> {
+    if (!values.length || !kinds.length) return [];
+    const rows = await this.db
+      .select(eventCols)
+      .from(recordEvent)
+      .where(
+        and(
+          inArray(recordEvent.kind, kinds),
+          inArray(sql<string>`${recordEvent.body} ->> ${field}`, values),
+        ),
+      )
+      .orderBy(asc(recordEvent.seq))
+      .limit(10_000);
+    return rows.map(toEvent);
+  }
+
   /** Compute units spent (sum of `cost` events), grouped by unit, operation or task. */
   async costBy(by: 'unit' | 'operation' | 'task'): Promise<Map<string, number>> {
     const col =

@@ -1,5 +1,6 @@
 import { Auth } from '../../core/auth';
 import { httpResource } from '@angular/common/http';
+import { TaskChanges } from '../code/task-changes';
 import { Component, computed, effect, inject, input, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { marked } from 'marked';
@@ -24,6 +25,7 @@ import { RecordTimeline } from './record-timeline';
 @Component({
   selector: 'orb-task-page',
   imports: [
+    TaskChanges,
     MainEffortBadge,
     RouterLink,
     StatusBadge,

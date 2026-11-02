@@ -170,7 +170,12 @@ describe('Recon', () => {
     const op = (
       await t.agent
         .post('/api/operations')
-        .send({ intent: 'Rate limit the login endpoint.', name: 'Throttle', reconFirst: true })
+        .send({
+          intent: 'Rate limit the login endpoint.',
+          name: 'Throttle',
+          reconFirst: true,
+          supplyIds: [repoId],
+        })
         .expect(201)
     ).body;
     const view = await waitFor(async () => {

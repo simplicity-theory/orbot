@@ -1,5 +1,13 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { budgetView, SETTINGS_ID, STAGE_ORDER, type BudgetView } from '@orbot/shared';
+import {
+  budgetView,
+  describeNeeds,
+  missingNeeds,
+  needStatus,
+  SETTINGS_ID,
+  STAGE_ORDER,
+  type BudgetView,
+} from '@orbot/shared';
 import type {
   ApprovalsView,
   AttentionItem,
@@ -12,7 +20,9 @@ import type {
   MissionBody,
   MissionProgress,
   MissionView,
+  OperationBody,
   OperationDetailView,
+  OperationResourcesView,
   OperationSummary,
   OrbatUnit,
   OrbatView,
@@ -116,11 +126,29 @@ export class ViewsService {
   /** The single inbox: backbriefs to decide, plus everything else waiting on the Commander. */
   async approvals(): Promise<ApprovalsView> {
     const orbat = await this.orbat();
+    // HQ's own: operations held at the O Group for want of resources.
+    const waiting: ApprovalsView['attention'] = [];
+    for (const op of await this.record.listActive('operation')) {
+      if (op.body.missionIds.length || !['intent', 'o-group'].includes(op.body.phase)) continue;
+      const r = await this.operationResources(op);
+      if (!r.blocked) continue;
+      waiting.push({
+        kind: 'resources',
+        label: `Operation ${op.body.name} is waiting for resources: ${describeNeeds(r.missing)}`,
+        link: `/operations/${op.entityId}#resources`,
+        entityId: op.entityId,
+        unitName: 'HQ',
+        unitId: null,
+      });
+    }
     return {
       backbriefs: orbat.units.flatMap((u) => u.backbriefs),
-      attention: orbat.units.flatMap((u) =>
-        u.attention.map((a) => ({ ...a, unitName: u.unit.name, unitId: u.unit.id })),
-      ),
+      attention: [
+        ...waiting,
+        ...orbat.units.flatMap((u) =>
+          u.attention.map((a) => ({ ...a, unitName: u.unit.name, unitId: u.unit.id })),
+        ),
+      ],
     };
   }
 
@@ -367,7 +395,42 @@ export class ViewsService {
         entityId: id,
       });
     }
-    return { operation: toView(op), budget, missions: rows, needsYou };
+    const resources = await this.operationResources(op);
+    if (resources.blocked) {
+      needsYou.unshift({
+        kind: 'resources',
+        label: `Operation ${op.body.name} is waiting for resources: ${describeNeeds(resources.missing)}`,
+        link: `/operations/${id}#resources`,
+        entityId: id,
+      });
+    }
+    return { operation: toView(op), budget, missions: rows, needsYou, resources };
+  }
+
+  /** What an operation needs, what is assigned, what is missing, and whether it is held up. */
+  private async operationResources(
+    op: RecordVersion<OperationBody>,
+  ): Promise<OperationResourcesView> {
+    const assigned = [];
+    for (const sid of op.body.supplyIds) {
+      const s = await this.record.getActive('supply', sid);
+      if (s) assigned.push(s);
+    }
+    const pairs = assigned.map((s) => ({ id: s.entityId, body: s.body }));
+    const missing = missingNeeds(op.body.needs, pairs);
+    return {
+      needs: needStatus(op.body.needs, pairs),
+      assigned: toViews(assigned),
+      mainRepositoryId:
+        op.body.repoSupplyId ??
+        assigned.find((s) => s.body.spec.kind === 'repository' && s.body.connected)?.entityId ??
+        null,
+      missing,
+      blocked:
+        missing.length > 0 &&
+        !op.body.missionIds.length &&
+        (op.body.phase === 'intent' || op.body.phase === 'o-group'),
+    };
   }
 
   async operation(id: string): Promise<OperationDetailView> {
@@ -609,14 +672,21 @@ function attentionFor(
       entityId: bb.id,
     });
   }
-  for (const b of bots.filter((b) => b.status === 'blocked')) {
-    const t = tasks.find((x) => x.id === b.currentTaskId);
+  // A blocked task no longer holds its bot (the bot moves on), so the item is the task's.
+  for (const t of tasks.filter((t) => t.status === 'blocked')) {
+    const b = bots.find((x) => x.id === t.botId);
     items.push({
       kind: 'blocked-bot',
-      label: t
-        ? `${b.callsign} blocked on #${t.number}: ${t.statusReason ?? 'no reason given'}`
-        : `${b.callsign} is blocked`,
-      link: t ? taskLink(unitId, b.id, t.id) : botLink(unitId, b.id),
+      label: `${b?.callsign ?? 'Unassigned'} blocked on #${t.number}: ${t.statusReason ?? 'no reason given'}`,
+      link: taskLink(unitId, t.botId, t.id),
+      entityId: t.id,
+    });
+  }
+  for (const b of bots.filter((b) => b.status === 'blocked' && !b.currentTaskId)) {
+    items.push({
+      kind: 'blocked-bot',
+      label: `${b.callsign} is blocked`,
+      link: botLink(unitId, b.id),
       entityId: b.id,
     });
   }

@@ -34,6 +34,9 @@ import {
   ServersController,
 } from './servers/servers.controller.js';
 import { AppsService } from './servers/apps.service.js';
+import { HealthService } from './servers/health.service.js';
+import { CodeController } from './code/code.controller.js';
+import { CodeService } from './code/code.service.js';
 import { ServersService } from './servers/servers.service.js';
 import { SshClient } from './servers/ssh.client.js';
 import { ClaudeCodeRuntime } from './runtime/claude-code.runtime.js';
@@ -99,6 +102,7 @@ export class AppModule {
       module: AppModule,
       imports: [ConfigModule.forRoot(opts.config)],
       controllers: [
+        CodeController,
         MetaController,
         AuthController,
         DomainController,
@@ -197,6 +201,8 @@ export class AppModule {
         SshClient,
         ServersService,
         AppsService,
+        HealthService,
+        CodeService,
         AlertService,
         BudgetService,
         EscalationService,

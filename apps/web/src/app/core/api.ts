@@ -4,6 +4,7 @@ import { firstValueFrom } from 'rxjs';
 import type {
   AppointOfficerRequest,
   AppProgressView,
+  OperationDetailView,
   ConnectServerRequest,
   InstallAppRequest,
   UpdateEnvironmentRequest,
@@ -93,6 +94,11 @@ export const apiUrl = {
   secrets: () => `${API}/supply/secrets`,
   deconfliction: () => `${API}/deconfliction`,
   disputes: () => `${API}/disputes`,
+  repositoryHistory: (id: string, ref?: string) =>
+    `${API}/repositories/${id}/history${ref ? `?ref=${encodeURIComponent(ref)}` : ''}`,
+  commit: (repoId: string, sha: string) => `${API}/repositories/${repoId}/commits/${sha}`,
+  findCommit: (sha: string) => `${API}/commits/${sha}`,
+  taskChanges: (id: string) => `${API}/tasks/${id}/changes`,
 };
 
 export type SettingsView = SettingsBody & { version: number; actionKinds: string[] };
@@ -291,6 +297,13 @@ export class Api {
     return firstValueFrom(this.http.put<SupplyView>(`${API}/supply/environments/${id}`, req));
   }
 
+  /** Log in, ask each app how it is doing, read the disks: a `server.health` event. */
+  serverHealth(serverId: string) {
+    return firstValueFrom(
+      this.http.post<RecordEvent<'server.health'>>(`${API}/supply/servers/${serverId}/health`, {}),
+    );
+  }
+
   setupWorkspace(serverId: string) {
     return firstValueFrom(
       this.http.post<SupplyView>(`${API}/supply/servers/${serverId}/workspace`, {}),
@@ -354,13 +367,52 @@ export class Api {
     return firstValueFrom(this.http.put<SettingsView>(apiUrl.settings(), body));
   }
 
-  createOperation(intent: string, name?: string, budgetUnits?: number | null, reconFirst = false) {
+  createOperation(
+    intent: string,
+    name?: string,
+    budgetUnits?: number | null,
+    reconFirst = false,
+    supplyIds: string[] = [],
+  ) {
     return firstValueFrom(
       this.http.post<OperationView>(`${API}/operations`, {
         intent,
         ...(name ? { name } : {}),
         ...(budgetUnits ? { budgetUnits } : {}),
         ...(reconFirst ? { reconFirst } : {}),
+        ...(supplyIds.length ? { supplyIds } : {}),
+      }),
+    );
+  }
+
+  /** Assign a depot item to an operation; held at the O Group, HQ checks again. */
+  assignResource(operationId: string, supplyId: string) {
+    return firstValueFrom(
+      this.http.post<OperationDetailView>(`${API}/operations/${operationId}/resources`, {
+        supplyId,
+      }),
+    );
+  }
+
+  /** Make a repository the operation's main one (missions out: issued again there). */
+  setMainRepository(operationId: string, supplyId: string) {
+    return firstValueFrom(
+      this.http.post<OperationDetailView>(`${API}/operations/${operationId}/resources/main`, {
+        supplyId,
+      }),
+    );
+  }
+
+  cancelOperation(operationId: string, note: string) {
+    return firstValueFrom(
+      this.http.post<OperationDetailView>(`${API}/operations/${operationId}/cancel`, { note }),
+    );
+  }
+
+  releaseResource(operationId: string, supplyId: string) {
+    return firstValueFrom(
+      this.http.post<OperationDetailView>(`${API}/operations/${operationId}/resources/release`, {
+        supplyId,
       }),
     );
   }

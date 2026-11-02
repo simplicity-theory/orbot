@@ -206,7 +206,7 @@ export class BudgetService implements OnModuleInit {
     const released: string[] = [];
     for (const t of held) {
       try {
-        await this.runner.start(t.entityId, actor);
+        await this.runner.resume(t.entityId, actor);
         released.push(t.entityId);
       } catch {
         // Still over a cap (or otherwise unable to start): it stays blocked, with its reason.

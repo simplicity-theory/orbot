@@ -218,7 +218,7 @@ export class DisputeService implements OnApplicationBootstrap, OnModuleDestroy {
   private async resume(taskId: string) {
     const task = await this.record.getActive('task', taskId);
     if (task?.body.status !== 'blocked' || this.runner.isRunning(taskId)) return;
-    await this.runner.start(taskId, HQ_ACTOR).catch(async (err: Error) => {
+    await this.runner.resume(taskId, HQ_ACTOR).catch(async (err: Error) => {
       await this.record.event(
         'sitrep',
         {

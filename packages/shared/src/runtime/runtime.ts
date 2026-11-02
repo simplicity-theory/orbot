@@ -1,4 +1,10 @@
-import type { ProposedTask, RulesOfEngagement, TaskBody, Workspace } from '../domain/entities.js';
+import type {
+  OperationNeed,
+  ProposedTask,
+  RulesOfEngagement,
+  TaskBody,
+  Workspace,
+} from '../domain/entities.js';
 import type { Interpretation } from '../chat/chat.js';
 import type { DiaryCategory } from '../record/events.js';
 import type { TaskStatus } from '../status/status.js';
@@ -269,6 +275,11 @@ export interface BackbriefInput {
   };
   unit: { id: string; name: string; standingOrders: string[] };
   bots: { id: string; callsign: string; role: string; status: string; queueLength: number }[];
+  /**
+   * Where the work can land: the operation's repositories (the first is the default), or the
+   * unit's own. A proposed task may name one by id.
+   */
+  repositories: { id: string; name: string }[];
   fieldManual: BriefFieldManualEntry[];
   /** Notes from the Commander on earlier rounds (when the plan was sent back). */
   commanderNotes: string[];
@@ -341,7 +352,8 @@ export interface InterpretInput {
   channelUnitId: string | null;
   units: InterpretUnit[];
   depot: { id: string; name: string; kind: string; connected: boolean; tier: string | null }[];
-  operations: { id: string; name: string; phase: string }[];
+  /** Operations, with the depot items assigned to them (ids, from `depot`). */
+  operations: { id: string; name: string; phase: string; supplyIds?: string[] }[];
   /** Whether "everything, stand down" is in force. */
   allHalted: boolean;
   /** The operation that is the main effort, if any. */
@@ -356,6 +368,8 @@ export interface OperationPlanInput {
   /** Recon reports filed for this operation before planning. */
   recon?: { unit: string; title: string; markdown: string }[];
   units: { id: string; name: string; role: string; standingMission: string }[];
+  /** Resources the Commander already assigned to the operation. */
+  resources: { name: string; kind: string }[];
 }
 
 export interface OperationPlan {
@@ -366,6 +380,11 @@ export interface OperationPlan {
     goal: string;
     definitionOfDone: string[];
   }[];
+  /**
+   * What else the operation needs from the Supply Depot beyond a repository (always needed) and,
+   * for a deploy mission, a production environment (added by HQ), e.g. a GPU dev server.
+   */
+  needs?: OperationNeed[];
 }
 
 export interface AfterActionInput {

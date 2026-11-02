@@ -3,7 +3,7 @@ import { Dialog } from '@angular/cdk/dialog';
 import { httpResource } from '@angular/common/http';
 import { Component, computed, effect, inject, input } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import type { MissionStatus, Status, UnitDetailView } from '@orbot/shared';
+import type { MissionStatus, OperationDetailView, Status, UnitDetailView } from '@orbot/shared';
 import { apiUrl } from '../../core/api';
 import { Breadcrumbs, ORBAT_CRUMB } from '../../core/breadcrumbs';
 import { reloadOnLive, touchedIds } from '../../core/live';
@@ -71,6 +71,8 @@ export class UnitPage {
   readonly section = input<UnitSection, string | undefined>('overview', {
     transform: (v) => (UNIT_SECTIONS.some((s) => s.id === v) ? (v as UnitSection) : 'overview'),
   });
+  /** `?mission=` — opened from an operation: that mission, singled out. */
+  readonly mission = input<string>();
   protected readonly sections = UNIT_SECTIONS;
   protected readonly view = httpResource<UnitDetailView>(() => apiUrl.unit(this.unitId()));
   protected readonly full = fullDate;
@@ -85,6 +87,18 @@ export class UnitPage {
   );
   protected readonly doneMissions = computed(
     () => this.view.value()?.missions.filter((m) => m.mission.status === 'done') ?? [],
+  );
+  protected readonly focus = computed(() => {
+    const v = this.view.value();
+    const m = v?.missions.find((x) => x.mission.id === this.mission());
+    return m && v ? { ...m, tasks: v.tasks.filter((t) => t.missionId === m.mission.id) } : null;
+  });
+  private readonly focusOperation = httpResource<OperationDetailView>(() => {
+    const id = this.focus()?.mission.operationId;
+    return id ? apiUrl.operation(id) : undefined;
+  });
+  protected readonly focusOperationName = computed(
+    () => this.focusOperation.value()?.operation.name ?? null,
   );
   protected readonly workers = computed(
     () => this.view.value()?.bots.filter((b) => !b.isOverseer && b.status !== 'stood-down') ?? [],

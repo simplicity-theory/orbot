@@ -8,6 +8,7 @@ deploy/
   lib/common.sh          shared helpers for app scripts (state, steps, Docker, NVIDIA toolkit)
   server/facts.sh        what a server is (OS, GPU, Docker, sudo), read on connect and Check login
   server/workspace.sh    the bot workspace: a login without sudo for bots' dev work
+  server/disk.sh         free disk space, for the server's health check
   apps/<id>/
     app.json             manifest: name, settings, secrets, what it provides
     install.sh           installs or reinstalls it (safe to run again)

@@ -1,8 +1,10 @@
 import { Authority, unitOf } from '../officers/authority.js';
 import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Put } from '@nestjs/common';
 import {
+  CancelOperationRequest,
   CreateOperationRequest,
   DeployDecisionRequest,
+  OperationResourceRequest,
   PermissionDecisionRequest,
   SetBudgetRequest,
 } from '@orbot/shared';
@@ -51,8 +53,63 @@ export class OperationsController {
         actor,
         body.budgetUnits ?? null,
         body.reconFirst ?? false,
+        body.supplyIds ?? [],
       ),
     );
+  }
+
+  /**
+   * Assign a depot item to the operation. While it waits at the O Group for resources, HQ
+   * checks again and carries on once it has what it needs. The Commander's alone (as in chat).
+   */
+  @Post('operations/:id/resources')
+  @HttpCode(200)
+  async assignResource(
+    @Param('id', Uuid) id: string,
+    @Body(new ZodPipe(OperationResourceRequest)) body: z.output<typeof OperationResourceRequest>,
+    @Actor() actor: string,
+  ) {
+    await this.hq.assignResource(id, body.supplyId, actor, body.reason);
+    return this.views.operation(id);
+  }
+
+  /** Take a depot item off the operation (units that hold it keep it). */
+  @Post('operations/:id/resources/release')
+  @HttpCode(200)
+  async releaseResource(
+    @Param('id', Uuid) id: string,
+    @Body(new ZodPipe(OperationResourceRequest)) body: z.output<typeof OperationResourceRequest>,
+    @Actor() actor: string,
+  ) {
+    await this.hq.releaseResource(id, body.supplyId, actor, body.reason);
+    return this.views.operation(id);
+  }
+
+  /**
+   * Make a repository the operation's main one. Once missions are out they are withdrawn and
+   * issued again there (the work done stays on record).
+   */
+  @Post('operations/:id/resources/main')
+  @HttpCode(200)
+  async setMainRepository(
+    @Param('id', Uuid) id: string,
+    @Body(new ZodPipe(OperationResourceRequest)) body: z.output<typeof OperationResourceRequest>,
+    @Actor() actor: string,
+  ) {
+    await this.hq.setMainRepository(id, body.supplyId, actor, body.reason);
+    return this.views.operation(id);
+  }
+
+  /** Call the operation off: its work stands down and it closes without a review. */
+  @Post('operations/:id/cancel')
+  @HttpCode(200)
+  async cancel(
+    @Param('id', Uuid) id: string,
+    @Body(new ZodPipe(CancelOperationRequest)) body: z.output<typeof CancelOperationRequest>,
+    @Actor() actor: string,
+  ) {
+    await this.hq.cancelOperation(id, body.note, actor);
+    return this.views.operation(id);
   }
 
   /** Set the operation's compute budget cap (null = none); work held at the old cap resumes. */

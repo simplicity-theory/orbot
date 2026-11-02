@@ -3,6 +3,7 @@ export * from './status/status.js';
 export * from './domain/principal.js';
 export * from './domain/entities.js';
 export * from './domain/apps.js';
+export * from './domain/resources.js';
 export * from './domain/operation-lifecycle.js';
 export * from './record/record.js';
 export * from './record/events.js';

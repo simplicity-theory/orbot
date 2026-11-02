@@ -153,6 +153,36 @@ export const RecordEventBodies = {
   }),
   /** The bot workspace (a login without sudo for bots' dev work) set up on a server. */
   'server.workspace': z.object({ supplyId: z.string(), server: z.string(), user: z.string() }),
+  /**
+   * A server's health check: can ORBOT log in, are its apps running, how full are its disks.
+   * `status` is the worst of the parts: down (no login), degraded (an app, a disk), or healthy.
+   */
+  'server.health': z.object({
+    supplyId: z.string(),
+    server: z.string(),
+    status: z.enum(['healthy', 'degraded', 'down']),
+    login: z.object({ ok: z.boolean(), message: z.string() }),
+    /** The bot workspace login, if one is set up. */
+    workspace: z.object({ ok: z.boolean(), message: z.string() }).nullable(),
+    disks: z.array(
+      z.object({
+        mount: z.string(),
+        sizeBytes: z.number(),
+        usedBytes: z.number(),
+        availBytes: z.number(),
+        usedPercent: z.number(),
+        status: z.enum(['healthy', 'degraded', 'down']),
+      }),
+    ),
+    apps: z.array(
+      z.object({
+        appId: z.string(),
+        name: z.string(),
+        status: z.enum(['healthy', 'degraded', 'down']),
+        message: z.string(),
+      }),
+    ),
+  }),
   'policy.check': z.object({
     action: z.string(),
     allowed: z.boolean(),

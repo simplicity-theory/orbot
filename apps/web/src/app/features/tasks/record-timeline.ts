@@ -3,7 +3,8 @@ import { CdkVirtualScrollViewport, ScrollingModule } from '@angular/cdk/scrollin
 import type { RecordEvent } from '@orbot/shared';
 import { Icon } from '../../ui/icon';
 import { fullDate, RelativeTimePipe } from '../../ui/relative-time';
-import { describeEvent } from './describe-event';
+import { RouterLink } from '@angular/router';
+import { commitOf, describeEvent } from './describe-event';
 
 /**
  * A bot's working record: one dense row per record event, virtual-scrolled so
@@ -11,7 +12,7 @@ import { describeEvent } from './describe-event';
  */
 @Component({
   selector: 'orb-record-timeline',
-  imports: [ScrollingModule, Icon, RelativeTimePipe],
+  imports: [ScrollingModule, Icon, RelativeTimePipe, RouterLink],
   template: `
     @if (rows().length) {
       <cdk-virtual-scroll-viewport [itemSize]="rowPx" class="viewport" [style.height.px]="height()">
@@ -39,6 +40,14 @@ import { describeEvent } from './describe-event';
             #{{ e.seq }} · {{ e.kind }} · by <span class="mono">{{ e.actor }}</span> ·
             {{ full(e.createdAt) }}
           </p>
+          @if (commit(e); as sha) {
+            <p>
+              <a [routerLink]="['/commits', sha]"
+                ><orb-icon class="sm" name="git-commit" /> View commit
+                <span class="mono">{{ sha.slice(0, 10) }}</span> and its changes</a
+              >
+            </p>
+          }
           <pre class="prose">{{ pretty(e.body) }}</pre>
         </section>
       }
@@ -149,6 +158,8 @@ export class RecordTimeline {
 
   protected readonly trackSeq = (_: number, r: { e: RecordEvent }) => r.e.seq;
   protected readonly full = fullDate;
+  protected readonly commit = commitOf;
+
   protected pretty(body: unknown): string {
     return JSON.stringify(body, null, 2);
   }

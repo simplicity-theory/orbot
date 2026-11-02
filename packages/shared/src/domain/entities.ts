@@ -154,13 +154,60 @@ export const IssueRef = z.object({
 });
 export type IssueRef = z.infer<typeof IssueRef>;
 
+/** What an operation can need from the Supply Depot. A server is an environment bots log in to. */
+export const ResourceKind = z.enum(['repository', 'server', 'environment', 'model', 'credential']);
+export type ResourceKind = z.infer<typeof ResourceKind>;
+
+/**
+ * Something an operation needs before its units can start. A required need that no assigned
+ * resource meets blocks the operation at the O Group.
+ */
+export const OperationNeed = z.object({
+  kind: ResourceKind,
+  /** What it is for, in words. */
+  label: z.string().min(1).max(200),
+  /** For servers and environments: the tier it must be. */
+  tier: z.enum(['dev', 'staging', 'production']).nullable().default(null),
+  /** Nice to have: a gap is said, but does not block. */
+  optional: z.boolean().default(false),
+});
+export type OperationNeed = z.infer<typeof OperationNeed>;
+
+/** A mission in HQ's plan, before it is issued. */
+export const PlannedMission = z.object({
+  unitId: Id,
+  stage: z.enum(['build', 'inspect', 'guard', 'deploy']),
+  goal: z.string().min(1),
+  definitionOfDone: z.array(z.string()),
+});
+export type PlannedMission = z.infer<typeof PlannedMission>;
+
 export const OperationBody = z.object({
   name: z.string().min(1),
   intent: z.string().min(1),
   phase: OperationPhase,
+  /**
+   * Resources assigned to the operation (depot items), in the order they were assigned. The
+   * first repository is where the work is handed off and deployed from.
+   */
   supplyIds: z.array(Id),
+  /** What the operation needs; until every required need is met, it holds at the O Group. */
+  needs: z
+    .array(OperationNeed)
+    .default([
+      { kind: 'repository', label: 'A repository to work in', tier: null, optional: false },
+    ]),
+  /** HQ's plan, kept while the operation waits for resources so it is not planned twice. */
+  plan: z.array(PlannedMission).nullable().default(null),
   /** Missions in handoff order (Engineers → Inspection → Guard → Logistics). */
   missionIds: z.array(Id).default([]),
+  /** Missions withdrawn when the operation was issued again (a new main repository). */
+  withdrawnMissionIds: z.array(Id).default([]),
+  /** The Commander called it off: closed without an After Action review. */
+  cancelled: z
+    .object({ by: z.string(), note: z.string(), at: z.iso.datetime({ offset: true }) })
+    .nullable()
+    .default(null),
   /** The repository the operation's work lands in. */
   repoSupplyId: Id.nullable().default(null),
   /** Branch every unit's work is integrated on, then deployed from. */
@@ -484,6 +531,8 @@ export const ProposedTask = z.object({
   /** SimulatedRuntime scenario; ignored by other runtimes. */
   scenario: z.string().nullable(),
   kind: TaskKind.default('work'),
+  /** Which of the operation's repositories the task works in; null = the first. */
+  repoSupplyId: Id.nullable().default(null),
 });
 export type ProposedTask = z.infer<typeof ProposedTask>;
 

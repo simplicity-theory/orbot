@@ -13,6 +13,10 @@ export const STATUSES = [
   'awaiting-approval',
   'stood-down',
   'done',
+  /** A server's health check. */
+  'healthy',
+  'degraded',
+  'down',
 ] as const;
 
 export const Status = z.enum(STATUSES);
@@ -43,6 +47,9 @@ export const STATUS_META: Record<Status, StatusMeta> = {
   },
   'stood-down': { label: 'Stood down', icon: 'pause', tone: 'muted', needsAttention: false },
   done: { label: 'Done', icon: 'check', tone: 'success', needsAttention: false },
+  healthy: { label: 'Healthy', icon: 'check', tone: 'success', needsAttention: false },
+  degraded: { label: 'Degraded', icon: 'triangle-alert', tone: 'warning', needsAttention: true },
+  down: { label: 'Down', icon: 'x', tone: 'danger', needsAttention: true },
 };
 
 export const BotStatus = z.enum(['idle', 'working', 'blocked', 'failed', 'stood-down']);

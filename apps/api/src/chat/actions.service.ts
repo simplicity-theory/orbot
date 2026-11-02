@@ -49,9 +49,68 @@ export class ActionsService {
 
   async run(action: ChatAction, ctx: WriteContext): Promise<ActionResult> {
     if (action.kind === 'create-operation') {
-      const op = await this.hq.createOperation(action.intent, action.name, ctx.actor);
+      const op = await this.hq.createOperation(
+        action.intent,
+        action.name,
+        ctx.actor,
+        null,
+        false,
+        action.supplyIds,
+      );
+      const names = (await this.hq.resourcesOf(op)).map((r) => r.body.name);
       return {
-        summary: `Operation ${op.body.name} launched: HQ is holding the O Group and will issue missions to the units.`,
+        summary:
+          `Operation ${op.body.name} launched: HQ is holding the O Group and will issue missions to the units.` +
+          (names.length
+            ? ` Resources: ${names.join(', ')}.`
+            : ' It has no resources yet: it waits at the O Group until it has a repository.'),
+        links: [{ label: `Operation ${op.body.name}`, link: `/operations/${op.entityId}` }],
+        inverse: null,
+        affects: [],
+      };
+    }
+    if (action.kind === 'assign-resource' || action.kind === 'release-resource') {
+      const link = { label: 'Resources', link: `/operations/${action.operationId}#resources` };
+      if (action.kind === 'assign-resource') {
+        const r = await this.hq.assignResource(action.operationId, action.supplyId, ctx.actor);
+        return {
+          summary: r.added
+            ? `${r.supply.body.name} assigned to Operation ${r.op.body.name}.`
+            : `${r.supply.body.name} was already assigned to Operation ${r.op.body.name}.`,
+          links: [link],
+          inverse: r.added ? { ...action, kind: 'release-resource' } : null,
+          affects: [],
+        };
+      }
+      const r = await this.hq.releaseResource(action.operationId, action.supplyId, ctx.actor);
+      return {
+        summary: r.removed
+          ? `${r.supply.body.name} taken off Operation ${r.op.body.name}. Units that hold it keep it.`
+          : `${r.supply.body.name} was not assigned to Operation ${r.op.body.name}.`,
+        links: [link],
+        inverse: r.removed ? { ...action, kind: 'assign-resource' } : null,
+        affects: [],
+      };
+    }
+    if (action.kind === 'set-main-repository') {
+      const r = await this.hq.setMainRepository(action.operationId, action.supplyId, ctx.actor);
+      const name = r.op.body.name;
+      return {
+        summary: !r.changed
+          ? `${r.supply.body.name} is already the main repository of Operation ${name}.`
+          : r.restarted
+            ? `Operation ${name} now works in ${r.supply.body.name}: its missions were withdrawn and are issued again there, so each unit briefs back afresh. Work already done stays on ${r.was?.body.name ?? 'the old repository'}'s branches.`
+            : `${r.supply.body.name} is now the main repository of Operation ${name}.`,
+        links: [{ label: 'Resources', link: `/operations/${action.operationId}#resources` }],
+        // Withdrawn work is not put back: changing again issues the missions afresh.
+        inverse: null,
+        affects: [],
+      };
+    }
+    if (action.kind === 'cancel-operation') {
+      const op = await this.hq.cancelOperation(action.operationId, action.note, ctx.actor);
+      return {
+        summary: `Operation ${op.body.name} cancelled. Its work stood down and stays on record.`,
         links: [{ label: `Operation ${op.body.name}`, link: `/operations/${op.entityId}` }],
         inverse: null,
         affects: [],
