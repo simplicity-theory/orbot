@@ -56,6 +56,7 @@ Tests use the `orbot_test` / `orbot_secrets_test` databases and reset them; the 
     - `SandTableService`: rehearses an operation's plan against the record (deterministic, changes nothing).
     - `DailyBriefService` (HQ's dated daily brief document) and `AlertService` (phone alerts: POST to a push URL held in the secrets store by name; `alert.sent` events).
       Each registers its own `PolicyRule` and/or bus listener.
+  - `policy/hold-policy.service.ts` — `HoldPolicyService`: the hold policy (what a bot fixes alone, what it records, what holds the work for the Commander; `holdFrom`/`fixUpTo`, `never` = automatic), per unit with a per-operation override; briefed, not enforced (`decideFinding` in shared; the simulated `finding` step applies it) (D106).
   - `policy/duties.service.ts` — separation of duties as a `RecordService` write guard: no bot approves its own work, changes its own rules or grants itself supply, by any path.
   - `domain/service-record.service.ts` — a bot's service record, computed from the record (conduct, not knowledge: never briefed).
   - `officers/` — `OfficersService` (officer entities; passwords hashed in the secrets store as `officer-login.<id>`), `AuthorityService` + `AuthorityGuard` (rank checks on every write).
@@ -65,7 +66,7 @@ Tests use the `orbot_test` / `orbot_secrets_test` databases and reset them; the 
   - `supply/templates.ts` + `SupplyService.createRepository` — repositories started from a template (`single-html`, `empty`); the shape stays on the depot item (`RepositorySupply.project`) and is briefed to bots, Overseers and HQ. `supply/projects.service.ts` — `ProjectsService`: one order (`POST /api/projects`, chat `new-project`) makes the repository, its site, deploy rights if confirmed, and the operation.
   - `code/` — `CodeService`: the code bots wrote, read straight from git (read-only, never copied into the record): repository history per branch, commits with diffs (`diff.ts` parses them), a task's changes, each commit tied to the task/bot/operation by the events that name it (D103).
   - `connections/` — `ConnectionsService` + `Connector` (GitHub adapter): push and pull requests, pipeline results (a red pipeline holds production deploys via a policy rule), issues taken on as missions. Tokens by credential name only.
-  - `chat/` — `ChatService` (message → `runtime.interpret` → actions/pending → orders log → read-back; undo; confirm/decline) and `ActionsService` (one executor per `ChatAction`, each returning its inverse).
+  - `chat/` — `ChatService` (message + the channel's recent history → `runtime.interpret` → actions/pending → orders log → read-back; undo; confirm/decline; "Do it" confirms the last proposal (D108); a mission ordered in chat is `preApproved` (D107)) and `ActionsService` (one executor per `ChatAction`, each returning its inverse).
   - `settings/` — the versioned settings entity (irreversible action kinds, confirmation phrase).
   - `documents/` — `FieldManualService` (entries, render/parse), `UnitDocsService` + `UnitDocumentStore` (Markdown mirror in the unit's repo, import of human edits).
   - `common/background.ts` — per-key serial job runner for bus-driven work; tests wait with `settled()` (`src/testing/settle.ts`).

@@ -1,6 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import { BadRequestException, Injectable } from '@nestjs/common';
-import type { ChatAction, ChatLink, TaskBody, TaskStatus } from '@orbot/shared';
+import {
+  describeHoldPolicy,
+  type ChatAction,
+  type ChatLink,
+  type TaskBody,
+  type TaskStatus,
+} from '@orbot/shared';
+import { HoldPolicyService } from '../policy/hold-policy.service.js';
 import { TaskRunner } from '../execution/task-runner.js';
 import { HqService } from '../overseer/hq.service.js';
 import { MainEffortService } from '../overseer/main-effort.service.js';
@@ -47,9 +54,34 @@ export class ActionsService {
     private readonly sandTables: SandTableService,
     private readonly connections: ConnectionsService,
     private readonly projects: ProjectsService,
+    private readonly holds: HoldPolicyService,
   ) {}
 
   async run(action: ChatAction, ctx: WriteContext): Promise<ActionResult> {
+    if (action.kind === 'hold-policy') {
+      if (action.operationId) {
+        const before = (await this.record.requireActive('operation', action.operationId)).body
+          .holdPolicy;
+        const op = await this.holds.setOperation(action.operationId, action.policy, ctx);
+        return {
+          summary: action.policy
+            ? `Hold policy for Operation ${op.body.name}: ${describeHoldPolicy(action.policy)}`
+            : `Operation ${op.body.name} is back to each unit’s own hold policy.`,
+          links: [{ label: `Operation ${op.body.name}`, link: `/operations/${op.entityId}` }],
+          inverse: { ...action, policy: before },
+          affects: [],
+        };
+      }
+      const unitId = action.unitId!;
+      const before = (await this.record.requireActive('unit', unitId)).body.holdPolicy;
+      const unit = await this.holds.setUnit(unitId, action.policy ?? before, ctx);
+      return {
+        summary: `${unit.body.name}'s hold policy: ${describeHoldPolicy(unit.body.holdPolicy)}`,
+        links: [{ label: `${unit.body.name} rules`, link: unitLink(unitId, 'rules') }],
+        inverse: { ...action, policy: before },
+        affects: [],
+      };
+    }
     if (action.kind === 'new-project') {
       const p = await this.projects.start(
         {
@@ -228,9 +260,10 @@ export class ActionsService {
         const m = await this.overseer.createMission(
           { unitId: action.unitId, goal: action.goal, definitionOfDone: action.definitionOfDone },
           ctx.actor,
+          { preApproved: true },
         );
         return {
-          summary: `New mission for ${u}: “${action.goal}”. The Overseer will brief back a plan.`,
+          summary: `New mission for ${u}: “${action.goal}”. You ordered it, so the Overseer’s plan goes ahead without waiting for approval.`,
           links: [{ label: action.goal, link: unitLink(action.unitId) }],
           inverse: {
             kind: 'withdraw-mission',
@@ -467,7 +500,7 @@ export class ActionsService {
           ctx.actor,
         );
         return {
-          summary: `${u} takes on issue #${action.number}: new mission “${m.body.goal}”. The Overseer will brief back a plan.`,
+          summary: `${u} takes on issue #${action.number}: new mission “${m.body.goal}”. You ordered it, so the Overseer’s plan goes ahead without waiting for approval.`,
           links: [{ label: m.body.goal, link: unitLink(action.unitId) }],
           inverse: {
             kind: 'withdraw-mission',

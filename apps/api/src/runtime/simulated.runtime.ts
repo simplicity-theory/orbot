@@ -1,6 +1,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, relative, resolve } from 'node:path';
 import {
+  decideFinding,
   parseHandoverMarkdown,
   type BackbriefDraft,
   type BackbriefInput,
@@ -193,6 +194,54 @@ export class SimulatedRuntime implements BotRuntime {
       case 'commit':
         yield* commit(brief, text(step.message));
         return false;
+      case 'finding': {
+        const fix = step.fix === 'none' ? null : step.fix;
+        const decision = decideFinding(brief.unit.holdPolicy, step.severity, fix);
+        const label = `Finding (${step.severity}): ${text(step.text)}`;
+        if (decision === 'fix') {
+          yield {
+            type: 'diary',
+            category: 'note',
+            text: `${label} Fixed on the spot (a ${fix} fix, within the hold policy).`,
+          };
+          if (step.file && step.content) {
+            yield* writeInWorkspace(brief, text(step.file), text(step.content));
+          }
+          yield* commit(brief, step.commit ? text(step.commit) : `Fix ${step.severity} finding`);
+          return false;
+        }
+        const why = fix
+          ? `a ${fix} fix is more than the hold policy lets the unit do alone`
+          : 'it cannot be fixed within this work';
+        if (decision === 'record') {
+          yield {
+            type: 'diary',
+            category: 'note',
+            text: `${label} Recorded, not holding: ${why}, and the hold policy does not hold on ${step.severity}.`,
+          };
+          return false;
+        }
+        yield {
+          type: 'diary',
+          category: 'note',
+          text: `${label} Holding the work: ${why}, and the hold policy holds on ${step.severity}.`,
+        };
+        yield {
+          type: 'handover',
+          note: {
+            state: `Review held on ${brief.workspace.branch}: ${label}`,
+            nextSteps: ['Commander decides: accept the finding, or order the fix.'],
+            triedAndFailed: [],
+            openProblems: [label],
+            flagsForSuccessor: [],
+          },
+        };
+        yield {
+          type: 'blocked',
+          reason: `${label} ${why.charAt(0).toUpperCase()}${why.slice(1)}. Holding for the Commander: accept it, or order the change.`,
+        };
+        return true;
+      }
       case 'use-credential': {
         if (!credentialName) {
           yield {

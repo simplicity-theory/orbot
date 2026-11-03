@@ -13,6 +13,7 @@ import { DeployApproval } from '../../ui/deploy-approval';
 import { LoadError } from '../../ui/load-error';
 import { PhaseStepper } from '../../ui/phase-stepper';
 import { BudgetControl } from '../../ui/budget';
+import { HoldPolicyControl } from '../../ui/hold-policy';
 import { Skeleton } from '../../ui/skeleton';
 import { StatusBadge } from '../../ui/status-badge';
 import { Term } from '../../ui/term';
@@ -34,6 +35,7 @@ import { SandTable } from './sand-table';
     LoadError,
     PhaseStepper,
     BudgetControl,
+    HoldPolicyControl,
     Skeleton,
     StatusBadge,
     Term,
@@ -115,6 +117,16 @@ import { SandTable } from './sand-table';
           [result]="v.sandTable"
           (rehearsed)="view.reload()"
         />
+        <section class="panel" aria-labelledby="op-hold-h">
+          <h2 id="op-hold-h" class="panel__title">What holds the work</h2>
+          <orb-hold-policy
+            scope="operation"
+            [targetId]="v.operation.id"
+            [name]="'Operation ' + v.operation.name"
+            [policy]="v.operation.holdPolicy"
+            (changed)="view.reload()"
+          />
+        </section>
         <section class="panel" aria-labelledby="op-budget-h">
           <h2 id="op-budget-h" class="panel__title">Compute budget</h2>
           <orb-budget-control

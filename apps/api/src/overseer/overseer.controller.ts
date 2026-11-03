@@ -11,6 +11,7 @@ import {
   RejectBackbriefRequest,
   RetireFmEntryRequest,
   ReviseFmEntryRequest,
+  HoldPolicyRequest,
   StandingOrdersRequest,
   type SourceRef,
 } from '@orbot/shared';
@@ -23,6 +24,7 @@ import { toView } from '../domain/view.js';
 import { ViewsService } from '../domain/views.service.js';
 import { RecordService } from '../record/record.service.js';
 import { SupplyService } from '../supply/supply.service.js';
+import { HoldPolicyService } from '../policy/hold-policy.service.js';
 import { RuntimeRegistry } from '../runtime/runtime.registry.js';
 import { ColdStartService } from './coldstart.service.js';
 import { OverseerService } from './overseer.service.js';
@@ -52,6 +54,7 @@ export class OverseerController {
     private readonly coldStart: ColdStartService,
     private readonly supply: SupplyService,
     private readonly runtimes: RuntimeRegistry,
+    private readonly holds: HoldPolicyService,
   ) {}
 
   @Authority({ level: 'unit', units: unitOf('unit', 'body') })
@@ -158,6 +161,16 @@ export class OverseerController {
   @HttpCode(200)
   async sync(@Param('id', Uuid) id: string) {
     return { imported: await this.docs.sync(id) };
+  }
+
+  /** What holds the unit's work for the Commander. The Commander's alone. */
+  @Put('units/:id/hold-policy')
+  async holdPolicy(
+    @Param('id', Uuid) id: string,
+    @Body(new ZodPipe(HoldPolicyRequest)) body: z.output<typeof HoldPolicyRequest>,
+    @Actor() actor: string,
+  ) {
+    return toView(await this.holds.setUnit(id, body.policy, { actor, reason: body.reason }));
   }
 
   @Authority({ level: 'unit', units: unitOf('unit', 'param') })

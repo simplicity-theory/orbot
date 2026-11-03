@@ -327,7 +327,7 @@ describe('Connections', () => {
     ).body;
     const item = r.readback.body.items[0];
     expect(item.summary).toBe(
-      'Engineers takes on issue #8: new mission “Logout leaves the session open (issue #8)”. The Overseer will brief back a plan.',
+      'Engineers takes on issue #8: new mission “Logout leaves the session open (issue #8)”. You ordered it, so the Overseer’s plan goes ahead without waiting for approval.',
     );
     expect(item.reversible).toBe(true);
     const issues: IssueView[] = (await t.agent.get(`/api/connections/${connId}/issues`).expect(200))

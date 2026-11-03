@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import type { UnitDetailView } from '@orbot/shared';
 import { Api } from '../../core/api';
 import { toUserError } from '../../core/api-error';
+import { HoldPolicyControl } from '../../ui/hold-policy';
 import { Term } from '../../ui/term';
 import { Toasts } from '../../ui/toast';
 
@@ -18,7 +19,7 @@ const GATES: Record<string, string> = {
 /** Standing orders (editable, versioned), rules of engagement and the approval gate. */
 @Component({
   selector: 'orb-rules-tab',
-  imports: [Can, FormsModule, Term],
+  imports: [Can, FormsModule, HoldPolicyControl, Term],
   template: `
     @let u = view().unit;
     <section class="panel" aria-labelledby="so-h">
@@ -74,6 +75,19 @@ const GATES: Record<string, string> = {
           </ul>
         </div>
       </div>
+    </section>
+
+    <section class="panel" aria-labelledby="hold-h">
+      <h2 id="hold-h" class="panel__title">
+        <orb-term key="hold-policy">What holds the work</orb-term>
+      </h2>
+      <orb-hold-policy
+        scope="unit"
+        [targetId]="u.id"
+        [name]="u.name"
+        [policy]="u.holdPolicy"
+        (changed)="changed.emit()"
+      />
     </section>
 
     <section class="panel" aria-labelledby="gate-h">

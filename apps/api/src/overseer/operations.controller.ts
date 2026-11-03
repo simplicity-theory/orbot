@@ -4,6 +4,7 @@ import {
   CancelOperationRequest,
   CreateOperationRequest,
   DeployDecisionRequest,
+  OperationHoldPolicyRequest,
   OperationResourceRequest,
   PermissionDecisionRequest,
   SetBudgetRequest,
@@ -13,6 +14,7 @@ import { Actor } from '../auth/auth.guard.js';
 import { ZodPipe } from '../common/zod.pipe.js';
 import { toView } from '../domain/view.js';
 import { ViewsService } from '../domain/views.service.js';
+import { HoldPolicyService } from '../policy/hold-policy.service.js';
 import { SandTableService } from './sand-table.service.js';
 import { BudgetService } from './budget.service.js';
 import { HqService } from './hq.service.js';
@@ -29,7 +31,19 @@ export class OperationsController {
     private readonly views: ViewsService,
     private readonly budgets: BudgetService,
     private readonly sandTables: SandTableService,
+    private readonly holds: HoldPolicyService,
   ) {}
+
+  /** Override what holds this operation's work (null: back to each unit's own). The Commander's alone. */
+  @Put('operations/:id/hold-policy')
+  async holdPolicy(
+    @Param('id', Uuid) id: string,
+    @Body(new ZodPipe(OperationHoldPolicyRequest))
+    body: z.output<typeof OperationHoldPolicyRequest>,
+    @Actor() actor: string,
+  ) {
+    return toView(await this.holds.setOperation(id, body.policy, { actor, reason: body.reason }));
+  }
 
   @Get('operations')
   list() {

@@ -1,9 +1,11 @@
-import type {
-  ChatAction,
-  InterpretInput,
-  InterpretUnit,
-  Interpretation,
-  MessageKind,
+import {
+  DEFAULT_HOLD_POLICY,
+  type ChatAction,
+  type HoldPolicy,
+  type InterpretInput,
+  type InterpretUnit,
+  type Interpretation,
+  type MessageKind,
 } from '@orbot/shared';
 import { words } from '../common/similarity.js';
 
@@ -15,6 +17,48 @@ const DEPLOY_RIGHTS = /\b(production|prod)\b.*\b(deploy|release)|\bdeploy(ment)?
 const BUDGET = /\b(budget|compute)\b/i;
 const GRANT =
   /\b(access to|give you|giving you|grant|granting|issue you|you can (use|have)|i'?ll (give|issue|grant))\b/i;
+/**
+ * Hold policy, in words: "hold only on critical findings", "automatic: nothing ever holds",
+ * "fix up to medium", "only record findings", "back to the units' own settings".
+ */
+const HOLD_AUTOMATIC =
+  /\b(full(?:y)?[- ]?automatic|automatic(?: mode)?|never (?:hold|block)|nothing (?:ever )?(?:holds|blocks)|don'?t (?:ever )?(?:hold|block)(?: the work)?)\b/i;
+const HOLD_FROM =
+  /\b(?:hold|block)(?: the work)?(?: only)? (?:on|from|at) (low|medium|high|critical)\b|\bonly (low|medium|high|critical)(?: findings)? (?:hold|block)/i;
+const FIX_UP_TO = /\bfix(?:es)? (?:anything )?up to (small|medium|large)\b/i;
+const FIX_ANY = /\bfix anything\b|\bfix (?:findings )?whatever the size\b/i;
+const FIX_NONE = /\b(?:only record|record only|never fix|don'?t fix)\b/i;
+const HOLD_RESET =
+  /\b(?:back to|use) (?:the |each )?units?'?s? own(?: hold)?(?: polic(?:y|ies)| settings?)?\b/i;
+const MENTIONS_HOLD = /\b(hold|holds|block|blocks|finding|findings|fix|fixes|automatic)\b/i;
+
+function holdPolicyChange(sentence: string, current: HoldPolicy): HoldPolicy | null {
+  if (!MENTIONS_HOLD.test(sentence)) return null;
+  const next: HoldPolicy = { ...current };
+  let changed = false;
+  if (HOLD_AUTOMATIC.test(sentence)) {
+    next.holdFrom = 'never';
+    changed = true;
+  }
+  const from = HOLD_FROM.exec(sentence);
+  if (from) {
+    next.holdFrom = (from[1] ?? from[2])!.toLowerCase() as HoldPolicy['holdFrom'];
+    changed = true;
+  }
+  const upTo = FIX_UP_TO.exec(sentence);
+  if (upTo) {
+    next.fixUpTo = upTo[1]!.toLowerCase() as HoldPolicy['fixUpTo'];
+    changed = true;
+  } else if (FIX_ANY.test(sentence)) {
+    next.fixUpTo = 'large';
+    changed = true;
+  } else if (FIX_NONE.test(sentence)) {
+    next.fixUpTo = 'none';
+    changed = true;
+  }
+  return changed ? next : null;
+}
+
 const RULE_NEGATIVE = /^(stop|don'?t|do not|never|no longer|quit)\b/i;
 const RULE_POSITIVE = /^(always|from now on|going forward)\b/i;
 const RESUME = /\b(resume|pick (it|that|.+) back up|restart|carry on with|un-?park)\b/i;
@@ -205,7 +249,10 @@ export class SimulatedInterpreter {
         }
         continue;
       }
-      const course = this.mainRepository(sentence, input) ?? this.cancelOperation(sentence, input);
+      const course =
+        this.operationHold(sentence, input) ??
+        this.mainRepository(sentence, input) ??
+        this.cancelOperation(sentence, input);
       if (course) {
         if ('unclear' in course) {
           out.unclear.push(course.unclear);
@@ -400,6 +447,25 @@ export class SimulatedInterpreter {
       .sort((a, b) => b.score - a.score)[0];
     if (best && best.score >= 0.5) return best.o;
     return !topic(phrase).size && open.length === 1 ? open[0]! : null;
+  }
+
+  /** "Operation Ledger: automatic, nothing holds" / "For Operation Ledger, hold only on critical findings". */
+  private operationHold(
+    sentence: string,
+    input: InterpretInput,
+  ): Extract<ChatAction, { kind: 'hold-policy' }> | { unclear: string } | null {
+    const m = /\b(?:for |on )?operation\s+([A-Za-z0-9][\w .-]*?)\s*[:,]\s*(.+)$/i.exec(sentence);
+    if (!m) return null;
+    const rest = m[2]!;
+    if (!MENTIONS_HOLD.test(rest) && !HOLD_RESET.test(rest)) return null;
+    const op = this.operationNamed(m[1]!, input);
+    if (!op) return { unclear: `${sentence} — which operation? None open is called ${m[1]}.` };
+    if (HOLD_RESET.test(rest)) {
+      return { kind: 'hold-policy', unitId: null, operationId: op.id, policy: null };
+    }
+    const policy = holdPolicyChange(rest, op.holdPolicy ?? DEFAULT_HOLD_POLICY);
+    if (!policy) return null;
+    return { kind: 'hold-policy', unitId: null, operationId: op.id, policy };
   }
 
   /** "Use payments-service for Operation Ledger" / "Take gpu1 off Operation Ledger". */
@@ -737,6 +803,14 @@ export class SimulatedInterpreter {
       return {
         kind: 'supply-grant',
         action: { kind: 'supply-grant', unitId: unit.id, supplyId: hit.d.id },
+      };
+    }
+    // The hold policy: what the unit fixes alone, and what holds the work for the Commander.
+    const hold = holdPolicyChange(sentence, unit.holdPolicy);
+    if (hold) {
+      return {
+        kind: 'rule-change',
+        action: { kind: 'hold-policy', unitId: unit.id, operationId: null, policy: hold },
       };
     }
     // Standing orders.

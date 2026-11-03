@@ -18,6 +18,7 @@ import { WorkService } from './domain/work.service.js';
 import { TaskRunner } from './execution/task-runner.js';
 import { EventsGateway } from './gateway/events.gateway.js';
 import { DutiesService } from './policy/duties.service.js';
+import { HoldPolicyService } from './policy/hold-policy.service.js';
 import { PolicyService } from './policy/policy.service.js';
 import { RecordBus } from './record/record-bus.js';
 import { RecordController } from './record/record.controller.js';
@@ -151,6 +152,7 @@ export class AppModule {
         SecretsService,
         PolicyService,
         DutiesService,
+        HoldPolicyService,
         {
           provide: RuntimeRegistry,
           inject: [APP_CONFIG],

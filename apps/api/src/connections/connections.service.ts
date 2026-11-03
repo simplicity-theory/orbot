@@ -609,6 +609,7 @@ export class ConnectionsService implements OnModuleInit, OnApplicationBootstrap,
         definitionOfDone: checklist.length ? checklist : [`Issue #${number} is resolved`],
       },
       actor,
+      { preApproved: true },
     );
     const ref = { connectionId, number, url: issue.url, title };
     return this.record.transaction(async (w) => {

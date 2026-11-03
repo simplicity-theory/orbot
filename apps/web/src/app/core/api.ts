@@ -10,6 +10,7 @@ import type {
   UpdateEnvironmentRequest,
   ModelCheckView,
   ConnectServiceRequest,
+  HoldPolicy,
   MeView,
   NewProjectRequest,
   NewProjectView,
@@ -221,6 +222,23 @@ export class Api {
   syncDocuments(unitId: string) {
     return firstValueFrom(
       this.http.post<{ imported: string[] }>(`${API}/units/${unitId}/documents/sync`, {}),
+    );
+  }
+
+  /** What holds a unit's work for the Commander. */
+  setHoldPolicy(unitId: string, policy: HoldPolicy, reason = '') {
+    return firstValueFrom(
+      this.http.put<UnitViewOf>(`${API}/units/${unitId}/hold-policy`, { policy, reason }),
+    );
+  }
+
+  /** Override (null: clear) the hold policy for one operation's work. */
+  setOperationHoldPolicy(operationId: string, policy: HoldPolicy | null, reason = '') {
+    return firstValueFrom(
+      this.http.put<OperationView>(`${API}/operations/${operationId}/hold-policy`, {
+        policy,
+        reason,
+      }),
     );
   }
 

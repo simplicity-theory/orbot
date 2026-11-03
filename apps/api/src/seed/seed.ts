@@ -20,7 +20,7 @@ import { SupplyService } from '../supply/supply.service.js';
 const SEED = { actor: 'system:seed', reason: 'Demo force seeded' };
 
 interface UnitSeed {
-  body: Omit<UnitBody, 'overseerBotId' | 'supplyIds' | 'computeBudget' | 'halt'>;
+  body: Omit<UnitBody, 'overseerBotId' | 'supplyIds' | 'computeBudget' | 'halt' | 'holdPolicy'>;
   overseerRole: string;
   botRoles: string[];
   fieldManual: {
@@ -31,6 +31,30 @@ interface UnitSeed {
     add: { title: string; body: string; reason: string };
   };
 }
+
+/**
+ * How Guard treats what it finds: everything is recorded; what the unit's hold policy allows is
+ * fixed on the spot; the work is held for the Commander only as the policy says (D106).
+ */
+export const GUARD_STANDING_ORDERS = [
+  {
+    id: 'grd-1',
+    text: 'Record every finding in the War Diary and the handover, with its severity.',
+  },
+  {
+    id: 'grd-2',
+    text: 'Fix what the hold policy lets you fix on the spot and commit it; record the rest.',
+  },
+  {
+    id: 'grd-3',
+    text: 'Hold the work only as the hold policy says, with the finding, so the Commander decides.',
+  },
+];
+/** The demo tightens Guard for a launch; the demo chat lifts it ("Stop blocking on low-severity findings"). */
+export const DEMO_GUARD_ORDER = {
+  id: 'grd-demo',
+  text: 'Low-severity findings also block release.',
+};
 
 const UNITS: UnitSeed[] = [
   {
@@ -156,14 +180,12 @@ const UNITS: UnitSeed[] = [
       rulesOfEngagement: {
         mayDoAlone: [
           'Run dependency and static scans',
-          'Block a release on a high-severity finding',
+          'Fix a small finding inside the work under review',
+          'Hold the work on a high finding',
         ],
         mustEscalate: ['Accepting a known vulnerability', 'Rotating production credentials'],
       },
-      standingOrders: [
-        { id: 'grd-1', text: 'High and critical findings block release.' },
-        { id: 'grd-2', text: 'Low-severity findings also block release.' },
-      ],
+      standingOrders: GUARD_STANDING_ORDERS,
       order: 4,
     },
     overseerRole: 'Overseer — security lead',
@@ -241,7 +263,16 @@ export async function seedDemoForce(
             ? [repo.entityId]
             : [];
     await force.createUnit(
-      { ...u.body, overseerBotId: overseerId, supplyIds: supplied, computeBudget: 100 },
+      {
+        ...u.body,
+        standingOrders:
+          opts.demo && u.body.slug === 'guard'
+            ? [...u.body.standingOrders, DEMO_GUARD_ORDER]
+            : u.body.standingOrders,
+        overseerBotId: overseerId,
+        supplyIds: supplied,
+        computeBudget: 100,
+      },
       SEED,
       unitId,
     );

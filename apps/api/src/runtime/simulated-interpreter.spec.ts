@@ -1,10 +1,11 @@
-import type { InterpretInput, InterpretUnit } from '@orbot/shared';
+import { DEFAULT_HOLD_POLICY, type InterpretInput, type InterpretUnit } from '@orbot/shared';
 import { SimulatedInterpreter } from './simulated-interpreter.js';
 
 const unit = (over: Partial<InterpretUnit> = {}): InterpretUnit => ({
   id: '00000000-0000-4000-8000-0000000000a1',
   name: 'Guard',
   slug: 'guard',
+  holdPolicy: DEFAULT_HOLD_POLICY,
   standingOrders: [
     { id: 'hi', text: 'High and critical findings block release.' },
     { id: 'lo', text: 'Low-severity findings also block release.' },
@@ -37,6 +38,7 @@ const unit = (over: Partial<InterpretUnit> = {}): InterpretUnit => ({
 });
 const input = (message: string, over: Partial<InterpretInput> = {}): InterpretInput => ({
   message,
+  history: [],
   channelUnitId: '00000000-0000-4000-8000-0000000000a1',
   units: [unit()],
   depot: [
@@ -147,6 +149,26 @@ describe('SimulatedInterpreter', () => {
       ]);
     });
 
+    it('sets an operation’s hold policy, or clears it', () => {
+      const r = i.interpret(hq('Operation Ledger: automatic, nothing ever holds.'));
+      expect(r.actions).toEqual([
+        {
+          kind: 'hold-policy',
+          unitId: null,
+          operationId: OP,
+          policy: { holdFrom: 'never', fixUpTo: 'small' },
+        },
+      ]);
+      expect(
+        i.interpret(
+          hq('For Operation Ledger, hold only on critical findings and fix up to medium.'),
+        ).actions,
+      ).toEqual([expect.objectContaining({ policy: { holdFrom: 'critical', fixUpTo: 'medium' } })]);
+      expect(i.interpret(hq("Operation Ledger: back to the units' own settings.")).actions).toEqual(
+        [{ kind: 'hold-policy', unitId: null, operationId: OP, policy: null }],
+      );
+    });
+
     it('starts a new project, with the rest of the sentence as the intent', () => {
       const r = i.interpret(
         hq('Start a new project called Ledger: a personal ledger that works offline.'),
@@ -181,6 +203,32 @@ describe('SimulatedInterpreter', () => {
         }),
       ]);
     });
+  });
+
+  it('sets the unit’s hold policy from a sentence, keeping what it does not mention', () => {
+    expect(i.interpret(input('Hold only on critical findings.')).actions).toEqual([
+      {
+        kind: 'hold-policy',
+        unitId: '00000000-0000-4000-8000-0000000000a1',
+        operationId: null,
+        policy: { holdFrom: 'critical', fixUpTo: 'small' },
+      },
+    ]);
+    expect(i.interpret(input('Go fully automatic: fix anything, never hold.')).actions).toEqual([
+      expect.objectContaining({
+        kind: 'hold-policy',
+        policy: { holdFrom: 'never', fixUpTo: 'large' },
+      }),
+    ]);
+    expect(i.interpret(input('Only record findings, never fix them.')).actions).toEqual([
+      expect.objectContaining({
+        kind: 'hold-policy',
+        policy: { holdFrom: 'high', fixUpTo: 'none' },
+      }),
+    ]);
+    expect(i.interpret(input('Only record findings, never fix them.')).kinds).toEqual([
+      'rule-change',
+    ]);
   });
 
   it('splits a message into a rule change and a supply grant', () => {

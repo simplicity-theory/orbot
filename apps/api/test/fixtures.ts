@@ -28,6 +28,7 @@ export interface UnitFixtureOptions {
   prefix?: string;
   bots?: number;
   supplyIds?: string[];
+  standingOrders?: { id: string; text: string }[];
 }
 
 /** One unit with an Overseer and bots, created through the same services the app uses. */
@@ -50,7 +51,7 @@ export async function makeUnitWithBot(
       overseerBotId: overseerId,
       approvalGate: opts.gate ?? 'backbriefs-and-deploys',
       rulesOfEngagement: { mayDoAlone: [], mustEscalate: [] },
-      standingOrders: [],
+      standingOrders: opts.standingOrders ?? [],
       supplyIds: opts.supplyIds ?? [],
       order: 1,
       computeBudget: 0,

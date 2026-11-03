@@ -93,7 +93,8 @@ export class DutiesService implements OnModuleInit {
         if (
           !same(b.standingOrders, a.standingOrders) ||
           !same(b.rulesOfEngagement, a.rulesOfEngagement) ||
-          !same(b.approvalGate, a.approvalGate)
+          !same(b.approvalGate, a.approvalGate) ||
+          !same(b.holdPolicy, a.holdPolicy)
         )
           return { duty: 'change-own-rules', ...own };
         if (

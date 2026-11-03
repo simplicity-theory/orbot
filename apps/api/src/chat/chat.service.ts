@@ -8,6 +8,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
+  describeHoldPolicy,
   Interpretation,
   SETTINGS_ID,
   type BotRuntime,
@@ -38,8 +39,15 @@ type ReadbackItem = Readback['items'][number];
  * services the UI uses. Every change goes in the orders log and is read back.
  */
 /** Orders about supply, budgets, operations and the main effort are the Commander's alone. */
+/** "Do it", "Yes", "Go ahead": the last proposal becomes the order. */
+const CONFIRM =
+  /^(?:ok(?:ay)?[,.]?\s*)?(?:yes|yes please|do it|do that|go ahead|go for it|make it so|proceed|please do|sounds good|agreed|confirmed?|that one)[.!]*$/i;
+/** Turns of the channel given to the interpreter as context. */
+const HISTORY_TURNS = 12;
+
 const COMMANDER_ONLY: ChatAction['kind'][] = [
   'new-project',
+  'hold-policy',
   'supply-grant',
   'supply-revoke',
   'budget-grant',
@@ -96,9 +104,15 @@ export class ChatService {
       actor,
     )) as RecordEvent<'chat.message'>;
 
+    // "Do it": what the Overseer last proposed in this channel becomes the order.
+    if (CONFIRM.test(text.trim())) {
+      const confirmed = await this.confirmProposed(channel, unitId, message, actor);
+      if (confirmed) return { message, readback: confirmed };
+    }
+
     const { runtime, overseerActor } = await this.reader(unitId);
     const interpretation = Interpretation.parse(
-      await runtime.interpret(await this.context(message.body.text, unitId)),
+      await runtime.interpret(await this.context(message, unitId)),
     );
     const settings = await this.settings.get();
 
@@ -433,7 +447,112 @@ export class ChatService {
     return { runtime: cmd.runtime, overseerActor: cmd.actor };
   }
 
-  private async context(message: string, channelUnitId: string | null): Promise<InterpretInput> {
+  /**
+   * The musings still open from this channel's last read-back: what the Overseer proposed and
+   * the Commander has neither confirmed nor declined.
+   */
+  private async openProposals(channel: string): Promise<RecordEvent<'pending.action'>[]> {
+    const [last] = (await this.record.findEvents(
+      ['chat.readback'],
+      { channel },
+      {
+        limit: 1,
+        latest: true,
+      },
+    )) as RecordEvent<'chat.readback'>[];
+    const out: RecordEvent<'pending.action'>[] = [];
+    for (const p of last?.body.pending ?? []) {
+      const [done] = await this.record.findEvents(
+        ['pending.resolved'],
+        { pendingId: p.pendingId },
+        {
+          limit: 1,
+        },
+      );
+      if (!done) out.push((await this.pending(p.pendingId)) as RecordEvent<'pending.action'>);
+    }
+    return out;
+  }
+
+  /** Confirms the open musings; irreversible proposals still need their typed phrase. */
+  private async confirmProposed(
+    channel: string,
+    unitId: string | null,
+    message: RecordEvent<'chat.message'>,
+    actor: string,
+  ): Promise<RecordEvent<'chat.readback'> | null> {
+    const open = await this.openProposals(channel);
+    if (!open.length) return null;
+    const { overseerActor } = await this.reader(unitId);
+    const items: ReadbackItem[] = [];
+    const unclear: string[] = [];
+    for (const p of open) {
+      if (p.body.reason === 'irreversible') {
+        const want = p.body.phrase ?? (await this.settings.get()).confirmationPhrase;
+        unclear.push(`${p.body.summary} cannot be undone: type “${want}” to go ahead.`);
+        continue;
+      }
+      await this.mayOrder(p.body.action, actor);
+      const item = await this.execute(p.body.action, p.body.messageId, channel, actor, {
+        reason: `Confirmed as an order: “${message.body.text}”`,
+      });
+      items.push(item);
+      await this.record.event(
+        'pending.resolved',
+        { pendingId: p.id, outcome: 'confirmed', ordersLogId: item.ordersLogId },
+        { unitId },
+        actor,
+      );
+    }
+    return (await this.record.event(
+      'chat.readback',
+      {
+        channel,
+        replyTo: message.id,
+        kinds: items.length ? ['order'] : [],
+        text: items.length ? 'Wilco.' : 'That cannot be undone. Confirm and I will act.',
+        answer: null,
+        items,
+        pending: [],
+        missing: [],
+        unclear,
+      },
+      { unitId },
+      overseerActor,
+    )) as RecordEvent<'chat.readback'>;
+  }
+
+  /** The channel's recent turns, oldest first, without the message being interpreted. */
+  private async history(
+    channel: string,
+    exceptMessageId: string,
+  ): Promise<InterpretInput['history']> {
+    const recent = (await this.record.findEvents(
+      ['chat.message', 'chat.readback'],
+      { channel },
+      {
+        limit: HISTORY_TURNS,
+        latest: true,
+      },
+    )) as (RecordEvent<'chat.message'> | RecordEvent<'chat.readback'>)[];
+    return recent
+      .filter((e) => e.id !== exceptMessageId)
+      .reverse()
+      .map((e) =>
+        e.kind === 'chat.message'
+          ? { from: e.body.from, text: e.body.text }
+          : {
+              from: 'overseer' as const,
+              text: [e.body.answer ?? e.body.text, ...e.body.items.map((i) => i.summary)].join(' '),
+              ...(e.body.pending.length ? { proposed: e.body.pending.map((p) => p.summary) } : {}),
+            },
+      );
+  }
+
+  private async context(
+    message: RecordEvent<'chat.message'>,
+    channelUnitId: string | null,
+  ): Promise<InterpretInput> {
     const [units, bots, tasks, missions, supply, settings] = await Promise.all([
       this.record.listActive('unit'),
       this.record.listActive('bot'),
@@ -444,7 +563,8 @@ export class ChatService {
     ]);
     const callsign = new Map(bots.map((b) => [b.entityId, b.body.callsign]));
     return {
-      message,
+      message: message.body.text,
+      history: await this.history(message.body.channel, message.id),
       channelUnitId,
       units: units.map((u) => {
         const ut = tasks.filter((t) => t.body.unitId === u.entityId);
@@ -453,6 +573,7 @@ export class ChatService {
           name: u.body.name,
           slug: u.body.slug,
           standingOrders: u.body.standingOrders,
+          holdPolicy: u.body.holdPolicy,
           supplyIds: u.body.supplyIds,
           computeBudget: u.body.computeBudget ?? 0,
           halted: !!u.body.halt,
@@ -500,6 +621,7 @@ export class ChatService {
         name: o.body.name,
         phase: o.body.phase,
         supplyIds: o.body.supplyIds,
+        holdPolicy: o.body.holdPolicy,
       })),
       allHalted: !!settings?.body.halt,
       mainEffortOperationId: settings?.body.mainEffort?.operationId ?? null,
@@ -539,6 +661,15 @@ export class ChatService {
   /** A one-line, human description of an action that has not run yet. */
   private async describe(a: ChatAction): Promise<string> {
     if (a.kind === 'create-operation') return `Launch Operation ${a.name}: “${a.intent}”`;
+    if (a.kind === 'hold-policy') {
+      const what = a.policy ? describeHoldPolicy(a.policy) : 'back to each unit’s own setting';
+      if (a.operationId) {
+        const op = await this.record.requireActive('operation', a.operationId);
+        return `Hold policy for Operation ${op.body.name}: ${what}`;
+      }
+      const unit = await this.record.requireActive('unit', a.unitId!);
+      return `${unit.body.name}'s hold policy: ${what}`;
+    }
     if (a.kind === 'new-project')
       return `Start project ${a.name} (one HTML file, published by ORBOT)${a.intent ? `: “${a.intent}”` : ''}`;
     if (a.kind === 'assign-resource' || a.kind === 'release-resource') {

@@ -13,6 +13,7 @@ import type {
 } from '@orbot/shared';
 import { FieldManualService } from '../documents/field-manual.service.js';
 import { UnitDocsService } from '../documents/unit-docs.service.js';
+import { HoldPolicyService } from '../policy/hold-policy.service.js';
 import { RecordService } from '../record/record.service.js';
 import { words } from '../common/similarity.js';
 
@@ -38,6 +39,7 @@ export class BriefingService {
     private readonly record: RecordService,
     private readonly fieldManual: FieldManualService,
     private readonly docs: UnitDocsService,
+    private readonly holds: HoldPolicyService,
   ) {}
 
   async build(
@@ -80,6 +82,7 @@ export class BriefingService {
         name: unit.body.name,
         standingOrders: unit.body.standingOrders.map((s) => s.text),
         rulesOfEngagement: unit.body.rulesOfEngagement,
+        holdPolicy: await this.holds.effectiveFor(task, unit),
       },
       workspace,
       repository: await this.repository(task),

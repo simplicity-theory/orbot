@@ -1,6 +1,6 @@
 {
   "id": "guard-check",
-  "description": "Guard's security review of the integration branch. Blocks while low-severity findings are ordered to block release.",
+  "description": "Guard's security review of the integration branch: one low finding with a small fix, decided by the hold policy (fixed on the spot by default). Blocks only while an order says low-severity findings block release.",
   "seed": 9901,
   "script": [
     {
@@ -13,7 +13,16 @@
       "do": "step",
       "action": "scan",
       "detail": "Dependency audit and static scan on the integration branch.",
-      "outcome": "0 high, 0 critical"
+      "outcome": "1 low, 0 high, 0 critical"
+    },
+    {
+      "do": "finding",
+      "severity": "low",
+      "fix": "small",
+      "text": "error responses echo the request path unescaped.",
+      "file": "orbot/security-review-{number}.md",
+      "content": "# Security review, task #{number}\n\n| Severity | Finding | Action |\n| --- | --- | --- |\n| low | Error responses echoed the request path unescaped | Fixed: escaped in this commit |\n\nNo high or critical findings.\n",
+      "commit": "Fix low finding: escape the request path in error responses"
     },
     {
       "do": "respect-order",
@@ -23,11 +32,13 @@
     },
     {
       "do": "handover",
-      "state": "Security review passed on {branch}.",
+      "state": "Security review passed on {branch}: one low finding, recorded.",
       "nextSteps": [],
       "triedAndFailed": [],
       "openProblems": [],
-      "flagsForSuccessor": []
+      "flagsForSuccessor": [
+        "Findings are in the War Diary and, when fixed, in orbot/security-review-{number}.md."
+      ]
     },
     { "do": "done", "summary": "Security review passed for task #{number}." }
   ]

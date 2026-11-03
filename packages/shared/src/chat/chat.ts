@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { Id } from '../domain/entities.js';
+import { HoldPolicy, Id } from '../domain/entities.js';
 
 /** What a Commander's message is, sentence by sentence. A message can be several at once. */
 export const MessageKind = z.enum([
@@ -151,6 +151,16 @@ export const ChatAction = z.discriminatedUnion('kind', [
   }),
   /** Issue a production environment to a unit: deploy rights. Irreversible by default. */
   z.object({ kind: z.literal('grant-deploy-rights'), unitId: Id, supplyId: Id }),
+  /**
+   * What holds the work: a unit's policy (unitId), or an operation's override (operationId;
+   * policy null = back to each unit's own).
+   */
+  z.object({
+    kind: z.literal('hold-policy'),
+    unitId: Id.nullable(),
+    operationId: Id.nullable(),
+    policy: HoldPolicy.nullable(),
+  }),
   /**
    * Through HQ: start a new project. A repository from a template and a static site to deploy
    * it to; with an intent, the operation that builds it.

@@ -1,0 +1,49 @@
+{
+  "id": "guard-check-blocker",
+  "description": "Guard's security review finds a high finding whose fix would be a large change, and a low one it cannot fix: the hold policy decides whether the work is held for the Commander or recorded and carried on.",
+  "seed": 9903,
+  "script": [
+    {
+      "do": "step",
+      "action": "read-brief",
+      "detail": "Read the brief for “{task}”.",
+      "outcome": "understood"
+    },
+    {
+      "do": "step",
+      "action": "scan",
+      "detail": "Dependency audit and static scan on the integration branch.",
+      "outcome": "1 high, 1 low"
+    },
+    {
+      "do": "finding",
+      "severity": "low",
+      "fix": "none",
+      "text": "verbose error messages come from a library the work does not own."
+    },
+    {
+      "do": "finding",
+      "severity": "high",
+      "fix": "large",
+      "text": "session tokens are stored unhashed; fixing it means replacing the session store.",
+      "file": "orbot/security-fix-{number}.md",
+      "content": "# Session store replaced, task #{number}\n\nTokens are now hashed at rest.\n",
+      "commit": "Fix high finding: hash session tokens at rest"
+    },
+    {
+      "do": "write-file",
+      "path": "orbot/security-review-{number}.md",
+      "content": "# Security review, task #{number}\n\nFindings and what was done with them are in the War Diary.\n"
+    },
+    { "do": "commit", "message": "Security review for task #{number}: findings recorded" },
+    {
+      "do": "handover",
+      "state": "Review complete on {branch}; findings recorded.",
+      "nextSteps": [],
+      "triedAndFailed": [],
+      "openProblems": [],
+      "flagsForSuccessor": ["Findings are in the War Diary."]
+    },
+    { "do": "done", "summary": "Security review for task #{number} complete; findings recorded." }
+  ]
+}

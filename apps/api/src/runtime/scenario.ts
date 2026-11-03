@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
-import { DiaryCategory, TaskStatus } from '@orbot/shared';
+import { DiaryCategory, FixSize, Severity, TaskStatus } from '@orbot/shared';
 
 /** Text with `{task}`, `{number}`, `{callsign}`, `{branch}`, `{unit}` placeholders, or a list to pick from. */
 const Text = z.union([z.string(), z.array(z.string()).min(1)]);
@@ -39,6 +39,22 @@ export const ScenarioStep = z.discriminatedUnion('do', [
   z.object({ do: z.literal('use-credential'), purpose: Text }),
   z.object({ do: z.literal('cost'), units: z.number().nonnegative() }),
   z.object({ do: z.literal('block'), reason: Text }),
+  /**
+   * A finding of a check, decided by the brief's hold policy: fixed on the spot (the file is
+   * written and committed) when the fix is within what the unit may do alone, else recorded,
+   * and holding the work (after a handover) when its severity reaches the policy's line.
+   * `fix` is how big the fix would be, or `none` when the bot cannot fix it at all.
+   */
+  z.object({
+    do: z.literal('finding'),
+    severity: Severity,
+    fix: z.union([FixSize, z.literal('none')]),
+    text: Text,
+    /** Written and committed when the finding is fixed. */
+    file: z.string().optional(),
+    content: Text.optional(),
+    commit: Text.optional(),
+  }),
   z.object({ do: z.literal('fail'), reason: Text }),
   z.object({
     do: z.literal('handover'),

@@ -103,7 +103,12 @@ export class OverseerService implements OnApplicationBootstrap, OnModuleDestroy 
   // ---------- Missions and backbriefs ----------
 
   /** The Commander gives a unit a mission (Phase 4: HQ does, from an operation). */
-  async createMission(input: z.output<typeof CreateMissionRequest>, actor: string) {
+  /** `preApproved`: ordered by a person in chat, so the plan does not wait for approval. */
+  async createMission(
+    input: z.output<typeof CreateMissionRequest>,
+    actor: string,
+    opts: { preApproved?: boolean } = {},
+  ) {
     await this.overseers.of(input.unitId);
     return this.record.create(
       'mission',
@@ -113,8 +118,9 @@ export class OverseerService implements OnApplicationBootstrap, OnModuleDestroy 
         goal: input.goal,
         definitionOfDone: input.definitionOfDone,
         status: 'planning',
+        preApproved: opts.preApproved ?? false,
       },
-      { actor, reason: 'Mission given to the unit' },
+      { actor, reason: opts.preApproved ? 'Mission ordered in chat' : 'Mission given to the unit' },
     );
   }
 
@@ -177,7 +183,9 @@ export class OverseerService implements OnApplicationBootstrap, OnModuleDestroy 
       ...t,
       botId: t.botId && botIds.has(t.botId) ? t.botId : null,
     }));
-    const autoApprove = cmd.unit.body.approvalGate === 'escalations-only';
+    // The gate is for work HQ plans; an order given in chat is already the Commander's decision.
+    const autoApprove =
+      cmd.unit.body.approvalGate === 'escalations-only' || mission.body.preApproved;
 
     const bb = await this.record.transaction(async (w) => {
       const body: BackbriefBody = {

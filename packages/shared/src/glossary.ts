@@ -206,6 +206,12 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     meaning:
       'Per unit: approve everything, approve backbriefs and production deploys (default), or see escalations only.',
   },
+  'hold-policy': {
+    term: 'Hold policy',
+    short: 'What holds the work and comes to you',
+    meaning:
+      'Per unit, overridable per operation: how big a fix a bot makes on its own, and how bad a finding must be before the work is held for you. Automatic means nothing ever holds.',
+  },
   archive: {
     term: 'Archive',
     short: 'Every prior version, kept forever',

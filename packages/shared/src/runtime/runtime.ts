@@ -1,4 +1,5 @@
 import type {
+  HoldPolicy,
   OperationNeed,
   ProjectShape,
   ProposedTask,
@@ -95,6 +96,8 @@ export interface TaskBrief {
     standingOrders: string[];
     /** What a bot may do without asking, and what it must ask permission for. */
     rulesOfEngagement: RulesOfEngagement;
+    /** What holds the work for the Commander (the operation's override, else the unit's). */
+    holdPolicy: HoldPolicy;
   };
   workspace: Workspace;
   /** The repository the task works in, and the shape of the product it holds (if templated). */
@@ -350,6 +353,7 @@ export interface InterpretUnit {
   name: string;
   slug: string;
   standingOrders: { id: string; text: string }[];
+  holdPolicy: HoldPolicy;
   supplyIds: string[];
   computeBudget: number;
   /** Whether a stand-down order is in force on the unit. */
@@ -370,12 +374,29 @@ export interface InterpretUnit {
 
 export interface InterpretInput {
   message: string;
+  /**
+   * The channel's recent turns before this message, oldest first: what the Commander said and
+   * what the Overseer answered or proposed. A short reply ("Do it", "Yes") refers to the last
+   * proposal here.
+   */
+  history: {
+    from: 'commander' | 'overseer' | 'hq';
+    text: string;
+    /** What the Overseer proposed and is waiting for the Commander to confirm. */
+    proposed?: string[];
+  }[];
   /** The unit whose Overseer is being addressed, or null for HQ. */
   channelUnitId: string | null;
   units: InterpretUnit[];
   depot: { id: string; name: string; kind: string; connected: boolean; tier: string | null }[];
   /** Operations, with the depot items assigned to them (ids, from `depot`). */
-  operations: { id: string; name: string; phase: string; supplyIds?: string[] }[];
+  operations: {
+    id: string;
+    name: string;
+    phase: string;
+    supplyIds?: string[];
+    holdPolicy?: HoldPolicy | null;
+  }[];
   /** Whether "everything, stand down" is in force. */
   allHalted: boolean;
   /** The operation that is the main effort, if any. */

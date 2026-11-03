@@ -35,6 +35,26 @@ export const ApprovalGate = z.enum([
 ]);
 export type ApprovalGate = z.infer<typeof ApprovalGate>;
 
+/** How bad a finding is (a check's result, a problem a bot runs into). */
+export const Severity = z.enum(['low', 'medium', 'high', 'critical']);
+export type Severity = z.infer<typeof Severity>;
+/** How big a fix is: a few lines inside the work under review, changes across it, or a rewrite beyond it. */
+export const FixSize = z.enum(['small', 'medium', 'large']);
+export type FixSize = z.infer<typeof FixSize>;
+
+/**
+ * What holds the work and comes to the Commander, set per unit and overridable per operation.
+ * A finding a bot can fix within `fixUpTo` is fixed on the spot; otherwise it is recorded, and
+ * holds the work only when its severity is at least `holdFrom`. `never` is the automatic mode:
+ * nothing ever holds; everything is fixed or recorded and the work goes on.
+ */
+export const HoldPolicy = z.object({
+  holdFrom: z.enum(['low', 'medium', 'high', 'critical', 'never']).default('high'),
+  fixUpTo: z.enum(['none', 'small', 'medium', 'large']).default('small'),
+});
+export type HoldPolicy = z.infer<typeof HoldPolicy>;
+export const DEFAULT_HOLD_POLICY: HoldPolicy = { holdFrom: 'high', fixUpTo: 'small' };
+
 export const RulesOfEngagement = z.object({
   /** Things a bot in this unit may do without asking. */
   mayDoAlone: z.array(z.string()),
@@ -82,6 +102,8 @@ export const UnitBody = z.object({
   approvalGate: ApprovalGate,
   rulesOfEngagement: RulesOfEngagement,
   standingOrders: z.array(StandingOrder),
+  /** What holds the unit's work for the Commander; an operation may override it. */
+  holdPolicy: HoldPolicy.default(DEFAULT_HOLD_POLICY),
   /** Supply items allotted to this unit. */
   supplyIds: z.array(Id),
   /** Display order on the ORBAT. */
@@ -210,6 +232,8 @@ export const OperationBody = z.object({
     .object({ by: z.string(), note: z.string(), at: z.iso.datetime({ offset: true }) })
     .nullable()
     .default(null),
+  /** Overrides every unit's hold policy for this operation's work; null = each unit's own. */
+  holdPolicy: HoldPolicy.nullable().default(null),
   /** The repository the operation's work lands in. */
   repoSupplyId: Id.nullable().default(null),
   /** Branch every unit's work is integrated on, then deployed from. */
@@ -259,6 +283,11 @@ export const MissionBody = z.object({
   dependsOnMissionId: Id.nullable().default(null),
   /** The tracker issue this mission took on, if any. */
   issue: IssueRef.nullable().default(null),
+  /**
+   * Ordered by a person in chat: the order is the approval, so the Overseer's plan proceeds
+   * without waiting at the approval gate (which is for work HQ plans).
+   */
+  preApproved: z.boolean().default(false),
 });
 export type MissionBody = z.infer<typeof MissionBody>;
 

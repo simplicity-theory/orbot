@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { Rank } from '../domain/principal.js';
-import { DocumentKind, Id, ProjectKind, ProposedTask } from '../domain/entities.js';
+import { DocumentKind, HoldPolicy, Id, ProjectKind, ProposedTask } from '../domain/entities.js';
 
 /** Request bodies shared by the API (validation) and the web app (typing). */
 
@@ -195,6 +195,20 @@ export const RetireFmEntryRequest = z.object({
   expectedVersion: z.number().int().positive(),
 });
 export type RetireFmEntryRequest = z.input<typeof RetireFmEntryRequest>;
+
+/** Set what holds a unit's work. */
+export const HoldPolicyRequest = z.object({
+  policy: HoldPolicy,
+  reason: z.string().trim().max(500).default(''),
+});
+export type HoldPolicyRequest = z.input<typeof HoldPolicyRequest>;
+
+/** Override (or clear, with null) the hold policy for one operation's work. */
+export const OperationHoldPolicyRequest = z.object({
+  policy: HoldPolicy.nullable(),
+  reason: z.string().trim().max(500).default(''),
+});
+export type OperationHoldPolicyRequest = z.input<typeof OperationHoldPolicyRequest>;
 
 export const StandingOrdersRequest = z.object({
   orders: z.array(

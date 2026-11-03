@@ -47,15 +47,19 @@ describe('command by chat', () => {
     expect((await log()).length).toBe(before);
   });
 
-  it('an order creates a mission, and the Overseer briefs back a plan', async () => {
+  it('an order creates a mission; the Overseer’s plan goes ahead without waiting (you ordered it)', async () => {
     const r = await say(eng, 'Add rate limiting to the API.');
     expect(r.readback.body.text).toBe('Wilco.');
     expect(r.readback.body.kinds).toEqual(['order']);
     expect(r.readback.body.items[0]!.summary).toBe(
-      'New mission for Engineers: “Add rate limiting to the API”. The Overseer will brief back a plan.',
+      'New mission for Engineers: “Add rate limiting to the API”. You ordered it, so the Overseer’s plan goes ahead without waiting for approval.',
     );
     const u = await unit(eng);
-    expect(u.backbriefs.map((b) => b.mission.goal)).toEqual(['Add rate limiting to the API']);
+    expect(u.missions.map((m) => m.mission.goal)).toEqual(['Add rate limiting to the API']);
+    expect(u.missions[0]!.backbrief?.status).toBe('approved');
+    expect(u.missions[0]!.mission.preApproved).toBe(true);
+    // Nothing waits for the Commander: the order was the decision.
+    expect(u.backbriefs).toEqual([]);
   });
 
   it('Undo of an order withdraws the mission (a new entry; the old one stays)', async () => {
@@ -109,6 +113,17 @@ describe('command by chat', () => {
       .post(`/api/pending/${r2.readback.body.pending[0]!.pendingId}/decline`)
       .expect(200);
     expect((await unit(eng)).unit.computeBudget).toBe(before + 10);
+
+    // "Do it" in chat confirms what the Overseer last proposed; said again, nothing is open.
+    const r3 = await say(eng, 'Perhaps a bit more budget.');
+    expect(r3.readback.body.pending).toHaveLength(1);
+    const yes = await say(eng, 'Do it.');
+    expect(yes.readback.body.text).toBe('Wilco.');
+    expect(yes.readback.body.items).toHaveLength(1);
+    expect((await unit(eng)).unit.computeBudget).toBe(before + 20);
+    const again = await say(eng, 'Do it.');
+    expect(again.readback.body.items).toEqual([]);
+    expect(again.readback.body.text).not.toBe('Wilco.');
   });
 
   it('irreversible orders wait for a typed one-line confirmation', async () => {

@@ -4,6 +4,7 @@ import { dirname, relative, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import { z } from 'zod';
 import {
+  describeHoldPolicy,
   ChatAction,
   type AfterActionInput,
   type AfterActionReview,
@@ -518,6 +519,10 @@ export abstract class ClaudeFamilyRuntime implements BotRuntime {
       'If your unit holds a dev server (list_servers shows tier dev), build, test and iterate there with dev_run: edit code in your workspace with write_file, then dev_run syncs it and runs the command in your own folder on the server. Use dev_fetch for files the server generates that belong in the repository. Commit as usual: the workspace is the work of record, not the dev server.',
       'If your unit holds servers (list_servers), you may log in to them with server_run and set them up as the task needs; copy committed work there with server_upload. Leave each server documented: what you installed, where, how to restart it, in the War Diary and your handover, so a successor can carry on.',
       projectRules(brief),
+      `Hold policy (what comes to the Commander): ${describeHoldPolicy(brief.unit.holdPolicy)} Judge each finding's severity (low, medium, high, critical) and how big its fix would be (small: a few lines inside the work under review; medium: changes across it; large: beyond it, a rewrite). Fix it yourself only within the policy and commit the fix; otherwise record it in the War Diary and your handover; use blocked, naming the finding, only when the policy holds the work on it. The same goes for any problem you run into.`,
+      brief.task.kind === 'check'
+        ? 'This is a check task on work another unit handed over. Run the checks your orders and Field Manual name. Record every finding with its severity and what you did about it. A check the previous unit must redo: send_back with what to fix.'
+        : '',
       brief.task.kind === 'recon'
         ? 'This is a recon task: read-only. Survey the code to answer the question, change nothing, and file_report your findings (what you looked at, what you found, risks, a suggested approach) before the handover and done.'
         : '',
@@ -668,7 +673,7 @@ export abstract class ClaudeFamilyRuntime implements BotRuntime {
     });
     return this.structured(
       I,
-      'You are an Overseer (or HQ) in ORBOT. The Commander commands by chat. Turn the message into typed actions; answer questions from the context. Hedged statements ("I might…", "maybe") are musings, not orders. Only reference ids that appear in the context. If promised supply is not in the depot, list it as missing instead of acting. Operations get resources from the depot: assign-resource gives one to an operation (create-operation may also list supplyIds to start with, repositories first); release-resource takes one off. The first repository is the main one, where work lands: to change an operation’s repository ("change the repo from A to B") use set-main-repository with B (it is assigned if it is not yet; once missions are out they are issued again there), never only assign-resource. cancel-operation calls an operation off (note: why, if given). new-project starts a project ("start a new project called X: …"): a repository from a template (projectKind single-html: one self-contained HTML file, no server) and a static site ORBOT publishes it to; with an intent, the operation that builds it.',
+      'You are an Overseer (or HQ) in ORBOT. The Commander commands by chat. Turn the message into typed actions; answer questions from the context. `history` holds the channel’s recent turns: a short reply such as "Do it", "Yes" or "the first one" refers to what you last proposed there, so act on that proposal. When your answer suggests doing something, put it in musings as typed actions (the Commander confirms with a word) instead of only describing it in prose. Hedged statements ("I might…", "maybe") are musings, not orders. Only reference ids that appear in the context. If promised supply is not in the depot, list it as missing instead of acting. Operations get resources from the depot: assign-resource gives one to an operation (create-operation may also list supplyIds to start with, repositories first); release-resource takes one off. The first repository is the main one, where work lands: to change an operation’s repository ("change the repo from A to B") use set-main-repository with B (it is assigned if it is not yet; once missions are out they are issued again there), never only assign-resource. cancel-operation calls an operation off (note: why, if given). new-project starts a project ("start a new project called X: …"): a repository from a template (projectKind single-html: one self-contained HTML file, no server) and a static site ORBOT publishes it to; with an intent, the operation that builds it.',
       JSON.stringify(input),
     );
   }
