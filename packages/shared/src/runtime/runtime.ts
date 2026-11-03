@@ -408,6 +408,8 @@ export interface InterpretInput {
     phase: string;
     supplyIds?: string[];
     holdPolicy?: HoldPolicy | null;
+    /** Its work is on the repository's default branch (HQ landed it when it closed). */
+    landed?: boolean;
   }[];
   /** Open theatres (projects): an intent with none named goes to the only open one. */
   theatres?: { id: string; name: string; status: string }[];

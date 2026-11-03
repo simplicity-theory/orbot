@@ -657,6 +657,9 @@ export class ChatService {
         phase: o.body.phase,
         supplyIds: o.body.supplyIds,
         holdPolicy: o.body.holdPolicy,
+        landed:
+          !!o.body.deployment ||
+          (o.body.autonomous && o.body.phase === 'closed' && !o.body.cancelled),
       })),
       allHalted: !!settings?.body.halt,
       mainEffortOperationId: settings?.body.mainEffort?.operationId ?? null,
@@ -775,6 +778,10 @@ export class ChatService {
       return a.kind === 'stand-down' ? `Stand down ${who}` : `Resume work: ${who}`;
     }
     if (a.kind === 'restart-queues') return 'Restart the queues';
+    if (a.kind === 'land-task') {
+      const task = await this.record.requireActive('task', a.taskId);
+      return `Land task #${task.body.number} (${task.body.title}) on main`;
+    }
     const unit = await this.record.requireActive('unit', a.unitId);
     const u = unit.body.name;
     switch (a.kind) {
