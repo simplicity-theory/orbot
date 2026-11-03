@@ -60,6 +60,12 @@ import { SandTable } from './sand-table';
         <header class="page-header">
           <div>
             <p class="page-header__eyebrow">
+              @if (v.theatre; as t) {
+                <a [routerLink]="['/theatres', t.id]"
+                  ><orb-term key="theatre">Theatre</orb-term> {{ t.name }}</a
+                >
+                ·
+              }
               <orb-term key="operation">Operation</orb-term> · {{ v.operation.phase }}
             </p>
             <h1>Operation {{ v.operation.name }}</h1>

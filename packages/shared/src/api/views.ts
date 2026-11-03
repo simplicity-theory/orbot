@@ -9,6 +9,7 @@ import type {
   DocumentBody,
   MissionBody,
   OperationBody,
+  TheatreBody,
   SupplyBody,
   TaskBody,
   TaskPermission,
@@ -34,9 +35,34 @@ export type BotView = Versioned<BotBody>;
 export type TaskView = Versioned<TaskBody>;
 export type MissionView = Versioned<MissionBody>;
 export type OperationView = Versioned<OperationBody>;
+export type TheatreView = Versioned<TheatreBody>;
+
+/** A theatre on the board: what it holds and the operations run in it. */
+export interface TheatreSummary {
+  theatre: TheatreView;
+  repository: SupplyView | null;
+  /** Its static site, with where ORBOT serves it. */
+  site: { id: string; name: string; url: string } | null;
+  resources: SupplyView[];
+  operations: { id: string; name: string; phase: string; needsYou: number }[];
+  needsYou: number;
+}
+
+export interface TheatreDetailView extends Omit<TheatreSummary, 'operations'> {
+  operations: OperationSummary[];
+}
+
+/** What opening a theatre made. */
+export interface NewTheatreView {
+  theatre: TheatreView;
+  repository: SupplyView | null;
+  site: SupplyView | null;
+  operation: OperationView | null;
+}
 
 /** What starting a project made: its repository, its site, and (with an intent) its operation. */
 export interface NewProjectView {
+  theatre: TheatreView;
   repository: SupplyView;
   site: SupplyView;
   operation: OperationView | null;
@@ -230,6 +256,8 @@ export interface TaskDetailView {
   mission: MissionView | null;
   /** The operation the mission belongs to, for the chain of command on the task. */
   operation: OperationView | null;
+  /** The theatre the operation runs in, if any. */
+  theatre: { id: string; name: string } | null;
   /** Every task of the mission in number order (this one among them). */
   missionTasks: TaskView[];
   events: RecordEvent[];
@@ -318,6 +346,8 @@ export interface OperationMissionView {
 
 export interface OperationSummary {
   operation: OperationView;
+  /** The theatre it runs in, if any. */
+  theatre: { id: string; name: string } | null;
   budget: BudgetView;
   missions: OperationMissionView[];
   /** Things on this operation waiting on the Commander. */

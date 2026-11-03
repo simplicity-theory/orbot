@@ -154,6 +154,12 @@
     <section class="panel chain" aria-labelledby="chain-h">
       <h2 id="chain-h" class="panel__title">Chain of command</h2>
       <ol class="list-reset chain__levels">
+        @if (v.theatre; as th) {
+          <li>
+            <span class="chain__level"><orb-term key="theatre">Theatre</orb-term></span>
+            <a [routerLink]="['/theatres', th.id]">Theatre {{ th.name }}</a>
+          </li>
+        }
         @if (v.operation; as op) {
           <li>
             <span class="chain__level"><orb-term key="operation">Operation</orb-term></span>

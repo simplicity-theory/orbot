@@ -222,6 +222,8 @@ export type StandingOrdersRequest = z.input<typeof StandingOrdersRequest>;
 export const CreateOperationRequest = z.object({
   intent: z.string().trim().min(1).max(1000),
   name: z.string().trim().min(1).max(100).optional(),
+  /** Launch it in a theatre: it starts with everything the theatre holds. */
+  theatreId: Id.nullable().optional(),
   /** Hard cap on the operation's compute spend; omit for none. */
   budgetUnits: z.number().int().positive().max(1_000_000).nullable().optional(),
   /** Send the building unit to recon first; HQ plans once the report is in. */
@@ -242,6 +244,43 @@ export const CancelOperationRequest = z.object({
   note: z.string().trim().max(500).default(''),
 });
 export type CancelOperationRequest = z.input<typeof CancelOperationRequest>;
+
+/** Open a theatre: a project with its repository, its site if wanted, and the first intent. */
+export const CreateTheatreRequest = z.object({
+  name: z.string().trim().min(1).max(60),
+  description: z.string().trim().max(500).default(''),
+  repository: z
+    .discriminatedUnion('kind', [
+      z.object({ kind: z.literal('template'), template: ProjectKind.default('single-html') }),
+      z.object({ kind: z.literal('existing'), supplyId: Id }),
+      z.object({
+        kind: z.literal('location'),
+        location: z.string().trim().min(1).max(1000),
+        defaultBranch: z.string().trim().min(1).max(200).nullable().default(null),
+      }),
+    ])
+    .nullable()
+    .default(null),
+  /** A static site ORBOT publishes itself (production tier). */
+  site: z.boolean().default(true),
+  /** Other depot items the theatre holds from the start. */
+  supplyIds: z.array(Id).max(50).default([]),
+  /** With an intent, the first operation is launched in it. */
+  intent: z.string().trim().max(1000).nullable().default(null),
+  budgetUnits: z.number().positive().nullable().default(null),
+});
+export type CreateTheatreRequest = z.input<typeof CreateTheatreRequest>;
+
+/** State intent inside a theatre. */
+export const TheatreIntentRequest = z.object({
+  intent: z.string().trim().min(1).max(1000),
+  name: z.string().trim().min(1).max(100).optional(),
+  budgetUnits: z.number().int().positive().max(1_000_000).nullable().optional(),
+  reconFirst: z.boolean().optional(),
+  /** Depot items beyond what the theatre holds. */
+  supplyIds: z.array(Id).max(50).optional(),
+});
+export type TheatreIntentRequest = z.input<typeof TheatreIntentRequest>;
 
 /** Abort a mission, start a mission over, start an operation over: why (optional). */
 export const CourseNoteRequest = CancelOperationRequest;

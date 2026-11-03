@@ -115,6 +115,9 @@ const INTENT_RESOURCES = /,?\s+(?:using|with|on|against)\s+(?:the\s+|our\s+)?(.+
  */
 const NEW_PROJECT =
   /^(?:(?:please|maybe|perhaps|possibly|let'?s)\s+)*(?:start|create|begin|open|new)\s+(?:a\s+)?(?:new\s+)?(?:single[- ]?(?:html|file)\s+)?project(?:\s+(?:called|named))?\s*["“]?([A-Za-z0-9][A-Za-z0-9 ._-]{0,59}?)["”]?\s*(?:[:,–—-]\s*(.+))?[.!]?$/i;
+/** "Open a theatre called Ledger: a personal ledger", "New theatre Ledger on the todo repo". */
+const NEW_THEATRE =
+  /^(?:(?:please|maybe|perhaps|possibly|let'?s)\s+)*(?:open|start|create|begin|new)\s+(?:a\s+)?(?:new\s+)?theatre(?:\s+(?:called|named))?\s*["“]?([A-Za-z0-9][A-Za-z0-9 ._-]{0,59}?)["”]?(?:\s+(?:on|for|with|using)\s+(?:the\s+)?(.+?)\s+repo(?:sitory)?)?\s*(?:[:,–—-]\s*(.+))?[.!]?$/i;
 const KIND_WORDS =
   /\b(repo|repository|repositories|server|environment|env|model|credential|token|key)\b/gi;
 const MAIN_EFFORT_CLEAR =
@@ -352,6 +355,37 @@ export class SimulatedInterpreter {
       if (!unit) {
         // "Start a new project called Ledger: a ledger that works offline." A repository from a
         // template, a site to deploy it to, and (with the rest of the sentence) the operation.
+        const theatre = NEW_THEATRE.exec(sentence);
+        if (!input.channelUnitId && theatre) {
+          const repoPhrase = (theatre[2] ?? '').trim();
+          const rest = (theatre[3] ?? '').trim().replace(/[.!]+$/, '');
+          let repoSupplyId: string | null = null;
+          if (repoPhrase) {
+            const found = this.depotItems(repoPhrase, input);
+            if (found.missing.length) {
+              out.missing.push({ what: `${found.missing[0]} repository`, kind: 'supply' });
+              continue;
+            }
+            repoSupplyId = found.hits[0] ?? null;
+          }
+          const action: ChatAction = {
+            kind: 'create-theatre',
+            unitId: null,
+            name: theatre[1]!.trim(),
+            description: '',
+            projectKind: repoSupplyId ? null : 'single-html',
+            repoSupplyId,
+            intent: rest ? `${sentenceCase(rest)}.` : null,
+          };
+          if (hedged) {
+            kinds.add('musing');
+            out.musings.push(action);
+          } else {
+            kinds.add('order');
+            out.actions.push(action);
+          }
+          continue;
+        }
         const project = NEW_PROJECT.exec(sentence);
         if (!input.channelUnitId && project) {
           const rest = (project[2] ?? '').trim().replace(/[.!]+$/, '');
@@ -394,6 +428,7 @@ export class SimulatedInterpreter {
             unitId: null,
             intent: `${intent}.`,
             name: operationName(intent),
+            theatreId: null,
             supplyIds,
           };
           if (hedged) {

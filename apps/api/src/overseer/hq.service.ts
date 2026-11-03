@@ -23,6 +23,7 @@ import {
   type RecordVersion,
   type TaskBody,
   type MissionBody,
+  type HoldPolicy,
 } from '@orbot/shared';
 import { APP_CONFIG, type AppConfig } from '../config/config.js';
 import { Background } from '../common/background.js';
@@ -154,6 +155,7 @@ export class HqService implements OnApplicationBootstrap, OnModuleDestroy {
     budgetUnits: number | null = null,
     reconFirst = false,
     supplyIds: string[] = [],
+    opts: { theatreId?: string | null; holdPolicy?: HoldPolicy | null } = {},
   ): Promise<RecordVersion<OperationBody>> {
     const opName = name ?? intent.split(/\s+/).slice(0, 3).join(' ');
     const resources: RecordVersion<SupplyBody>[] = [];
@@ -165,6 +167,8 @@ export class HqService implements OnApplicationBootstrap, OnModuleDestroy {
           name: opName,
           intent,
           phase: 'intent',
+          theatreId: opts.theatreId ?? null,
+          holdPolicy: opts.holdPolicy ?? null,
           supplyIds: resources.map((r) => r.entityId),
           budgetUnits,
           reconFirst,

@@ -14,7 +14,7 @@ import { PhaseStepper } from '../../ui/phase-stepper';
 import { Skeleton } from '../../ui/skeleton';
 import { Term } from '../../ui/term';
 import { IntentDialog } from './intent.dialog';
-import { NewProjectDialog } from './new-project.dialog';
+import { NewTheatreDialog } from '../theatres/new-theatre.dialog';
 import { MainEfforts } from '../../core/main-effort';
 import { MainEffortBadge } from '../../ui/main-effort';
 import { MissionChain } from './mission-chain';
@@ -43,7 +43,7 @@ import { MissionChain } from './mission-chain';
           </p>
         </div>
         <div *orbCan="null" class="buttons">
-          <button type="button" class="btn" (click)="newProject()">New project</button>
+          <button type="button" class="btn" (click)="newProject()">New theatre</button>
           <button type="button" class="btn btn--primary" (click)="stateIntent()">
             State intent
           </button>
@@ -61,6 +61,11 @@ import { MissionChain } from './mission-chain';
                     >Operation {{ o.operation.name }}</a
                   >
                 </h2>
+                @if (o.theatre; as t) {
+                  <a class="meta" [routerLink]="['/theatres', t.id]"
+                    ><orb-term key="theatre">Theatre</orb-term> {{ t.name }}</a
+                  >
+                }
                 @if (efforts.isOperation(o.operation.id)) {
                   <orb-main-effort-badge />
                 }
@@ -151,6 +156,6 @@ export class OperationsPage {
   }
 
   protected newProject(): void {
-    openDialog(this.dialog, NewProjectDialog, null, 'New project');
+    openDialog(this.dialog, NewTheatreDialog, null, 'New theatre');
   }
 }

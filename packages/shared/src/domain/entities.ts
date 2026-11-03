@@ -8,6 +8,7 @@ import { BotStatus, TaskStatus } from '../status/status.js';
  * author and timestamps live on the record row itself.
  */
 export const ENTITY_TYPES = [
+  'theatre',
   'unit',
   'bot',
   'operation',
@@ -206,10 +207,34 @@ export const PlannedMission = z.object({
 });
 export type PlannedMission = z.infer<typeof PlannedMission>;
 
+/**
+ * A theatre is a software project: the standing home of one codebase. It holds the repository
+ * the work lands in (first), where it deploys, and whatever else its operations share, so
+ * every operation launched in it starts equipped (D121).
+ */
+export const TheatreBody = z.object({
+  name: z.string().min(1),
+  /** What the project is, in a sentence or two. */
+  description: z.string().default(''),
+  status: z.enum(['open', 'closed']).default('open'),
+  /** Depot items every operation in the theatre starts with; the main repository first. */
+  supplyIds: z.array(Id).default([]),
+  repoSupplyId: Id.nullable().default(null),
+  /** Default hold policy for the theatre's operations; null = each unit's own. */
+  holdPolicy: HoldPolicy.nullable().default(null),
+  closed: z
+    .object({ by: z.string(), note: z.string(), at: z.iso.datetime({ offset: true }) })
+    .nullable()
+    .default(null),
+});
+export type TheatreBody = z.infer<typeof TheatreBody>;
+
 export const OperationBody = z.object({
   name: z.string().min(1),
   intent: z.string().min(1),
   phase: OperationPhase,
+  /** The theatre (project) the operation runs in, if any. */
+  theatreId: Id.nullable().default(null),
   /**
    * Resources assigned to the operation (depot items), in the order they were assigned. The
    * first repository is where the work is handed off and deployed from.
@@ -855,6 +880,7 @@ export const ENTITY_BODY_SCHEMAS = {
   settings: SettingsBody,
   dispute: DisputeBody,
   officer: OfficerBody,
+  theatre: TheatreBody,
 } as const satisfies Record<EntityType, z.ZodType>;
 
 export interface EntityBodyMap {
@@ -870,6 +896,7 @@ export interface EntityBodyMap {
   settings: SettingsBody;
   dispute: DisputeBody;
   officer: OfficerBody;
+  theatre: TheatreBody;
 }
 
 /** What a write may supply: defaulted fields are optional and filled in by the schema. */

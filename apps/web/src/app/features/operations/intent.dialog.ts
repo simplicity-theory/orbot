@@ -1,4 +1,4 @@
-import { DialogRef } from '@angular/cdk/dialog';
+import { DIALOG_DATA, DialogRef } from '@angular/cdk/dialog';
 import { httpResource } from '@angular/common/http';
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -31,6 +31,16 @@ import { ResourcePicker } from './resource-picker';
         [(ngModel)]="intent"
         placeholder="Ship login rate limiting to production."
       ></textarea>
+      @if (theatre; as t) {
+        <p class="hint">
+          Launched in <strong>Theatre {{ t.theatreName }}</strong
+          >: the operation starts with everything the theatre holds{{
+            t.hasRepo
+              ? '.'
+              : ', but the theatre has no repository yet: it will wait at the O Group.'
+          }}
+        </p>
+      }
       <label for="op-name">Code name <span class="hint">(optional)</span></label>
       <input id="op-name" name="name" class="input" [(ngModel)]="name" placeholder="Gatekeeper" />
       <label for="op-budget"
@@ -45,7 +55,7 @@ import { ResourcePicker } from './resource-picker';
         step="1"
         [(ngModel)]="budget"
       />
-      @if (supply.value(); as list) {
+      @if (!theatre && supply.value(); as list) {
         <orb-resource-picker [supply]="list" [(selected)]="supplyIds" />
         @if (!hasRepo()) {
           <p class="hint">
@@ -85,6 +95,12 @@ import { ResourcePicker } from './resource-picker';
 })
 export class IntentDialog {
   protected readonly ref = inject(DialogRef);
+  /** Set when opened from a theatre's page: the operation is launched in it. */
+  protected readonly theatre = inject<{
+    theatreId: string;
+    theatreName: string;
+    hasRepo: boolean;
+  } | null>(DIALOG_DATA, { optional: true });
   private readonly api = inject(Api);
   private readonly router = inject(Router);
   private readonly toasts = inject(Toasts);
@@ -111,13 +127,15 @@ export class IntentDialog {
         this.budget ? Math.round(this.budget) : null,
         this.reconFirst,
         this.supplyIds(),
+        this.theatre?.theatreId ?? null,
       );
       this.toasts.show({
         tone: 'success',
         message: `Operation ${op.name} launched.`,
-        detail: this.hasRepo()
-          ? 'HQ is holding the O Group.'
-          : 'It waits at the O Group until it has a repository.',
+        detail:
+          this.hasRepo() || this.theatre?.hasRepo
+            ? 'HQ is holding the O Group.'
+            : 'It waits at the O Group until it has a repository.',
       });
       this.ref.close();
       void this.router.navigate(['/operations', op.id]);

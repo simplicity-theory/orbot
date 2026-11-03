@@ -5,6 +5,10 @@ import type {
   AppointOfficerRequest,
   AppProgressView,
   OperationDetailView,
+  TheatreDetailView,
+  NewTheatreView,
+  TheatreIntentRequest,
+  CreateTheatreRequest,
   QueuesRestartView,
   LandedView,
   ConnectServerRequest,
@@ -81,6 +85,8 @@ export const apiUrl = {
   approvals: () => `${API}/approvals`,
   backbrief: (id: string) => `${API}/backbriefs/${id}`,
   palette: () => `${API}/palette`,
+  theatres: () => `${API}/theatres`,
+  theatre: (id: string) => `${API}/theatres/${id}`,
   operations: () => `${API}/operations`,
   operation: (id: string) => `${API}/operations/${id}`,
   chat: (channel: string) => `${API}/chat/${channel}`,
@@ -412,6 +418,7 @@ export class Api {
     budgetUnits?: number | null,
     reconFirst = false,
     supplyIds: string[] = [],
+    theatreId: string | null = null,
   ) {
     return firstValueFrom(
       this.http.post<OperationView>(`${API}/operations`, {
@@ -420,7 +427,47 @@ export class Api {
         ...(budgetUnits ? { budgetUnits } : {}),
         ...(reconFirst ? { reconFirst } : {}),
         ...(supplyIds.length ? { supplyIds } : {}),
+        ...(theatreId ? { theatreId } : {}),
       }),
+    );
+  }
+
+  createTheatre(req: CreateTheatreRequest) {
+    return firstValueFrom(this.http.post<NewTheatreView>(apiUrl.theatres(), req));
+  }
+
+  /** State intent inside a theatre: the operation starts with everything it holds. */
+  launchInTheatre(theatreId: string, req: TheatreIntentRequest) {
+    return firstValueFrom(
+      this.http.post<OperationView>(`${apiUrl.theatre(theatreId)}/operations`, req),
+    );
+  }
+
+  assignToTheatre(theatreId: string, supplyId: string) {
+    return firstValueFrom(
+      this.http.post<TheatreDetailView>(`${apiUrl.theatre(theatreId)}/resources`, { supplyId }),
+    );
+  }
+
+  releaseFromTheatre(theatreId: string, supplyId: string) {
+    return firstValueFrom(
+      this.http.post<TheatreDetailView>(`${apiUrl.theatre(theatreId)}/resources/release`, {
+        supplyId,
+      }),
+    );
+  }
+
+  setTheatreMainRepository(theatreId: string, supplyId: string) {
+    return firstValueFrom(
+      this.http.post<TheatreDetailView>(`${apiUrl.theatre(theatreId)}/resources/main`, {
+        supplyId,
+      }),
+    );
+  }
+
+  closeTheatre(theatreId: string, note: string) {
+    return firstValueFrom(
+      this.http.post<TheatreDetailView>(`${apiUrl.theatre(theatreId)}/close`, { note }),
     );
   }
 

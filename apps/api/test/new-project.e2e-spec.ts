@@ -282,6 +282,6 @@ describe('New project: a single HTML file, published by ORBOT', () => {
           .send({ name: 'notes', kind: 'single-html', intent: null })
           .expect(400)
       ).body.error.message,
-    ).toBe('A repository called Notes is already in the Supply Depot.');
+    ).toBe('A theatre called Notes is already open.');
   });
 });

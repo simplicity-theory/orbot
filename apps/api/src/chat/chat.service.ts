@@ -54,6 +54,7 @@ const COMMANDER_ONLY: ChatAction['kind'][] = [
   'budget-grant',
   'grant-deploy-rights',
   'create-operation',
+  'create-theatre',
   'assign-resource',
   'release-resource',
   'set-main-repository',
@@ -190,6 +191,7 @@ export class ChatService {
     const routedVia =
       action.unitId !== channelUnit ||
       action.kind === 'create-operation' ||
+      action.kind === 'create-theatre' ||
       action.kind === 'assign-resource' ||
       action.kind === 'release-resource' ||
       action.kind === 'set-main-repository' ||
@@ -678,6 +680,8 @@ export class ChatService {
   /** A one-line, human description of an action that has not run yet. */
   private async describe(a: ChatAction): Promise<string> {
     if (a.kind === 'create-operation') return `Launch Operation ${a.name}: “${a.intent}”`;
+    if (a.kind === 'create-theatre')
+      return `Open Theatre ${a.name}${a.repoSupplyId ? ' on an existing repository' : a.projectKind ? ' (one HTML file, published by ORBOT)' : ''}${a.intent ? `: “${a.intent}”` : ''}`;
     if (a.kind === 'hold-policy') {
       const what = a.policy ? describeHoldPolicy(a.policy) : 'back to each unit’s own setting';
       if (a.operationId) {

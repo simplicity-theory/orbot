@@ -47,6 +47,8 @@ import { SshClient } from './servers/ssh.client.js';
 import { ClaudeCodeRuntime } from './runtime/claude-code.runtime.js';
 import { SimulatedRuntime } from './runtime/simulated.runtime.js';
 import { WorkspaceManager } from './runtime/workspace-manager.js';
+import { TheatresService } from './overseer/theatres.service.js';
+import { TheatresController } from './overseer/theatres.controller.js';
 import { createSecretsPool, SECRETS_POOL, SecretsService } from './secrets/secrets.service.js';
 import { SupplyController } from './supply/supply.controller.js';
 import { SupplyService } from './supply/supply.service.js';
@@ -131,6 +133,7 @@ export class AppModule {
         EnvironmentsController,
         SitesController,
         ProjectsController,
+        TheatresController,
       ],
       providers: [
         { provide: LOG_DESTINATION, useValue: opts.logDestination ?? null },
@@ -198,6 +201,7 @@ export class AppModule {
         OverseerService,
         SettingsService,
         HqService,
+        TheatresService,
         StandDownService,
         MainEffortService,
         ReconService,

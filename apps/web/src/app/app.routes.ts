@@ -44,6 +44,16 @@ export const routes: Routes = [
         loadComponent: () => import('./features/tasks/task.page').then((m) => m.TaskPage),
       },
       {
+        path: 'theatres',
+        title: 'Theatres',
+        loadComponent: () =>
+          import('./features/theatres/theatres.page').then((m) => m.TheatresPage),
+      },
+      {
+        path: 'theatres/:theatreId',
+        loadComponent: () => import('./features/theatres/theatre.page').then((m) => m.TheatrePage),
+      },
+      {
         path: 'operations',
         title: 'Operations',
         loadComponent: () =>

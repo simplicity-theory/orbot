@@ -26,6 +26,12 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     meaning:
       'The bot that commands a unit: it takes your orders, directs the unit’s bots and reports back.',
   },
+  theatre: {
+    term: 'Theatre',
+    short: 'A project: one codebase and where it deploys',
+    meaning:
+      'The standing home of a codebase: its repository, its site or environments, and the operations run in it. Open one per project.',
+  },
   operation: {
     term: 'Operation',
     short: 'A large piece of work owned by HQ',

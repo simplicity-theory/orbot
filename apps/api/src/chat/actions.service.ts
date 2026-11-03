@@ -10,6 +10,7 @@ import {
 import { HoldPolicyService } from '../policy/hold-policy.service.js';
 import { TaskRunner } from '../execution/task-runner.js';
 import { HqService } from '../overseer/hq.service.js';
+import { TheatresService } from '../overseer/theatres.service.js';
 import { MainEffortService } from '../overseer/main-effort.service.js';
 import { ConnectionsService } from '../connections/connections.service.js';
 import { ReconService } from '../overseer/recon.service.js';
@@ -47,6 +48,7 @@ export class ActionsService {
     private readonly supply: SupplyService,
     private readonly runner: TaskRunner,
     private readonly hq: HqService,
+    private readonly theatres: TheatresService,
     private readonly standDowns: StandDownService,
     private readonly budget: BudgetService,
     private readonly mainEffort: MainEffortService,
@@ -116,14 +118,56 @@ export class ActionsService {
         affects: [],
       };
     }
+    if (action.kind === 'create-theatre') {
+      const t = await this.theatres.create(
+        {
+          name: action.name,
+          description: action.description,
+          repository: action.repoSupplyId
+            ? { kind: 'existing', supplyId: action.repoSupplyId }
+            : action.projectKind
+              ? { kind: 'template', template: action.projectKind }
+              : null,
+          site: true,
+          supplyIds: [],
+          intent: action.intent,
+          budgetUnits: null,
+        },
+        ctx,
+      );
+      return {
+        summary:
+          `Theatre ${t.theatre.body.name} opened${t.repository ? ` on ${t.repository.body.name}` : ''}${t.site ? `, publishing to ${t.site.body.name}` : ''}.` +
+          (t.operation
+            ? ` Operation ${t.operation.body.name} launched in it; HQ is holding the O Group.`
+            : ' State your intent in it when you are ready.'),
+        links: [
+          { label: `Theatre ${t.theatre.body.name}`, link: `/theatres/${t.theatre.entityId}` },
+          ...(t.operation
+            ? [
+                {
+                  label: `Operation ${t.operation.body.name}`,
+                  link: `/operations/${t.operation.entityId}`,
+                },
+              ]
+            : []),
+        ],
+        inverse: null,
+        affects: [],
+      };
+    }
     if (action.kind === 'create-operation') {
+      const theatre = action.theatreId
+        ? await this.record.requireActive('theatre', action.theatreId)
+        : null;
       const op = await this.hq.createOperation(
         action.intent,
         action.name,
         ctx.actor,
         null,
         false,
-        action.supplyIds,
+        [...(theatre?.body.supplyIds ?? []), ...action.supplyIds],
+        { theatreId: theatre?.entityId ?? null, holdPolicy: theatre?.body.holdPolicy ?? null },
       );
       const names = (await this.hq.resourcesOf(op)).map((r) => r.body.name);
       return {

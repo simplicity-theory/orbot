@@ -73,7 +73,8 @@ orbot up
 Builds the image (several minutes the first time), starts Postgres, applies the migrations,
 seeds the force, waits until `/api/health` answers, and prints the address. Sign in with the
 passphrase (`orbot passphrase` shows it again). Then connect your repositories in the Supply
-Depot, or use **New project** on Operations for a single-HTML-file project.
+Depot, or open a **New theatre** (Theatres: one per project, with its repository and the site
+ORBOT publishes it to) and state your first intent in it.
 
 ## Update
 

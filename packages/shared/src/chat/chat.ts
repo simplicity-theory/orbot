@@ -67,6 +67,19 @@ export const ChatAction = z.discriminatedUnion('kind', [
     name: z.string().min(1).max(100),
     /** Depot items to assign to it from the start (repositories first). */
     supplyIds: z.array(Id).default([]),
+    /** Launch it in a theatre: it starts with everything the theatre holds. */
+    theatreId: Id.nullable().default(null),
+  }),
+  /** Through HQ: open a theatre (a project) with its repository, its site, and the first intent. */
+  z.object({
+    kind: z.literal('create-theatre'),
+    unitId: Id.nullable(),
+    name: z.string().min(1).max(60),
+    description: z.string().max(500).default(''),
+    /** A new single-HTML repository, or an existing one by id, or none yet. */
+    projectKind: z.enum(['single-html']).nullable().default('single-html'),
+    repoSupplyId: Id.nullable().default(null),
+    intent: z.string().min(1).max(1000).nullable().default(null),
   }),
   /** Through HQ: assign a depot item to an operation. A missing required one blocks it. */
   z.object({

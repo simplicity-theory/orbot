@@ -37,6 +37,7 @@ interface NavItem {
 
 const NAV: NavItem[] = [
   { label: 'ORBAT', link: '/', icon: 'grid', exact: true },
+  { label: 'Theatres', link: '/theatres', icon: 'crosshair' },
   { label: 'Operations', link: '/operations', icon: 'flag' },
   { label: 'Approvals', link: '/approvals', icon: 'stamp' },
   { label: 'Daily brief', link: '/brief', icon: 'sun' },

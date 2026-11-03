@@ -7,6 +7,10 @@ import {
   SETTINGS_ID,
   STAGE_ORDER,
   type BudgetView,
+  type TheatreSummary,
+  type TheatreDetailView,
+  type TheatreBody,
+  type SupplyBody,
 } from '@orbot/shared';
 import type {
   ApprovalsView,
@@ -328,6 +332,12 @@ export class ViewsService {
       bot: bot ? toView(bot) : null,
       mission: mission ? toView(mission) : null,
       operation: operation ? toView(operation) : null,
+      theatre: await (async () => {
+        const th = operation?.body.theatreId
+          ? await this.record.getActive('theatre', operation.body.theatreId)
+          : null;
+        return th ? { id: th.entityId, name: th.body.name } : null;
+      })(),
       missionTasks,
       events,
       versions,
@@ -345,6 +355,59 @@ export class ViewsService {
       this.record.listActive('bot', { unitId: bb.body.unitId }),
     ]);
     return backbriefViews([bb], missions, units, bots)[0]!;
+  }
+
+  async theatres(): Promise<TheatreSummary[]> {
+    const [theatres, ops] = await Promise.all([
+      this.record.listActive('theatre'),
+      this.operations(),
+    ]);
+    return Promise.all(
+      theatres
+        .sort((a, b) => Number(a.body.status === 'closed') - Number(b.body.status === 'closed'))
+        .map(async (t) => {
+          const mine = ops.filter((o) => o.operation.theatreId === t.entityId);
+          return {
+            ...(await this.theatreBase(t)),
+            operations: mine.map((o) => ({
+              id: o.operation.id,
+              name: o.operation.name,
+              phase: o.operation.phase,
+              needsYou: o.needsYou.length,
+            })),
+            needsYou: mine.reduce((n, o) => n + o.needsYou.length, 0),
+          };
+        }),
+    );
+  }
+
+  async theatre(id: string): Promise<TheatreDetailView> {
+    const t = await this.record.requireActive('theatre', id);
+    const ops = (await this.operations()).filter((o) => o.operation.theatreId === id);
+    return {
+      ...(await this.theatreBase(t)),
+      operations: ops,
+      needsYou: ops.reduce((n, o) => n + o.needsYou.length, 0),
+    };
+  }
+
+  private async theatreBase(t: RecordVersion<TheatreBody>) {
+    const resources: RecordVersion<SupplyBody>[] = [];
+    for (const sid of t.body.supplyIds) {
+      const s = await this.record.getActive('supply', sid);
+      if (s) resources.push(s);
+    }
+    const repo = resources.find((s) => s.entityId === t.body.repoSupplyId) ?? null;
+    const site =
+      resources.find((s) => s.body.spec.kind === 'environment' && s.body.spec.site) ?? null;
+    return {
+      theatre: toView(t),
+      repository: repo ? toView(repo) : null,
+      site: site
+        ? { id: site.entityId, name: site.body.name, url: `/api/sites/${site.entityId}/` }
+        : null,
+      resources: toViews(resources),
+    };
   }
 
   async operations(): Promise<OperationSummary[]> {
@@ -449,7 +512,17 @@ export class ViewsService {
         entityId: id,
       });
     }
-    return { operation: toView(op), budget, missions: rows, needsYou, resources };
+    const theatre = op.body.theatreId
+      ? await this.record.getActive('theatre', op.body.theatreId)
+      : null;
+    return {
+      operation: toView(op),
+      theatre: theatre ? { id: theatre.entityId, name: theatre.body.name } : null,
+      budget,
+      missions: rows,
+      needsYou,
+      resources,
+    };
   }
 
   /** What an operation needs, what is assigned, what is missing, and whether it is held up. */

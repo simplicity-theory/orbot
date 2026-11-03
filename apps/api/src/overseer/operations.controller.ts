@@ -69,6 +69,7 @@ export class OperationsController {
         body.budgetUnits ?? null,
         body.reconFirst ?? false,
         body.supplyIds ?? [],
+        { theatreId: body.theatreId ?? null },
       ),
     );
   }

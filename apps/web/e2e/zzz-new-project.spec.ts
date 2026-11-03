@@ -2,22 +2,23 @@ import { expect, test } from '@playwright/test';
 import { expectAccessible } from './axe';
 
 /**
- * A new project whose deployment is one HTML file: started from the Operations page, it lands on
- * its operation with the repository and the site assigned, and both show in the Supply Depot.
- * Runs last: the project it starts stays in the shared record the other specs read.
+ * A new theatre whose product is one HTML file: opened from the Theatres page, it lands on its
+ * first operation with the repository and the site assigned, both show in the Supply Depot, and
+ * the theatre's page lists what it holds and the operation. Runs last: what it opens stays in
+ * the shared record the other specs read.
  */
-test('start a new single-HTML project: operation launched with its repository and site', async ({
+test('open a single-HTML theatre: operation launched with its repository and site', async ({
   page,
 }) => {
-  await page.goto('/operations');
-  await page.getByRole('button', { name: 'New project' }).click();
-  const dialog = page.getByRole('dialog', { name: 'New project' });
-  await dialog.getByLabel('Project name').fill('Pocket Ledger');
+  await page.goto('/theatres');
+  await page.getByRole('button', { name: 'New theatre' }).first().click();
+  const dialog = page.getByRole('dialog', { name: 'New theatre' });
+  await dialog.getByLabel('Theatre name').fill('Pocket Ledger');
   await dialog
-    .getByLabel('Intent')
+    .getByLabel('First intent')
     .fill('A personal ledger that works offline and keeps its data in the browser.');
-  await expectAccessible(page, 'new project dialog');
-  await dialog.getByRole('button', { name: 'Start project and launch' }).click();
+  await expectAccessible(page, 'new theatre dialog');
+  await dialog.getByRole('button', { name: 'Open theatre and launch' }).click();
 
   await expect(
     page.getByRole('heading', { level: 1, name: 'Operation Pocket Ledger' }),
@@ -30,7 +31,26 @@ test('start a new single-HTML project: operation launched with its repository an
     'A production environment to deploy to · Pocket Ledger site',
   );
   await expect(resources).not.toContainText('Waiting at the O Group');
+  await expect(page.locator('.page-header__eyebrow')).toContainText('Pocket Ledger');
   await expectAccessible(page, 'operation of a new project');
+
+  // The theatre's page: what it holds, and the operation run in it.
+  await page
+    .locator('.page-header__eyebrow')
+    .getByRole('link', { name: /Pocket Ledger/ })
+    .click();
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'Theatre Pocket Ledger' }),
+  ).toBeVisible();
+  const held = page.getByRole('list', { name: 'Theatre resources' });
+  await expect(held).toContainText('Pocket Ledger');
+  await expect(held).toContainText('Pocket Ledger site');
+  await expect(held).toContainText('main');
+  await expect(page.getByRole('link', { name: 'Operation Pocket Ledger' })).toBeVisible();
+  await expectAccessible(page, 'theatre page');
+  await page.goto('/theatres');
+  await expect(page.getByRole('link', { name: 'Theatre Pocket Ledger' })).toBeVisible();
+  await expectAccessible(page, 'theatres board');
 
   await page.goto('/supply');
   const repo = page.getByRole('listitem').filter({ hasText: 'Pocket Ledger' }).first();

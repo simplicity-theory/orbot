@@ -18,6 +18,7 @@ export class ProjectsController {
   ): Promise<NewProjectView> {
     const r = await this.projects.start(body, { actor, reason: `Project ${body.name} started` });
     return {
+      theatre: toView(r.theatre),
       repository: toView(r.repository),
       site: toView(r.site),
       operation: r.operation ? toView(r.operation) : null,
