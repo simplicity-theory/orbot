@@ -124,6 +124,23 @@ set `ORBOT_WEB_ORIGIN` and `ORBOT_DOMAIN` in `.env` and `orbot up`), or a privat
 its own certificates (Tailscale's HTTPS names work with the same two settings). A plain-http
 origin other than localhost is refused.
 
+## When something goes wrong
+
+Every error ORBOT shows says what happened and what to do next; this is where to look when it
+is not obvious.
+
+| What you see                                                            | What to do                                                                                                                                                                                                                                                                                                           |
+| ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A task is **blocked** or **failed**                                     | Open it (Needs you lists them): the reason and a **What to do** line are on the task. Give what it asks for (an item from the Supply Depot, a decision, an order in chat), then **Resume** or **Retry**. If it says "Held again for the same reason", resuming alone will not clear it: change what causes it first. |
+| A Guard finding holds the work you did not want held                    | Set the unit's hold policy (Rules tab, or in chat: "Guard, hold only on critical findings"; "Go fully automatic" never holds), or order the fix in chat ("Fix it").                                                                                                                                                  |
+| "Needs a decision" in a sitrep, nothing in Needs you                    | The task is failed: it is on the bot's page and the unit's task list, with a Retry button.                                                                                                                                                                                                                           |
+| A bot keeps failing with "runtime crashed" or "No bot runtime called …" | `orbot logs` shows the error. Settings shows each bot's runtime: for `claude-code`, run `claude` on the host and check the login is still valid; for `claude`, the API key in `.env`.                                                                                                                                |
+| The sand table lists blockers                                           | Each blocker names its fix and links to where to do it (chat to HQ, the Supply Depot).                                                                                                                                                                                                                               |
+| `orbot update` refuses: local changes                                   | `git -C /var/www/orbot status`; commit or discard them (`git checkout -- .`), then update again.                                                                                                                                                                                                                     |
+| `orbot update` refuses: not a fast-forward / no common history          | The checkout and origin diverged (for instance after the repository's history was rewritten). `git -C /var/www/orbot fetch origin && git -C /var/www/orbot reset --hard origin/main`, then `orbot update`.                                                                                                           |
+| `orbot up` waits for health and gives up                                | `orbot logs`: the first error after start says which setting is wrong (a plain-http origin, a database password, the secrets key). Fix `.env`, `orbot up` again.                                                                                                                                                     |
+| "Something went wrong on our side" with a reference                     | `orbot logs \| grep <reference>` shows the redacted error. Retry once; if it repeats, report it with the reference.                                                                                                                                                                                                  |
+
 ## What this setup does not do yet
 
 - One API process. The login throttle and the background job queues are in memory, so run one

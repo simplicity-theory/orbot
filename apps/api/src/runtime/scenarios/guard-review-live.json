@@ -6,7 +6,7 @@
     {
       "do": "step",
       "action": "read-brief",
-      "detail": "Read the brief for \u201c{task}\u201d.",
+      "detail": "Read the brief for “{task}”.",
       "outcome": "understood"
     },
     {
@@ -29,7 +29,8 @@
       "do": "respect-order",
       "pattern": "low-severity findings (also )?block",
       "holdMs": 20000,
-      "blocked": "Two low-severity findings, and standing orders say low-severity findings block release."
+      "blocked": "Two low-severity findings, and standing orders say low-severity findings block release.",
+      "action": "Lift the standing order (in chat: “{unit}, stop blocking on low-severity findings”, or on the Rules tab), then Resume the task; or order the fix in chat."
     },
     {
       "do": "write-file",

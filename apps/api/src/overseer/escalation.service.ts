@@ -191,7 +191,7 @@ export class EscalationService implements OnApplicationBootstrap, OnModuleDestro
           text: `${await this.unitName(task.body.unitId)} cannot get task #${task.body.number} done.`,
           action: 'Raised to the Commander for a decision.',
         },
-        commander: `Task #${task.body.number} “${task.body.title}” has failed ${failures} times: ${task.body.statusReason ?? 'no reason given'}. It needs your decision.`,
+        commander: `Task #${task.body.number} “${task.body.title}” has failed ${failures} times: ${task.body.statusReason ?? 'no reason given'}. ${task.body.statusAction ?? 'It needs your decision.'}`,
       });
     }
 

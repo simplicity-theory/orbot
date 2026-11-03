@@ -12,7 +12,8 @@
     {
       "do": "require-supply",
       "pattern": "payments",
-      "missing": "No access to the payments repository: it has not been issued to {unit}."
+      "missing": "No access to the payments repository: it has not been issued to {unit}.",
+      "action": "Issue the payments repository to {unit} from the Supply Depot (or in chat: “Give {unit} access to the payments repo”), then Resume the task."
     },
     {
       "do": "step",
@@ -25,7 +26,10 @@
       "path": "orbot/payments-review-{number}.md",
       "content": "# Payments review, task #{number}\n\nToken handling reviewed; no findings."
     },
-    { "do": "commit", "message": "Payments review for task #{number}" },
+    {
+      "do": "commit",
+      "message": "Payments review for task #{number}"
+    },
     {
       "do": "handover",
       "state": "Payments review complete.",
@@ -34,6 +38,9 @@
       "openProblems": [],
       "flagsForSuccessor": []
     },
-    { "do": "done", "summary": "Payments review for task #{number} complete." }
+    {
+      "do": "done",
+      "summary": "Payments review for task #{number} complete."
+    }
   ]
 }

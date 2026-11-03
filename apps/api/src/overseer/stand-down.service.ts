@@ -231,7 +231,7 @@ export class StandDownService implements OnModuleInit {
         await w.revise(
           'task',
           task.entityId,
-          (b) => ({ ...b, status: 'queued', statusReason: why }),
+          (b) => ({ ...b, status: 'queued', statusReason: why, statusAction: null }),
           ctx,
         );
         await w.event(

@@ -6,10 +6,17 @@
 
 .reason {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--space-3);
   border-color: var(--tone-warning);
   color: var(--tone-warning);
+  p {
+    margin: 0;
+  }
+  &__next {
+    margin-top: var(--space-2) !important;
+    color: var(--color-text);
+  }
   &[data-status='failed'] {
     border-color: var(--tone-danger);
     color: var(--tone-danger);

@@ -138,6 +138,8 @@ export class SimulatedRuntime implements BotRuntime {
     state: RunState,
   ): AsyncGenerator<BotEvent, Stop> {
     const credentialName = brief.task.credentialNames[0];
+    /** The step's "what the Commander can do", when the scenario gives one. */
+    const next = (t?: string | string[]) => (t ? { action: text(t) } : {});
     switch (step.do) {
       case 'step':
         yield {
@@ -239,6 +241,7 @@ export class SimulatedRuntime implements BotRuntime {
         yield {
           type: 'blocked',
           reason: `${label} ${why.charAt(0).toUpperCase()}${why.slice(1)}. Holding for the Commander: accept it, or order the change.`,
+          action: `Order the fix in chat (“Fix it”), or accept the finding and Resume the task, or change the hold policy so a ${step.severity} finding does not hold the work.`,
         };
         return true;
       }
@@ -270,10 +273,10 @@ export class SimulatedRuntime implements BotRuntime {
         yield { type: 'cost', units: step.units };
         return false;
       case 'block':
-        yield { type: 'blocked', reason: text(step.reason) };
+        yield { type: 'blocked', reason: text(step.reason), ...next(step.action) };
         return true;
       case 'fail':
-        yield { type: 'failed', reason: text(step.reason) };
+        yield { type: 'failed', reason: text(step.reason), ...next(step.action) };
         return true;
       case 'stand-down':
         yield { type: 'stood-down', reason: text(step.reason) };
@@ -296,7 +299,7 @@ export class SimulatedRuntime implements BotRuntime {
       case 'require-handover': {
         const note = brief.lastHandover ? parseHandoverMarkdown(brief.lastHandover.markdown) : null;
         if (!note || note.nextSteps.length === 0) {
-          yield { type: 'blocked', reason: text(step.missing) };
+          yield { type: 'blocked', reason: text(step.missing), ...next(step.action) };
           return true;
         }
         state.handover = note;
@@ -326,7 +329,7 @@ export class SimulatedRuntime implements BotRuntime {
           }
         }
         if (!found) {
-          yield { type: 'blocked', reason: text(step.missing) };
+          yield { type: 'blocked', reason: text(step.missing), ...next(step.action) };
           return true;
         }
         state.vars[step.as] = found[1] ?? found[0];
@@ -379,7 +382,7 @@ export class SimulatedRuntime implements BotRuntime {
           }
         }
         if (order) {
-          yield { type: 'blocked', reason: text(step.blocked) };
+          yield { type: 'blocked', reason: text(step.blocked), ...next(step.action) };
           return true;
         }
         yield {
@@ -460,7 +463,7 @@ export class SimulatedRuntime implements BotRuntime {
           (s) => (!re || re.test(s.name)) && (!step.tier || s.tier === step.tier),
         );
         if (!item) {
-          yield { type: 'blocked', reason: text(step.missing) };
+          yield { type: 'blocked', reason: text(step.missing), ...next(step.action) };
           return true;
         }
         yield {

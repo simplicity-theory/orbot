@@ -28,7 +28,8 @@
       "do": "respect-order",
       "pattern": "low-severity findings (also )?block",
       "holdMs": 0,
-      "blocked": "Low-severity findings found, and standing orders say they block release."
+      "blocked": "Low-severity findings found, and standing orders say they block release.",
+      "action": "Lift the standing order (in chat: “{unit}, stop blocking on low-severity findings”, or on the Rules tab), then Resume the task; or order the fix in chat."
     },
     {
       "do": "handover",
@@ -40,6 +41,9 @@
         "Findings are in the War Diary and, when fixed, in orbot/security-review-{number}.md."
       ]
     },
-    { "do": "done", "summary": "Security review passed for task #{number}." }
+    {
+      "do": "done",
+      "summary": "Security review passed for task #{number}."
+    }
   ]
 }

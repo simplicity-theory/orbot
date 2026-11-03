@@ -678,6 +678,7 @@ function attentionFor(
     items.push({
       kind: 'blocked-bot',
       label: `${b?.callsign ?? 'Unassigned'} blocked on #${t.number}: ${t.statusReason ?? 'no reason given'}`,
+      ...(t.statusAction ? { next: t.statusAction } : {}),
       link: taskLink(unitId, t.botId, t.id),
       entityId: t.id,
     });
@@ -694,6 +695,7 @@ function attentionFor(
     items.push({
       kind: 'failed-task',
       label: `Task #${t.number} failed: ${t.statusReason ?? t.title}`,
+      ...(t.statusAction ? { next: t.statusAction } : {}),
       link: taskLink(unitId, t.botId, t.id),
       entityId: t.id,
     });

@@ -12,7 +12,8 @@
     {
       "do": "require-supply",
       "tier": "production",
-      "missing": "No deploy rights: the production environment has not been issued to {unit}."
+      "missing": "No deploy rights: the production environment has not been issued to {unit}.",
+      "action": "Give {unit} deploy rights to the production environment: in chat to HQ, “Give {unit} deploy rights to <its name>”, or issue it from the Supply Depot; then Resume the task."
     },
     {
       "do": "step",
@@ -20,8 +21,15 @@
       "detail": "Pipeline green on the integration branch.",
       "outcome": "ok"
     },
-    { "do": "deploy", "environment": "production" },
-    { "do": "sitrep", "text": "{callsign}: deployed to production.", "status": "working" },
+    {
+      "do": "deploy",
+      "environment": "production"
+    },
+    {
+      "do": "sitrep",
+      "text": "{callsign}: deployed to production.",
+      "status": "working"
+    },
     {
       "do": "handover",
       "state": "Deployed {branch} to production.",
@@ -30,6 +38,9 @@
       "openProblems": [],
       "flagsForSuccessor": []
     },
-    { "do": "done", "summary": "Deployed to production." }
+    {
+      "do": "done",
+      "summary": "Deployed to production."
+    }
   ]
 }

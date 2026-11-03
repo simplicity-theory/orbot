@@ -371,6 +371,8 @@ export const TaskBody = z.object({
   /** SimulatedRuntime scenario id; ignored by other runtimes. */
   scenario: z.string().nullable(),
   statusReason: z.string().nullable(),
+  /** What the Commander can do about a held or failed task (set with `statusReason`). */
+  statusAction: z.string().nullable().default(null),
   /** The task this one picks up from (its handover is part of the brief). */
   continuesTaskId: Id.nullable().default(null),
   /** Started by the Overseer's dispatcher when its bot is free (tasks from approved backbriefs). */

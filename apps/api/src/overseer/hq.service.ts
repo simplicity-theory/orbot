@@ -397,7 +397,7 @@ export class HqService implements OnApplicationBootstrap, OnModuleDestroy {
           await w.revise(
             'task',
             t.entityId,
-            (x) => ({ ...x, status: 'stood-down', statusReason: note }),
+            (x) => ({ ...x, status: 'stood-down', statusReason: note, statusAction: null }),
             { actor, reason: note },
           );
           await w.event(
@@ -915,6 +915,7 @@ export class HqService implements OnApplicationBootstrap, OnModuleDestroy {
               ...b,
               status: 'queued',
               statusReason: `Re-check after ${fromUnit.body.name}'s fix`,
+              statusAction: null,
             }),
             { actor: HQ_ACTOR, reason: 'Re-check after the fix' },
           );

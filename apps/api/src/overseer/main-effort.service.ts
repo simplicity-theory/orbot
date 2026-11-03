@@ -279,7 +279,7 @@ export class MainEffortService implements OnApplicationBootstrap, OnModuleDestro
       await w.revise(
         'task',
         victim.entityId,
-        (b) => ({ ...b, status: 'queued', statusReason: why }),
+        (b) => ({ ...b, status: 'queued', statusReason: why, statusAction: null }),
         ctx,
       );
       await w.event(

@@ -16,6 +16,8 @@ import {
   type TaskBrief,
   type TaskStatus,
 } from '@orbot/shared';
+import { errorAction } from '../common/api-error.js';
+import { GitError } from '../common/git.js';
 import { APP_CONFIG, type AppConfig } from '../config/config.js';
 import { ServersService } from '../servers/servers.service.js';
 import { SitesService } from '../servers/sites.service.js';
@@ -53,7 +55,43 @@ interface ActiveRun {
   startedAt: number;
 }
 
-const STARTABLE: readonly TaskStatus[] = ['queued', 'blocked', 'stood-down'];
+const STARTABLE: readonly TaskStatus[] = ['queued', 'blocked', 'stood-down', 'failed'];
+
+const NEXT = {
+  blocked:
+    'Give the bot what it is held for (a decision, an item from the Supply Depot, a credential), then Resume the task. For a finding: order the fix in chat, change the hold policy, or accept it and Resume.',
+  failed:
+    'Read the reason (and the handover, if there is one), change what it names, then Retry the task or reassign it to another bot.',
+  crashed:
+    'Retry the task. If the bot keeps crashing, check its runtime: `orbot logs` shows the error, and Settings shows which runtime it is on.',
+  noReport:
+    'Retry the task; the bot carries on from its handover if it wrote one. If it keeps stopping without a report, check the runtime with `orbot logs`.',
+  policy: 'Clear what holds it (the rule named in the reason), then Resume the task.',
+  dispute:
+    'HQ rules on the dispute and the task resumes with the ruling; you can rule yourself on the Disputes page.',
+  git: 'Retry the task: its workspace is prepared again from the integrated work. If git fails the same way, `orbot logs` has the full output.',
+} as const;
+
+/**
+ * What the Commander can do about a task that stops short: the bot's own suggestion when it
+ * gave one, else the usual way out; and when the task stops the same way it did last time, a
+ * warning first that resuming alone will not change it (D112).
+ */
+export function nextStep(
+  status: TaskStatus,
+  reason: string,
+  before: Pick<TaskBody, 'status' | 'statusReason'>,
+  given: string | null,
+  crashed: boolean,
+): string | null {
+  if (status !== 'blocked' && status !== 'failed') return null;
+  const usual = status === 'blocked' ? NEXT.blocked : crashed ? NEXT.crashed : NEXT.failed;
+  const step = given ?? usual;
+  if (before.status !== status || before.statusReason !== reason) return step;
+  return status === 'blocked'
+    ? `Held again for the same reason: resuming alone will not clear it. ${step}`
+    : `Failed again in the same way: retrying alone will not fix it. ${step}`;
+}
 
 /**
  * Drives one bot through one task:
@@ -176,7 +214,7 @@ export class TaskRunner {
     if (!STARTABLE.includes(task.body.status)) {
       throw new ConflictException({
         message: `Task #${task.body.number} is ${task.body.status} and cannot be started.`,
-        action: 'Only queued, blocked or stood-down tasks can be started.',
+        action: 'Only queued, blocked, stood-down or failed tasks can be started.',
       });
     }
     const allowed = await this.policy.check({
@@ -226,7 +264,7 @@ export class TaskRunner {
     if (!STARTABLE.includes(t.status)) {
       throw new ConflictException({
         message: `Task #${t.number} is ${t.status} and cannot be started.`,
-        action: 'Only queued, blocked or stood-down tasks can be started.',
+        action: 'Only queued, blocked, stood-down or failed tasks can be started.',
       });
     }
     if (!t.botId) {
@@ -436,6 +474,9 @@ export class TaskRunner {
         refs,
         botActor,
         runId,
+        undefined,
+        false,
+        errorAction(err) ?? (err instanceof GitError ? NEXT.git : null),
       ).catch(() => undefined);
       throw err;
     }
@@ -483,6 +524,8 @@ export class TaskRunner {
             botActor,
             run.runId,
             spent,
+            false,
+            decision.action ?? NEXT.policy,
           );
         }
         switch (ev.type) {
@@ -550,6 +593,8 @@ export class TaskRunner {
               botActor,
               run.runId,
               spent,
+              false,
+              NEXT.dispute,
             );
           case 'permission':
             // Its rules of engagement say ask first: the task waits for the decision.
@@ -587,6 +632,8 @@ export class TaskRunner {
                 botActor,
                 run.runId,
                 spent,
+                false,
+                go.action ?? NEXT.policy,
               );
             }
             break;
@@ -599,9 +646,29 @@ export class TaskRunner {
             run.handoverWritten = true;
             break;
           case 'blocked':
-            return this.finish('blocked', ev.reason, task.body, refs, botActor, run.runId, spent);
+            return this.finish(
+              'blocked',
+              ev.reason,
+              task.body,
+              refs,
+              botActor,
+              run.runId,
+              spent,
+              false,
+              ev.action ?? null,
+            );
           case 'failed':
-            return this.finish('failed', ev.reason, task.body, refs, botActor, run.runId, spent);
+            return this.finish(
+              'failed',
+              ev.reason,
+              task.body,
+              refs,
+              botActor,
+              run.runId,
+              spent,
+              false,
+              ev.action ?? null,
+            );
           case 'done':
             return this.finish('done', ev.summary, task.body, refs, botActor, run.runId, spent);
           case 'stood-down':
@@ -617,6 +684,8 @@ export class TaskRunner {
         botActor,
         run.runId,
         spent,
+        false,
+        NEXT.noReport,
       );
     } catch (err) {
       const reason = `The bot's runtime crashed: ${this.message(err)}`;
@@ -770,6 +839,7 @@ export class TaskRunner {
     runId: string,
     spent?: number,
     botCrashed = false,
+    action: string | null = null,
   ): Promise<RunOutcome> {
     const taskStatus: TaskStatus =
       outcome === 'done'
@@ -783,8 +853,10 @@ export class TaskRunner {
     // later (`resume`). Only a bot that itself crashed stays with its task, as failed.
     const botStatus: BotStatus = botCrashed ? 'failed' : 'idle';
     const keepTask = botCrashed;
+    // `task` is the task as it stood when this run started: the same hold again is called out.
+    const next = nextStep(taskStatus, reason, task, action, botCrashed);
     await this.record.transaction(async (w) => {
-      await this.setStatus(w, refs.taskId!, taskStatus, reason, refs, actor, reason, spent);
+      await this.setStatus(w, refs.taskId!, taskStatus, reason, refs, actor, reason, spent, next);
       await this.setBot(
         w,
         refs.botId!,
@@ -868,6 +940,7 @@ export class TaskRunner {
     actor: string,
     reason: string,
     spent?: number,
+    statusAction: string | null = null,
   ) {
     const current = await this.record.requireActive('task', taskId);
     await w.revise(
@@ -877,6 +950,7 @@ export class TaskRunner {
         ...b,
         status: to,
         statusReason,
+        statusAction,
         budget: spent === undefined ? b.budget : { ...b.budget, spentUnits: spent },
       }),
       { actor, reason },
@@ -884,7 +958,7 @@ export class TaskRunner {
     if (current.body.status !== to) {
       await w.event(
         'task.status',
-        { from: current.body.status, to, reason: statusReason },
+        { from: current.body.status, to, reason: statusReason, action: statusAction },
         refs,
         actor,
       );

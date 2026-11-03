@@ -9,14 +9,24 @@
       "detail": "Read the brief for “{task}”.",
       "outcome": "understood"
     },
-    { "do": "sitrep", "text": "{callsign} on task #{number}: starting.", "status": "working" },
-    { "do": "wait", "ms": 600 },
+    {
+      "do": "sitrep",
+      "text": "{callsign} on task #{number}: starting.",
+      "status": "working"
+    },
+    {
+      "do": "wait",
+      "ms": 600
+    },
     {
       "do": "write-file",
       "path": "orbot/task-{number}.md",
       "content": "# Task #{number}: {task}\n\nAttempted by {callsign}.\n"
     },
-    { "do": "commit", "message": "WIP task #{number}: {task}" },
+    {
+      "do": "commit",
+      "message": "WIP task #{number}: {task}"
+    },
     {
       "do": "step",
       "action": "run-tests",
@@ -28,7 +38,10 @@
       "category": "surprise",
       "text": "Three tests fail: they assert the old behaviour this task changes."
     },
-    { "do": "cost", "units": 2 },
+    {
+      "do": "cost",
+      "units": 2
+    },
     {
       "do": "handover",
       "state": "Change committed on {branch} but 3 tests fail.",
@@ -39,7 +52,8 @@
     },
     {
       "do": "fail",
-      "reason": "3 tests fail against the new behaviour; needs a decision on the spec."
+      "reason": "3 tests fail against the new behaviour; needs a decision on the spec.",
+      "action": "Decide the spec: in chat, order the tests updated or the change reverted; then Retry the task."
     }
   ]
 }

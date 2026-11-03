@@ -10,3 +10,10 @@ export interface ApiErrorBody {
     issues?: { path: string; message: string }[];
   };
 }
+
+/** The "what to do next" an error carries (an `action` on an HttpException body), if any. */
+export function errorAction(err: unknown): string | null {
+  const r = (err as { getResponse?: () => unknown }).getResponse?.();
+  const action = typeof r === 'object' && r ? (r as { action?: unknown }).action : undefined;
+  return typeof action === 'string' && action ? action : null;
+}

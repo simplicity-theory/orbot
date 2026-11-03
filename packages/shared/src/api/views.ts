@@ -89,6 +89,8 @@ export interface AttentionItem {
   /** For escalations: the chain to acknowledge. */
   chainId?: string;
   label: string;
+  /** What the Commander can do about it (a held or failed task's `statusAction`). */
+  next?: string;
   /** App route that resolves it, e.g. `/units/<id>/bots/<id>`. */
   link: string;
   entityId: string;

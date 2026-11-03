@@ -92,7 +92,7 @@ export class TaskPage {
       !!t &&
       !!t.botId &&
       !!t.repoSupplyId &&
-      ['queued', 'blocked', 'stood-down'].includes(t.status) &&
+      ['queued', 'blocked', 'stood-down', 'failed'].includes(t.status) &&
       this.auth.can(t.unitId)
     );
   });

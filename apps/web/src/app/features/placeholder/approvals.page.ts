@@ -90,6 +90,9 @@ import { scrollToFragment } from './scroll-to-fragment';
                   />
                   <span class="meta">{{ a.unitName }}</span>
                   <a [routerLink]="a.link | url">{{ a.label }}</a>
+                  @if (a.next) {
+                    <p class="next"><strong>What to do:</strong> {{ a.next }}</p>
+                  }
                   @if (a.action === 'approve-deploy') {
                     <orb-deploy-approval
                       class="inline"
@@ -144,6 +147,12 @@ import { scrollToFragment } from './scroll-to-fragment';
     .inline {
       grid-column: 1 / -1;
       padding-bottom: var(--space-3);
+    }
+    .next {
+      grid-column: 3;
+      margin: 0 0 var(--space-3);
+      font-size: var(--font-size-sm);
+      color: var(--color-text-muted);
     }
   `,
 })

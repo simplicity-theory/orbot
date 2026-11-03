@@ -127,12 +127,32 @@ export const TOOLS: BotTool[] = [
   {
     name: 'blocked',
     description: 'You cannot continue without something from outside the unit.',
-    input_schema: obj({ reason: str }),
+    input_schema: obj(
+      {
+        reason: str,
+        action: {
+          type: 'string',
+          description:
+            'What the Commander can do to clear it: what to give, what to decide, or what to order.',
+        },
+      },
+      ['reason'],
+    ),
   },
   {
     name: 'failed',
     description: 'The task cannot be completed as specified.',
-    input_schema: obj({ reason: str }),
+    input_schema: obj(
+      {
+        reason: str,
+        action: {
+          type: 'string',
+          description:
+            'What the Commander can do about it: what to change in the task or the orders, or what to decide.',
+        },
+      },
+      ['reason'],
+    ),
   },
   {
     name: 'send_back',
@@ -272,21 +292,23 @@ export abstract class ClaudeFamilyRuntime implements BotRuntime {
       return { type: 'dispute', against: s('against'), claim: s('claim') };
     if (name === 'request_permission')
       return { type: 'permission', action: s('action'), rule: s('rule'), reason: s('reason') };
-    return this.terminal(name, String(input['reason'] ?? input['summary'] ?? ''));
+    const action = typeof input['action'] === 'string' && input['action'] ? input['action'] : null;
+    return this.terminal(name, String(input['reason'] ?? input['summary'] ?? ''), action);
   }
 
-  protected terminal(name: string, text: string): BotEvent {
+  protected terminal(name: string, text: string, action: string | null = null): BotEvent {
+    const next = action ? { action } : {};
     switch (name) {
       case 'done':
         return { type: 'done', summary: text };
       case 'blocked':
-        return { type: 'blocked', reason: text };
+        return { type: 'blocked', reason: text, ...next };
       case 'send_back':
         return { type: 'send-back', reason: text };
       case 'stand_down':
         return { type: 'stood-down', reason: text };
       default:
-        return { type: 'failed', reason: text };
+        return { type: 'failed', reason: text, ...next };
     }
   }
 
@@ -515,7 +537,7 @@ export abstract class ClaudeFamilyRuntime implements BotRuntime {
       `You are ${brief.bot.callsign}, a ${brief.bot.role} in the ${brief.unit.name} unit of ORBOT, working one task in your own git worktree on branch ${brief.workspace.branch}.`,
       'You arrived today: everything you know about this work comes from the brief below (the unit’s documents). Act on it, and leave the unit better documented than you found it.',
       'Work only through your tools; you cannot reach anything outside the workspace. Record decisions and surprises in the War Diary as you go, send a sitrep at milestones, commit your changes, and always write a handover before you finish, block, fail, send back or stand down.',
-      'If a check you are running fails because of the previous unit’s work, use send_back with a reason they can act on. If you need something only someone outside the unit can give (access, a decision), use blocked. If another unit’s rules conflict with your brief, use raise_dispute; once ruled on, follow the ruling. If your unit’s rules of engagement say something must be escalated, use request_permission before doing it.',
+      'If a check you are running fails because of the previous unit’s work, use send_back with a reason they can act on. If you need something only someone outside the unit can give (access, a decision), use blocked, and say in action what the Commander can do to clear it (what to give, decide or order); the same in action when you use failed. If another unit’s rules conflict with your brief, use raise_dispute; once ruled on, follow the ruling. If your unit’s rules of engagement say something must be escalated, use request_permission before doing it.',
       'If your unit holds a dev server (list_servers shows tier dev), build, test and iterate there with dev_run: edit code in your workspace with write_file, then dev_run syncs it and runs the command in your own folder on the server. Use dev_fetch for files the server generates that belong in the repository. Commit as usual: the workspace is the work of record, not the dev server.',
       'If your unit holds servers (list_servers), you may log in to them with server_run and set them up as the task needs; copy committed work there with server_upload. Leave each server documented: what you installed, where, how to restart it, in the War Diary and your handover, so a successor can carry on.',
       projectRules(brief),

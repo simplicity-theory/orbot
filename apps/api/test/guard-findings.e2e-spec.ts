@@ -82,6 +82,7 @@ describe('Guard findings: record, fix what is small, hold only on a high finding
   it('a high finding whose fix means large changes holds the work for the Commander, recorded first', async () => {
     const d = await review('guard-check-blocker', botIds[1]!, 'blocked');
     expect(d.task.statusReason).toMatch(/^Finding \(high\): session tokens are stored unhashed/);
+    expect(d.task.statusAction).toMatch(/^Order the fix in chat .* or change the hold policy/);
     const diary = d.events
       .filter((e) => e.kind === 'diary.entry')
       .map((e) => (e.body as { text: string }).text);

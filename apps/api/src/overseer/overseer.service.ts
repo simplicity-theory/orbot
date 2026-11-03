@@ -28,6 +28,7 @@ import { ForceService } from '../domain/force.service.js';
 import { WorkService } from '../domain/work.service.js';
 import { TaskRunner } from '../execution/task-runner.js';
 import { RecordBus } from '../record/record-bus.js';
+import { errorAction } from '../common/api-error.js';
 import { RecordService, type RecordWriter } from '../record/record.service.js';
 import { words } from '../common/similarity.js';
 import { BriefingService } from './briefing.service.js';
@@ -538,7 +539,7 @@ export class OverseerService implements OnApplicationBootstrap, OnModuleDestroy 
             'sitrep',
             {
               level: 'unit',
-              text: `Could not start task #${task.body.number} on ${bot.body.callsign}: ${(err as Error).message}`,
+              text: `Could not start task #${task.body.number} on ${bot.body.callsign}: ${(err as Error).message}${errorAction(err) ? ` ${errorAction(err)}` : ''}`,
               status: null,
             },
             { unitId, botId: bot.entityId, taskId, missionId: task.body.missionId },
@@ -558,8 +559,8 @@ export class OverseerService implements OnApplicationBootstrap, OnModuleDestroy 
     const who = bot ? bot.body.callsign : 'Unassigned';
     const text: Record<string, string> = {
       done: `${who} completed task #${task.body.number}: ${task.body.title}.`,
-      failed: `${who} failed task #${task.body.number}: ${e.body.reason ?? 'no reason given'}. Needs a decision.`,
-      blocked: `${who} blocked on task #${task.body.number}: ${e.body.reason ?? 'no reason given'}.`,
+      failed: `${who} failed task #${task.body.number}: ${e.body.reason ?? 'no reason given'}. ${e.body.action ?? 'Needs a decision.'}`,
+      blocked: `${who} blocked on task #${task.body.number}: ${e.body.reason ?? 'no reason given'}.${e.body.action ? ` ${e.body.action}` : ''}`,
       'stood-down': `${who} stood down from task #${task.body.number} with a handover; it can be picked up again.`,
     };
     await this.record.transaction(async (w) => {
@@ -640,6 +641,7 @@ export class OverseerService implements OnApplicationBootstrap, OnModuleDestroy 
             note,
           },
           status: approve ? 'queued' : 'stood-down',
+          statusAction: null,
           statusReason: approve
             ? 'Production deploy approved'
             : `Production deploy rejected${note ? `: ${note}` : ''}`,
@@ -723,6 +725,7 @@ export class OverseerService implements OnApplicationBootstrap, OnModuleDestroy 
           // Blocked until the bot picks it up again (straight away, below).
           status: 'blocked',
           statusReason: reason,
+          statusAction: null,
         }),
         { actor, reason },
       );
@@ -814,6 +817,7 @@ export class OverseerService implements OnApplicationBootstrap, OnModuleDestroy 
           botId: to.entityId,
           status: 'queued',
           statusReason: `Reassigned to ${to.body.callsign}: ${input.reason}`,
+          statusAction: null,
         }),
         { actor, reason: `Reassigned to ${to.body.callsign}: ${input.reason}` },
       );

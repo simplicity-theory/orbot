@@ -17,7 +17,13 @@ export type SitrepLevel = z.infer<typeof SitrepLevel>;
 
 export const RecordEventBodies = {
   'task.assigned': z.object({ taskNumber: z.number().int(), title: z.string() }),
-  'task.status': z.object({ from: TaskStatus, to: TaskStatus, reason: z.string().nullable() }),
+  'task.status': z.object({
+    from: TaskStatus,
+    to: TaskStatus,
+    reason: z.string().nullable(),
+    /** For a hold or failure: what the Commander can do about it. */
+    action: z.string().nullable().optional(),
+  }),
   'workspace.prepared': z.object({
     path: z.string(),
     branch: z.string(),

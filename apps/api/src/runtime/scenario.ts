@@ -38,7 +38,8 @@ export const ScenarioStep = z.discriminatedUnion('do', [
   z.object({ do: z.literal('commit'), message: Text }),
   z.object({ do: z.literal('use-credential'), purpose: Text }),
   z.object({ do: z.literal('cost'), units: z.number().nonnegative() }),
-  z.object({ do: z.literal('block'), reason: Text }),
+  /** `action` on a hold or failure: what the Commander can do about it. */
+  z.object({ do: z.literal('block'), reason: Text, action: Text.optional() }),
   /**
    * A finding of a check, decided by the brief's hold policy: fixed on the spot (the file is
    * written and committed) when the fix is within what the unit may do alone, else recorded,
@@ -55,7 +56,7 @@ export const ScenarioStep = z.discriminatedUnion('do', [
     content: Text.optional(),
     commit: Text.optional(),
   }),
-  z.object({ do: z.literal('fail'), reason: Text }),
+  z.object({ do: z.literal('fail'), reason: Text, action: Text.optional() }),
   z.object({
     do: z.literal('handover'),
     state: Text,
@@ -75,7 +76,7 @@ export const ScenarioStep = z.discriminatedUnion('do', [
   /** Stop part-way so another bot can pick the task up (after writing a handover). */
   z.object({ do: z.literal('stand-down'), reason: Text }),
   /** Block unless the brief carries a handover with next steps for this task. */
-  z.object({ do: z.literal('require-handover'), missing: Text }),
+  z.object({ do: z.literal('require-handover'), missing: Text, action: Text.optional() }),
   /**
    * Block unless the Field Manual (brief first, then a record search) contains `pattern`.
    * The pattern's first capture group becomes the variable `as`.
@@ -86,6 +87,7 @@ export const ScenarioStep = z.discriminatedUnion('do', [
     query: z.string(),
     as: z.string(),
     missing: Text,
+    action: Text.optional(),
   }),
   /** Carry out the handover's next steps of the form ``Write `path`: content``. */
   z.object({ do: z.literal('follow-handover') }),
@@ -98,6 +100,7 @@ export const ScenarioStep = z.discriminatedUnion('do', [
     pattern: z.string(),
     holdMs: z.number().int().nonnegative().default(0),
     blocked: Text,
+    action: Text.optional(),
   }),
   /** Inspect the branch: send the work back unless a tracked file matches `pattern`. */
   z.object({
@@ -122,6 +125,7 @@ export const ScenarioStep = z.discriminatedUnion('do', [
     pattern: z.string().optional(),
     tier: z.string().optional(),
     missing: Text,
+    action: Text.optional(),
   }),
 ]);
 export type ScenarioStep = z.infer<typeof ScenarioStep>;

@@ -562,7 +562,7 @@ export class ActionsService {
       await w.revise(
         'task',
         taskId,
-        (t) => ({ ...t, status: 'stood-down', statusReason: reason }),
+        (t) => ({ ...t, status: 'stood-down', statusReason: reason, statusAction: null }),
         ctx,
       );
       await w.event(
@@ -591,7 +591,7 @@ export class ActionsService {
       await w.revise(
         'task',
         taskId,
-        (t) => ({ ...t, status: 'queued', statusReason: `Resumed: ${note}` }),
+        (t) => ({ ...t, status: 'queued', statusReason: `Resumed: ${note}`, statusAction: null }),
         ctx,
       );
       await w.event(

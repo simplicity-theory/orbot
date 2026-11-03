@@ -73,6 +73,7 @@ describe('Held work does not hold up a unit', () => {
         kind: 'blocked-bot',
         entityId: blocked.entityId,
         label: expect.stringMatching(/^E-1 blocked on #\d+: Upstream API client/),
+        next: expect.stringMatching(/^Resume the task once the upstream client is available/),
       }),
     );
 

@@ -229,12 +229,13 @@ export type BotEvent =
   | { type: 'cost'; units: number }
   /** A report (recon findings): filed as a unit document. */
   | { type: 'report'; title: string; markdown: string }
-  | { type: 'blocked'; reason: string }
+  /** `action`: what the Commander can do to clear it, when the bot knows. */
+  | { type: 'blocked'; reason: string; action?: string }
   /** The bot stops part-way (handed over) so another bot can pick the task up. */
   | { type: 'stood-down'; reason: string }
   | { type: 'handover'; note: HandoverNote }
   | { type: 'done'; summary: string }
-  | { type: 'failed'; reason: string };
+  | { type: 'failed'; reason: string; action?: string };
 
 export type BotEventType = BotEvent['type'];
 
