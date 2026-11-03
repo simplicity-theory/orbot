@@ -36,7 +36,8 @@ test('a bot asks permission under its rules of engagement; I decide in Needs you
   await page.goto('/approvals');
   const item = page
     .getByRole('listitem')
-    .filter({ hasText: `${bot.callsign} asks permission on #${task.number}` });
+    .filter({ hasText: `#${task.number}` })
+    .filter({ hasText: `${bot.callsign} asks permission` });
   await expect(item).toBeVisible({ timeout: 15_000 });
   await expect(item).toContainText('Add a new production dependency');
   await expect(item).toContainText('Must escalate: “Adding a new dependency”');

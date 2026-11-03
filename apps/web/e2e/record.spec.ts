@@ -42,7 +42,12 @@ test.describe('one bot, one task, on the record', () => {
 
   test('a blocked bot is one click from the ORBAT, with the reason', async ({ page }) => {
     await page.goto('/');
-    await page.getByRole('link', { name: /E-2 blocked on/ }).click();
+    await page
+      .getByRole('listitem')
+      .filter({ hasText: 'Upstream API client' })
+      .getByRole('link')
+      .first()
+      .click();
     // The decision comes first: why it is held, what to do, the bot's open problems, the controls.
     const decision = page.getByRole('region', { name: 'Held for your decision' });
     await expect(decision).toBeVisible();

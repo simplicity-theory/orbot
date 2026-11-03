@@ -65,7 +65,13 @@ describe('a held or failed task says what to do next', () => {
     expect(status.body.action).toBe(next);
     const inbox: ApprovalsView = (await t.agent.get('/api/approvals').expect(200)).body;
     expect(inbox.attention).toContainEqual(
-      expect.objectContaining({ kind: 'blocked-bot', entityId: id, next }),
+      expect.objectContaining({
+        kind: 'blocked-bot',
+        entityId: id,
+        next,
+        title: `Task #${d.task.number} · Engineers`,
+        detail: 'Blocked: Upstream API client is not available yet.',
+      }),
     );
     const sitreps = d.events
       .filter((e) => e.kind === 'sitrep')

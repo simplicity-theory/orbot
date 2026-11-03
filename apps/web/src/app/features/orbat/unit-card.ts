@@ -80,7 +80,7 @@ const ATTENTION_ICON = {
               <li [attr.data-kind]="a.kind">
                 <orb-icon class="sm" [name]="icons[a.kind]" />
                 @if (bb) {
-                  <span class="label">{{ a.label }}</span>
+                  <span class="label">{{ a.detail ?? a.label }}</span>
                   <button
                     type="button"
                     class="btn btn--ghost review"
@@ -91,7 +91,10 @@ const ATTENTION_ICON = {
                     {{ reviewing() === bb.id ? 'Close' : 'Review' }}
                   </button>
                 } @else {
-                  <a [routerLink]="a.link | url">{{ a.label }}</a>
+                  <a [routerLink]="a.link | url">{{ a.title }}</a>
+                  @if (a.detail) {
+                    <span class="meta detail">{{ a.detail }}</span>
+                  }
                   @if (a.action === 'acknowledge' && a.chainId) {
                     <orb-acknowledge [chainId]="a.chainId" [unitId]="u.unit.id" [label]="a.label" />
                   }

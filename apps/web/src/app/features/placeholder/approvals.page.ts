@@ -89,7 +89,10 @@ import { scrollToFragment } from './scroll-to-fragment';
                     "
                   />
                   <span class="meta">{{ a.unitName }}</span>
-                  <a [routerLink]="a.link | url">{{ a.label }}</a>
+                  <a [routerLink]="a.link | url">{{ a.title }}</a>
+                  @if (a.detail) {
+                    <p class="detail">{{ a.detail }}</p>
+                  }
                   @if (a.next) {
                     <p class="next"><strong>What to do:</strong> {{ a.next }}</p>
                   }
@@ -147,6 +150,10 @@ import { scrollToFragment } from './scroll-to-fragment';
     .inline {
       grid-column: 1 / -1;
       padding-bottom: var(--space-3);
+    }
+    .detail {
+      grid-column: 3;
+      margin: 0;
     }
     .next {
       grid-column: 3;

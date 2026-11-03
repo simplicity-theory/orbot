@@ -34,9 +34,7 @@ test('a dispute no standing order settles comes to me; I rule and the task resum
   expect((await api.post(`/api/tasks/${task.id}/run`)).status()).toBe(202);
 
   await page.goto('/approvals');
-  const item = page
-    .getByRole('listitem')
-    .filter({ hasText: 'Dispute to rule on: Inspection v Guard' });
+  const item = page.getByRole('listitem').filter({ hasText: 'Dispute · Inspection v Guard' });
   await expect(item).toBeVisible({ timeout: 15_000 });
   await item.getByRole('link').click();
   await expect(page).toHaveURL(/\/disputes#dispute-/);

@@ -65,13 +65,15 @@ export class ViewsService {
   ) {}
 
   async orbat(): Promise<OrbatView> {
-    const [units, bots, tasks, missions, backbriefs] = await Promise.all([
+    const [units, bots, tasks, missions, backbriefs, operations] = await Promise.all([
       this.record.listActive('unit'),
       this.record.listActive('bot'),
       this.record.listActive('task'),
       this.record.listActive('mission'),
       this.record.listActive('backbrief', { bodyContains: { status: 'awaiting-approval' } }),
+      this.record.listActive('operation'),
     ]);
+    const opNames = new Map(operations.map((o) => [o.entityId, o.body.name]));
     const bbViews = backbriefViews(backbriefs, missions, units, bots);
     const settings = (await this.record.getActive('settings', SETTINGS_ID))?.body;
     const allHalted = !!settings?.halt;
@@ -109,7 +111,11 @@ export class ViewsService {
           status: unitStatus(ub, ut, ubb, allHalted || !!u.body.halt),
           attention: unitAttention(
             u,
-            attentionFor(u.entityId, ub, ut, ubb),
+            attentionFor(u.entityId, ub, ut, ubb, {
+              unitName: u.body.name,
+              missions: um.map((m) => ({ id: m.id, operationId: m.operationId })),
+              operations: opNames,
+            }),
             open.filter((e) => e.unitId === u.entityId),
             budget,
             referred.filter((d) => d.body.unitId === u.entityId),
@@ -141,6 +147,8 @@ export class ViewsService {
       waiting.push({
         kind: 'resources',
         label: `Operation ${op.body.name} is waiting for resources: ${describeNeeds(r.missing)}`,
+        title: `Resources · Operation ${op.body.name}`,
+        detail: `Assign what it waits for: ${brief(describeNeeds(r.missing))}`,
         link: `/operations/${op.entityId}#resources`,
         entityId: op.entityId,
         unitName: 'HQ',
@@ -241,7 +249,13 @@ export class ViewsService {
       supply: toViews(supply.filter((s) => u.body.supplyIds.includes(s.entityId))),
       attention: unitAttention(
         u,
-        attentionFor(id, bv, tv, awaiting),
+        attentionFor(id, bv, tv, awaiting, {
+          unitName: u.body.name,
+          missions: missions.map((m) => ({ id: m.entityId, operationId: m.body.operationId })),
+          operations: new Map(
+            (await this.record.listActive('operation')).map((o) => [o.entityId, o.body.name]),
+          ),
+        }),
         await this.escalations.openChains({ unitId: id }),
         unitBudget(
           u.body.computeBudget,
@@ -384,6 +398,8 @@ export class ViewsService {
             {
               kind: 'awaiting-approval' as const,
               label: `${r.unit.name} backbrief awaiting approval`,
+              title: `Backbrief · ${r.unit.name} · Operation ${op.body.name}`,
+              detail: `Approve the plan: ${brief(r.mission.goal)}`,
               link: `/operations/${id}`,
               entityId: r.backbrief.id,
             },
@@ -394,6 +410,11 @@ export class ViewsService {
         toViews(bots.filter((b) => b.body.unitId === r.unit.id)),
         r.tasks,
         [],
+        {
+          unitName: r.unit.name,
+          missions: [{ id: r.mission.id, operationId: op.entityId }],
+          operations: new Map([[op.entityId, op.body.name]]),
+        },
       ),
     ]);
     const st = (await this.record.getActive('settings', SETTINGS_ID))?.body;
@@ -411,6 +432,8 @@ export class ViewsService {
       needsYou.push({
         kind: 'sand-table',
         label: `Sand table: no-go for Operation ${op.body.name} (${n} blocker${n === 1 ? '' : 's'})`,
+        title: `Sand table · Operation ${op.body.name}`,
+        detail: `No-go: ${n} blocker${n === 1 ? '' : 's'} to clear before the work starts`,
         link: `/operations/${id}#sand-table`,
         entityId: id,
       });
@@ -420,6 +443,8 @@ export class ViewsService {
       needsYou.unshift({
         kind: 'resources',
         label: `Operation ${op.body.name} is waiting for resources: ${describeNeeds(resources.missing)}`,
+        title: `Resources · Operation ${op.body.name}`,
+        detail: `Assign what it waits for: ${brief(describeNeeds(resources.missing))}`,
         link: `/operations/${id}#resources`,
         entityId: id,
       });
@@ -582,6 +607,38 @@ function unitBudget(
   return budgetView(computeBudget > 0 ? computeBudget : null, spent, warnAt, enforced);
 }
 
+/** A reason cut to its first sentence (or `max` characters): the decision in one line. */
+export function brief(text: string | null | undefined, max = 160): string {
+  const t = (text ?? '').replace(/\s+/g, ' ').trim();
+  if (!t) return '';
+  const m = /^(.{12,}?[.!?])(?:\s|$)/.exec(t);
+  const first = m ? m[1]! : t;
+  return first.length > max ? `${first.slice(0, max - 1).trimEnd()}…` : first;
+}
+
+const KIND_WORD: Record<string, string> = {
+  work: 'Task',
+  fix: 'Fix',
+  check: 'Check',
+  deploy: 'Deploy',
+  recon: 'Recon',
+};
+
+/** Where an attention item points: mission goal and operation name, from what the caller has. */
+export interface AttentionContext {
+  unitName: string;
+  missions: { id: string; operationId: string | null }[];
+  /** Operation id → name. */
+  operations: Map<string, string>;
+}
+
+/** "Deploy #111 · Logistics · Operation Main List". */
+function taskHeading(t: TaskView, ctx: AttentionContext): string {
+  const m = t.missionId ? ctx.missions.find((x) => x.id === t.missionId) : null;
+  const op = m?.operationId ? ctx.operations.get(m.operationId) : null;
+  return `${KIND_WORD[t.kind] ?? 'Task'} #${t.number} · ${ctx.unitName}${op ? ` · Operation ${op}` : ''}`;
+}
+
 function budgetAttention(
   label: string,
   link: string,
@@ -589,13 +646,16 @@ function budgetAttention(
   b: BudgetView,
 ): AttentionItem[] {
   if (b.state !== 'warning' && b.state !== 'capped') return [];
+  const detail =
+    b.state === 'capped'
+      ? `${label} is at its compute budget cap (${b.spent} of ${b.cap} units): work is held`
+      : `${label} has used ${b.spent} of ${b.cap} compute units`;
   return [
     {
       kind: 'budget',
-      label:
-        b.state === 'capped'
-          ? `${label} is at its compute budget cap (${b.spent} of ${b.cap} units): work is held`
-          : `${label} has used ${b.spent} of ${b.cap} compute units`,
+      label: detail,
+      title: `Budget · ${label}`,
+      detail,
       link,
       entityId,
     },
@@ -643,16 +703,20 @@ function unitAttention(
           !(i.kind === 'blocked-bot' && [...disputed].some((t) => i.link.endsWith(`/tasks/${t}`))),
       ),
       open,
+      u.body.name,
     ),
     ...budgetAttention(u.body.name, `/units/${u.entityId}`, u.entityId, budget),
-    ...referred.map((d): AttentionItem => ({
-      kind: 'dispute',
-      label: `Dispute to rule on: ${u.body.name} v ${
-        units.find((x) => x.entityId === d.body.againstUnitId)?.body.name ?? '?'
-      } — ${d.body.claim}`,
-      link: `/disputes#dispute-${d.entityId}`,
-      entityId: d.entityId,
-    })),
+    ...referred.map((d): AttentionItem => {
+      const against = units.find((x) => x.entityId === d.body.againstUnitId)?.body.name ?? '?';
+      return {
+        kind: 'dispute',
+        label: `Dispute to rule on: ${u.body.name} v ${against} — ${d.body.claim}`,
+        title: `Dispute · ${u.body.name} v ${against}`,
+        detail: `Rule on it: ${brief(d.body.claim)}`,
+        link: `/disputes#dispute-${d.entityId}`,
+        entityId: d.entityId,
+      };
+    }),
   ];
 }
 
@@ -663,12 +727,15 @@ function unitAttention(
 function withEscalations(
   items: AttentionItem[],
   open: RecordEvent<'escalation'>[],
+  unitName: string,
 ): AttentionItem[] {
   const escalated = new Set(open.map((e) => e.taskId).filter(Boolean));
   return [
     ...open.map((e): AttentionItem => ({
       kind: 'escalation',
       label: `Escalated to you: ${e.body.text}`,
+      title: `Escalated · ${unitName}`,
+      detail: brief(e.body.text),
       link: e.taskId
         ? taskLink(e.unitId!, e.botId, e.taskId)
         : e.botId
@@ -687,12 +754,20 @@ function attentionFor(
   bots: BotView[],
   tasks: TaskView[],
   backbriefs: BackbriefView[],
+  ctx: AttentionContext,
 ): AttentionItem[] {
   const items: AttentionItem[] = [];
+  const opOf = (missionId: string | null) => {
+    const m = missionId ? ctx.missions.find((x) => x.id === missionId) : null;
+    return m?.operationId ? ctx.operations.get(m.operationId) : null;
+  };
   for (const bb of backbriefs) {
+    const op = opOf(bb.missionId);
     items.push({
       kind: 'awaiting-approval',
       label: `Backbrief awaiting approval: ${bb.mission.goal}`,
+      title: `Backbrief · ${ctx.unitName}${op ? ` · Operation ${op}` : ''}`,
+      detail: `Approve the plan: ${brief(bb.mission.goal)}`,
       link: `/approvals#backbrief-${bb.id}`,
       entityId: bb.id,
     });
@@ -703,6 +778,8 @@ function attentionFor(
     items.push({
       kind: 'blocked-bot',
       label: `${b?.callsign ?? 'Unassigned'} blocked on #${t.number}: ${t.statusReason ?? 'no reason given'}`,
+      title: taskHeading(t, ctx),
+      detail: `Blocked: ${brief(t.statusReason) || 'no reason given'}`,
       ...(t.statusAction ? { next: t.statusAction } : {}),
       link: taskLink(unitId, t.botId, t.id),
       entityId: t.id,
@@ -712,6 +789,8 @@ function attentionFor(
     items.push({
       kind: 'blocked-bot',
       label: `${b.callsign} is blocked`,
+      title: `${b.callsign} · ${ctx.unitName}`,
+      detail: 'Blocked with no task in hand',
       link: botLink(unitId, b.id),
       entityId: b.id,
     });
@@ -720,6 +799,8 @@ function attentionFor(
     items.push({
       kind: 'failed-task',
       label: `Task #${t.number} failed: ${t.statusReason ?? t.title}`,
+      title: taskHeading(t, ctx),
+      detail: `Failed: ${brief(t.statusReason) || brief(t.title)}`,
       ...(t.statusAction ? { next: t.statusAction } : {}),
       link: taskLink(unitId, t.botId, t.id),
       entityId: t.id,
@@ -736,6 +817,12 @@ function attentionFor(
         : deploy
           ? `Production deploy awaiting approval: #${t.number} ${t.title}`
           : `Task #${t.number} awaiting approval`,
+      title: taskHeading(t, ctx),
+      detail: permission
+        ? `${bot} asks permission: ${brief(permission.action)}`
+        : deploy
+          ? `Approve the production deploy: ${brief(t.title)}`
+          : 'Awaiting your approval',
       link: taskLink(unitId, t.botId, t.id),
       entityId: t.id,
       ...(permission ? { action: 'decide-permission' as const, permission } : {}),

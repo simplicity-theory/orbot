@@ -108,7 +108,10 @@
               @for (a of v.attention; track a.entityId + a.kind) {
                 @if (a.kind !== 'awaiting-approval' || !a.link.startsWith('/approvals')) {
                   <li>
-                    <a [routerLink]="a.link | url">{{ a.label }}</a>
+                    <a [routerLink]="a.link | url">{{ a.title }}</a>
+                    @if (a.detail) {
+                      <span class="meta">{{ a.detail }}</span>
+                    }
                   </li>
                 }
               }

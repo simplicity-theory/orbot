@@ -135,7 +135,12 @@ export interface AttentionItem {
   permission?: TaskPermission;
   /** For escalations: the chain to acknowledge. */
   chainId?: string;
+  /** One line with everything, for the record and for tests. */
   label: string;
+  /** Short heading: what and where, e.g. "Deploy #111 · Logistics · Operation Main List". */
+  title: string;
+  /** The decision in a sentence: why it waits, cut to its first sentence. */
+  detail?: string;
   /** What the Commander can do about it (a held or failed task's `statusAction`). */
   next?: string;
   /** App route that resolves it, e.g. `/units/<id>/bots/<id>`. */
