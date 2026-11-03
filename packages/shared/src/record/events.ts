@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { Id } from '../domain/entities.js';
+import { Id, WorkspaceRestart } from '../domain/entities.js';
 import { TaskStatus } from '../status/status.js';
 import { ChatAction, MessageKind } from '../chat/chat.js';
 
@@ -18,7 +18,13 @@ export type SitrepLevel = z.infer<typeof SitrepLevel>;
 export const RecordEventBodies = {
   'task.assigned': z.object({ taskNumber: z.number().int(), title: z.string() }),
   'task.status': z.object({ from: TaskStatus, to: TaskStatus, reason: z.string().nullable() }),
-  'workspace.prepared': z.object({ path: z.string(), branch: z.string(), baseCommit: z.string() }),
+  'workspace.prepared': z.object({
+    path: z.string(),
+    branch: z.string(),
+    baseCommit: z.string(),
+    /** Set when the branch had to be restarted from the integrated work (a merge conflict). */
+    restarted: WorkspaceRestart.nullable().default(null),
+  }),
   'bot.step': z.object({ action: z.string(), detail: z.string(), outcome: z.string().nullable() }),
   'diary.entry': z.object({ category: DiaryCategory, text: z.string() }),
   sitrep: z.object({ level: SitrepLevel, text: z.string(), status: TaskStatus.nullable() }),

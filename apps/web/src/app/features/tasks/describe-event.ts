@@ -54,9 +54,11 @@ export function describeEvent(e: RecordEvent): EventSummary {
     case 'workspace.prepared':
       return {
         icon: 'git-branch',
-        label: 'Workspace',
-        text: `Branch ${s('branch')} from ${s('baseCommit').slice(0, 8)}`,
-        tone: 'neutral',
+        label: b['restarted'] ? 'Branch restarted' : 'Workspace',
+        text: b['restarted']
+          ? `${s('branch')} restarted from ${s('baseCommit').slice(0, 8)}: merging conflicted (${((b['restarted'] as { conflicts: string[] }).conflicts ?? []).join(', ') || 'in the tree'}); earlier commits kept on ${(b['restarted'] as { kept: string }).kept}`
+          : `Branch ${s('branch')} from ${s('baseCommit').slice(0, 8)}`,
+        tone: b['restarted'] ? 'warning' : 'neutral',
       };
     case 'bot.step':
       return {

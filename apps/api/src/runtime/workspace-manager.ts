@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Inject, Injectable } from '@nestjs/common';
-import type { SupplyBody, TaskBody, Workspace } from '@orbot/shared';
+import type { SupplyBody, TaskBody, Workspace, WorkspaceRestart } from '@orbot/shared';
 import { APP_CONFIG, type AppConfig } from '../config/config.js';
 import { git } from '../common/git.js';
 
@@ -48,15 +48,62 @@ export class WorkspaceManager {
       await mkdir(tasksDir, { recursive: true });
       const path = join(tasksDir, `task-${task.number}`);
       const branch = this.branchFor(task);
+      let restarted: WorkspaceRestart | null = null;
       if (!existsSync(path)) {
         await git(repo.localPath, ['worktree', 'add', '--quiet', '-b', branch, path, base]);
       } else if (task.baseRef) {
         // Picking the task up again: bring in what was integrated since (e.g. an upstream fix).
-        await git(path, ['merge', '--quiet', '--no-edit', base]);
+        restarted = await this.bringIn(path, branch, base);
       }
       const baseCommit = await git(repo.localPath, ['rev-parse', base]);
-      return { path, branch, repoSupplyId: repoId, baseCommit };
+      return { path, branch, repoSupplyId: repoId, baseCommit, restarted };
     });
+  }
+
+  /**
+   * Merge `base` into the task's branch. When that conflicts (the work came back changed in
+   * the same places the task had touched), the task cannot go on from a half-merged tree: its
+   * commits, and anything left uncommitted, are kept on a `-kept-` branch, and the task branch
+   * restarts from `base`. Nothing is lost; the bot is told where its earlier work is.
+   */
+  private async bringIn(
+    path: string,
+    branch: string,
+    base: string,
+  ): Promise<WorkspaceRestart | null> {
+    // A merge left half done by an earlier attempt (the process stopped mid-way).
+    const midMerge = await git(path, ['rev-parse', '-q', '--verify', 'MERGE_HEAD']).then(
+      () => true,
+      () => false,
+    );
+    if (midMerge) await git(path, ['merge', '--abort']);
+    try {
+      await git(path, ['merge', '--quiet', '--no-edit', base]);
+      return null;
+    } catch {
+      const conflicts = (
+        await git(path, ['diff', '--name-only', '--diff-filter=U']).catch(() => '')
+      )
+        .split('\n')
+        .map((f) => f.trim())
+        .filter(Boolean);
+      await git(path, ['merge', '--abort']).catch(() => undefined);
+      // Whatever the bot had not committed goes with the kept commits, never away.
+      if ((await git(path, ['status', '--porcelain'])).trim()) {
+        await git(path, ['add', '--all']);
+        await git(path, [
+          'commit',
+          '--quiet',
+          '-m',
+          'Work left uncommitted before the branch was restarted',
+        ]);
+      }
+      const from = await git(path, ['rev-parse', 'HEAD']);
+      const kept = `${branch}-kept-${from.slice(0, 8)}`;
+      await git(path, ['branch', '--force', kept, from]);
+      await git(path, ['reset', '--hard', '--quiet', base]);
+      return { from, kept, conflicts };
+    }
   }
 
   /** Create an operation's integration branch from the default branch (idempotent). */

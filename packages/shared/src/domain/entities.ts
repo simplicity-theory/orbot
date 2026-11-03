@@ -298,11 +298,26 @@ export const Budget = z.object({
 });
 export type Budget = z.infer<typeof Budget>;
 
+/**
+ * The task's branch was restarted from the integrated work because merging it into the branch's
+ * earlier commits conflicted. Those commits are kept on `kept` (nothing is lost).
+ */
+export const WorkspaceRestart = z.object({
+  /** The branch's head before the restart. */
+  from: z.string().min(1),
+  /** The branch that keeps it. */
+  kept: z.string().min(1),
+  /** The files that conflicted. */
+  conflicts: z.array(z.string()),
+});
+export type WorkspaceRestart = z.infer<typeof WorkspaceRestart>;
+
 export const Workspace = z.object({
   path: z.string().min(1),
   branch: z.string().min(1),
   repoSupplyId: Id,
   baseCommit: z.string().min(1),
+  restarted: WorkspaceRestart.nullable().default(null),
 });
 export type Workspace = z.infer<typeof Workspace>;
 

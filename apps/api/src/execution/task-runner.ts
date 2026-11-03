@@ -330,10 +330,27 @@ export class TaskRunner {
       await this.record.transaction(async (w) => {
         await w.event(
           'workspace.prepared',
-          { path: workspace.path, branch: workspace.branch, baseCommit: workspace.baseCommit },
+          {
+            path: workspace.path,
+            branch: workspace.branch,
+            baseCommit: workspace.baseCommit,
+            restarted: workspace.restarted,
+          },
           refs,
           botActor,
         );
+        if (workspace.restarted) {
+          await w.event(
+            'sitrep',
+            {
+              level: 'unit',
+              status: null,
+              text: `Task #${t.number}: the integrated work could not be merged into ${workspace.branch} (conflicts in ${workspace.restarted.conflicts.join(', ') || 'the tree'}), so the branch restarts from it; the earlier commits are kept on ${workspace.restarted.kept}.`,
+            },
+            refs,
+            botActor,
+          );
+        }
         await w.revise('task', taskId, (b) => ({ ...b, workspace }), {
           actor: botActor,
           reason: 'Workspace prepared',
