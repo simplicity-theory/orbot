@@ -59,6 +59,8 @@ export class TaskPage {
   protected readonly view = httpResource<TaskDetailView>(() => apiUrl.task(this.taskId()));
   protected readonly full = fullDate;
   protected readonly missionStatus = missionStatus;
+  /** Statuses whose reason is worth a line in a list. */
+  protected readonly stopped = (s: string) => ['blocked', 'failed', 'stood-down'].includes(s);
 
   /** Report Markdown, with headings demoted under the page's own. */
   protected md(markdown: string): string {
@@ -110,9 +112,20 @@ export class TaskPage {
         return t.permission?.status === 'pending'
           ? 'Asks your permission'
           : 'Waiting for your approval';
+      case 'stood-down':
+        return 'Stood down';
       default:
         return null;
     }
+  });
+  /** What to do about it: the task's own next step, else the usual one for a stood-down task. */
+  protected readonly next = computed(() => {
+    const t = this.view.value()?.task;
+    if (!t) return null;
+    if (t.statusAction) return t.statusAction;
+    return t.status === 'stood-down'
+      ? 'Resume the task when it should go on; the bot carries on from its handover. If its mission was aborted or started over, leave it: the work is on record.'
+      : null;
   });
   /** The bot's handover, parsed, for the open problems and next steps it reports. */
   protected readonly note = computed(() => {

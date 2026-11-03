@@ -212,6 +212,9 @@ import { SandTable } from './sand-table';
                       </a>
                       <span class="meta">{{ t.kind }}</span>
                       <orb-status [status]="t.status" />
+                      @if (t.statusReason && stopped(t.status)) {
+                        <span class="meta why">{{ t.statusReason }}</span>
+                      }
                     </li>
                   } @empty {
                     <li class="meta">
@@ -350,6 +353,10 @@ import { SandTable } from './sand-table';
         min-height: var(--row-height-dense);
         border-top: var(--border-width) solid var(--color-border);
       }
+      .why {
+        grid-column: 1 / -1;
+        padding-bottom: var(--space-2);
+      }
     }
     .deployed {
       color: var(--tone-success);
@@ -398,6 +405,8 @@ import { SandTable } from './sand-table';
 })
 export class OperationPage {
   protected readonly missionStatus = missionStatus;
+  /** Statuses whose reason is worth a line in a list. */
+  protected readonly stopped = (s: string) => ['blocked', 'failed', 'stood-down'].includes(s);
   /** Missions withdrawn when the operation was started over or moved; their work stays on record. */
   protected readonly withdrawn = computed(
     () => this.view.value()?.operation.withdrawnMissionIds.length ?? 0,

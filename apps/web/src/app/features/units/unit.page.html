@@ -87,6 +87,9 @@
                     ><span class="mono">#{{ t.number }}</span> {{ t.title }}</a
                   >
                   <orb-status [status]="t.status" />
+                  @if (t.statusReason && stopped(t.status)) {
+                    <span class="meta why">{{ t.statusReason }}</span>
+                  }
                 </li>
               } @empty {
                 <li class="meta">No tasks yet.</li>
@@ -261,6 +264,9 @@
                     <span class="mono">#{{ t.number }}</span> {{ t.title }}
                   </a>
                   <orb-status [status]="t.status" />
+                  @if (t.statusReason && stopped(t.status)) {
+                    <span class="meta why">{{ t.statusReason }}</span>
+                  }
                 </li>
               } @empty {
                 <li class="meta">

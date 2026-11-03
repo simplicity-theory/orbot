@@ -561,7 +561,7 @@ export class OverseerService implements OnApplicationBootstrap, OnModuleDestroy 
       done: `${who} completed task #${task.body.number}: ${task.body.title}.`,
       failed: `${who} failed task #${task.body.number}: ${e.body.reason ?? 'no reason given'}. ${e.body.action ?? 'Needs a decision.'}`,
       blocked: `${who} blocked on task #${task.body.number}: ${e.body.reason ?? 'no reason given'}.${e.body.action ? ` ${e.body.action}` : ''}`,
-      'stood-down': `${who} stood down from task #${task.body.number} with a handover; it can be picked up again.`,
+      'stood-down': `${who} stood down from task #${task.body.number}${e.body.reason ? `: ${e.body.reason}` : ''}. It has a handover and can be picked up again.`,
     };
     await this.record.transaction(async (w) => {
       await this.sitrep(

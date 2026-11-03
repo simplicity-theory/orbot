@@ -155,6 +155,9 @@ import { AddBotDialog, type AddBotData } from '../units/add-bot.dialog';
               }
               <orb-status [status]="t.status" />
             </div>
+            @if (t.statusReason && stopped(t.status)) {
+              <p class="meta">{{ t.statusReason }}</p>
+            }
             <ng-container *ngTemplateOutlet="reassignControl; context: { $implicit: t }" />
           } @empty {
             <p class="meta">Queue is empty.</p>
@@ -168,6 +171,9 @@ import { AddBotDialog, type AddBotData } from '../units/add-bot.dialog';
               <a [routerLink]="taskLink(t)">#{{ t.number }} {{ t.title }}</a>
               <orb-status [status]="t.status" />
             </div>
+            @if (t.statusReason && stopped(t.status)) {
+              <p class="meta">{{ t.statusReason }}</p>
+            }
           } @empty {
             <p class="meta">No finished tasks yet.</p>
           }
@@ -269,6 +275,8 @@ import { AddBotDialog, type AddBotData } from '../units/add-bot.dialog';
   `,
 })
 export class BotPage {
+  /** Statuses whose reason is worth a line in a list. */
+  protected readonly stopped = (s: string) => ['blocked', 'failed', 'stood-down'].includes(s);
   protected readonly auth = inject(Auth);
   protected readonly efforts = inject(MainEfforts);
   readonly unitId = input.required<string>();

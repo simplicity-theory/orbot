@@ -169,6 +169,8 @@ export class UnitPage {
   }
 
   /** Missions share the app's one status vocabulary. */
+  /** Statuses whose reason is worth a line in a list. */
+  protected readonly stopped = (s: string) => ['blocked', 'failed', 'stood-down'].includes(s);
   protected missionStatus(s: MissionStatus): Status {
     return s === 'planning' || s === 'waiting' ? 'queued' : s === 'withdrawn' ? 'stood-down' : s;
   }

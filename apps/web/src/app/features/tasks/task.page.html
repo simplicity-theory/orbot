@@ -48,8 +48,8 @@
         </h2>
         <div class="decision__what" role="status">
           <p class="decision__reason">{{ t.statusReason ?? 'No reason given.' }}</p>
-          @if (t.statusAction) {
-            <p class="decision__next"><strong>What to do:</strong> {{ t.statusAction }}</p>
+          @if (next(); as n) {
+            <p class="decision__next"><strong>What to do:</strong> {{ n }}</p>
           }
         </div>
         @if (t.permission; as p) {
@@ -182,6 +182,9 @@
                     >
                   }
                   <orb-status [status]="s.status" />
+                  @if (s.id !== t.id && s.statusReason && stopped(s.status)) {
+                    <span class="meta chain__why">{{ s.statusReason }}</span>
+                  }
                 </li>
               }
             </ul>
