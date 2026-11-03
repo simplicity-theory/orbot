@@ -158,7 +158,8 @@ export class AppModule {
           inject: [APP_CONFIG],
           useFactory: (c: AppConfig) => {
             const r = new RuntimeRegistry();
-            r.register(new SimulatedRuntime());
+            // Scripted bots: development, demos and tests. Not in production unless asked for.
+            if (c.simulated) r.register(new SimulatedRuntime());
             // The Claude runtime is available when an API key is configured.
             if (c.anthropicApiKey) {
               r.register(

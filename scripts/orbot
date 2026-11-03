@@ -3,7 +3,7 @@
 # Lives in the checkout it operates on (/var/www/orbot by convention); link it into PATH:
 #   sudo ln -sf /var/www/orbot/scripts/orbot /usr/local/bin/orbot
 #
-#   orbot setup [--origin URL] [--port N] [--runtime simulated|claude|claude-code] [--claude-home DIR]
+#   orbot setup [--origin URL] [--port N] [--runtime claude-code|claude|simulated] [--claude-home DIR]
 #   orbot up            build the image and start (or restart) everything
 #   orbot update        back up, pull, rebuild, restart, wait for health
 #   orbot status        containers, health, the commit running and the commit checked out
@@ -78,7 +78,7 @@ cmd_setup() {
 
   port="${port:-3000}"
   origin="${origin:-http://localhost:$port}"
-  runtime="${runtime:-simulated}"
+  runtime="${runtime:-claude-code}"
   case "$runtime" in simulated|claude|claude-code) ;; *) die "--runtime must be simulated, claude or claude-code" ;; esac
   claude_home="${claude_home:-$HOME/.claude}"
   local domain=""
@@ -170,7 +170,7 @@ cmd_update() {
   else
     echo "  $behind new commit(s) on $branch:"
     git --no-pager log --oneline "HEAD..origin/$branch" | sed 's/^/    /'
-    if [[ -n "$(git status --porcelain)" ]]; then
+    if [[ -n "$(git status --porcelain --untracked-files=no)" ]]; then
       die "The checkout has local changes; commit or discard them first (git status)."
     fi
   fi

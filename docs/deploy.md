@@ -17,6 +17,8 @@ volume) and on the servers you connect in the Supply Depot.
   else could reach, because the session cookie would travel in clear.
 - For real bots: an Anthropic API key (`claude` runtime), or your own Claude plan signed in
   with Claude Code on the same machine (`claude-code` runtime; one Commander's own use only).
+  The simulated runtime (scripted bots, free, for trying the command system) is not installed
+  in production unless you choose it (`--runtime simulated`, or `ORBOT_SIMULATED=on`).
 
 ## Install
 
@@ -44,12 +46,12 @@ orbot setup --port 3001 --runtime claude-code
 orbot setup --origin https://orbot.example.com --runtime claude
 ```
 
-| Option          | Default                 | Meaning                                                                                                           |
-| --------------- | ----------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `--origin URL`  | `http://localhost:PORT` | `ORBOT_WEB_ORIGIN`, where ORBOT is reached. `https://…` also sets `ORBOT_DOMAIN`, and `orbot up` then runs Caddy. |
-| `--port N`      | `3000`                  | The port on this machine (loopback only; Caddy or your own proxy faces the internet).                             |
-| `--runtime …`   | `simulated`             | `simulated` (scripted bots, free), `claude` (needs `ANTHROPIC_API_KEY` in `.env`), `claude-code`.                 |
-| `--claude-home` | `~/.claude`             | For `claude-code`: the `claude` login to mount into the container.                                                |
+| Option          | Default                 | Meaning                                                                                                                                                           |
+| --------------- | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--origin URL`  | `http://localhost:PORT` | `ORBOT_WEB_ORIGIN`, where ORBOT is reached. `https://…` also sets `ORBOT_DOMAIN`, and `orbot up` then runs Caddy.                                                 |
+| `--port N`      | `3000`                  | The port on this machine (loopback only; Caddy or your own proxy faces the internet).                                                                             |
+| `--runtime …`   | `claude-code`           | `claude-code` (your Claude plan), `claude` (needs `ANTHROPIC_API_KEY` in `.env`), or `simulated` (scripted bots, free; installed in production only when chosen). |
+| `--claude-home` | `~/.claude`             | For `claude-code`: the `claude` login to mount into the container.                                                                                                |
 
 For `claude-code`, run `claude` once as yourself and log in before `orbot up`. The container's
 user (uid 1001) needs to read and write that folder; `orbot setup` grants it with an ACL

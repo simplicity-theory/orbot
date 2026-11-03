@@ -53,6 +53,11 @@ const Env = z.object({
   /** Session cookie `Secure` flag: auto = on when ORBOT_WEB_ORIGIN is https. */
   ORBOT_COOKIE_SECURE: z.enum(['auto', 'on', 'off']).default('auto'),
   ORBOT_RUNTIME: z.string().default('simulated'),
+  /**
+   * The simulated runtime (scripted bots: development, demos, tests). `auto` installs it in
+   * development, and in production only when ORBOT_RUNTIME=simulated itself.
+   */
+  ORBOT_SIMULATED: z.enum(['on', 'off', 'auto']).default('auto'),
   ORBOT_SIM_SPEED: z.coerce.number().min(0).default(1),
   ORBOT_WORKSPACES_DIR: z.string().default('./workspaces'),
   ORBOT_CLAUDE_MODEL: z.string().default('claude-opus-5-5'),
@@ -108,6 +113,8 @@ export interface AppConfig {
   cookieSecure: boolean;
   /** NODE_ENV=production: stricter checks, no demo defaults. */
   production: boolean;
+  /** Whether the simulated runtime is installed (scripted bots). */
+  simulated: boolean;
   defaultRuntime: string;
   simSpeed: number;
   workspacesDir: string;
@@ -170,6 +177,9 @@ export function loadConfig(overrides: Record<string, string | undefined> = {}): 
         ? e.ORBOT_WEB_ORIGIN.startsWith('https://')
         : e.ORBOT_COOKIE_SECURE === 'on',
     production,
+    simulated:
+      e.ORBOT_SIMULATED === 'on' ||
+      (e.ORBOT_SIMULATED === 'auto' && (!production || e.ORBOT_RUNTIME === 'simulated')),
     defaultRuntime: e.ORBOT_RUNTIME,
     simSpeed: e.ORBOT_SIM_SPEED,
     workspacesDir: resolve(REPO_ROOT, e.ORBOT_WORKSPACES_DIR),

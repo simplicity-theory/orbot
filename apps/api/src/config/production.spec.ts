@@ -11,6 +11,17 @@ const base = {
 };
 
 describe('production configuration', () => {
+  it('installs the simulated runtime in development, and in production only when chosen', () => {
+    expect(loadConfig({ ...base }).simulated).toBe(true);
+    const prod = { ...base, NODE_ENV: 'production', ORBOT_WEB_ORIGIN: 'https://orbot.example.com' };
+    expect(loadConfig({ ...prod, ORBOT_RUNTIME: 'claude-code' }).simulated).toBe(false);
+    expect(loadConfig({ ...prod, ORBOT_RUNTIME: 'simulated' }).simulated).toBe(true);
+    expect(loadConfig({ ...prod, ORBOT_RUNTIME: 'claude', ORBOT_SIMULATED: 'on' }).simulated).toBe(
+      true,
+    );
+    expect(loadConfig({ ...base, ORBOT_SIMULATED: 'off' }).simulated).toBe(false);
+  });
+
   it('refuses placeholder passwords and a plain-http origin in production, naming the setting', () => {
     expect(() =>
       loadConfig({

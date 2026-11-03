@@ -15,6 +15,7 @@ import { settled } from '../testing/settle.js';
 import { ChatService } from '../chat/chat.service.js';
 import { TaskRunner } from '../execution/task-runner.js';
 import { RecordService } from '../record/record.service.js';
+import { RuntimeRegistry } from '../runtime/runtime.registry.js';
 import { SupplyService } from '../supply/supply.service.js';
 
 const SEED = { actor: 'system:seed', reason: 'Demo force seeded' };
@@ -233,6 +234,11 @@ export async function seedDemoForce(
   if (existing.length) return { seeded: false, units: existing.length, bots: 0, tasks: 0 };
 
   const config = app.get<AppConfig>(APP_CONFIG);
+  if (opts.demo && !app.get(RuntimeRegistry).kinds().includes('simulated')) {
+    throw new Error(
+      'The demo force plays scripted scenarios and needs the simulated runtime, which is not installed here (production). Seed the force instead (ORBOT_SEED=force), or set ORBOT_SIMULATED=on.',
+    );
+  }
   const force = app.get(ForceService);
   const work = app.get(WorkService);
   const supply = app.get(SupplyService);
