@@ -24,6 +24,16 @@ services:
       timeout: 3s
       retries: 30
 
+  # One shot, as root: the workspaces volume belongs to whoever the API runs as (an install
+  # from before D123 left it to uid 1001; a changed ORBOT_UID would otherwise lock the bots out).
+  init:
+    image: orbot:latest
+    user: '0:0'
+    entrypoint: ['sh', '-c', 'chown -R "${ORBOT_UID:-1001}:${ORBOT_GID:-1001}" /app/workspaces']
+    restart: 'no'
+    volumes:
+      - orbot-prod-workspaces:/app/workspaces
+
   api:
     build:
       context: .
@@ -58,6 +68,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      init:
+        condition: service_completed_successfully
     healthcheck:
       test: ['CMD', 'curl', '-fsS', 'http://localhost:3000/api/health']
       interval: 30s
