@@ -1,0 +1,16 @@
+node_modules
+**/node_modules
+**/dist
+**/.angular
+**/coverage
+**/test-results
+**/playwright-report
+.env
+.env.*
+!.env.example
+workspaces
+e2e
+.git
+*.log
+docs
+BUILD_PROMPT.md

@@ -192,7 +192,20 @@ export interface SeedResult {
 }
 
 /** Creates the demo force if the record has no units yet. Idempotent. */
-export async function seedDemoForce(app: INestApplication): Promise<SeedResult> {
+export interface SeedOptions {
+  /**
+   * The demo force: demo repositories, a credential, a production environment, an operation
+   * in flight with tasks played out, and a chat. Off, only the force itself is created: the
+   * four units with their Overseers, bots and Field Manuals, ready for the Commander's own
+   * repositories (production).
+   */
+  demo: boolean;
+}
+
+export async function seedDemoForce(
+  app: INestApplication,
+  opts: SeedOptions = { demo: true },
+): Promise<SeedResult> {
   const record = app.get(RecordService);
   const existing = await record.listActive('unit');
   if (existing.length) return { seeded: false, units: existing.length, bots: 0, tasks: 0 };
@@ -205,31 +218,12 @@ export async function seedDemoForce(app: INestApplication): Promise<SeedResult> 
   const overseer = app.get(OverseerService);
   const coldStart = app.get(ColdStartService);
 
-  // Supply: a small demo repository and a credential for it, issued to Engineers and Inspection.
-  const sourcePath = await createDemoRepo(join(config.workspacesDir, 'source', 'demo-app'));
-  const repo = await supply.connectRepository(
-    { name: 'demo-app', location: sourcePath },
-    { ...SEED, reason: 'Demo repository connected' },
-  );
-  const tokenName = 'demo-app-push-token';
-  const token = await supply.storeCredential(
-    { name: tokenName, value: `demo-${randomBytes(18).toString('base64url')}` },
-    { ...SEED, reason: 'Demo credential stored' },
-  );
-
-  // In the depot but not issued to anyone yet: the payments service and production.
-  const paymentsPath = await createDemoRepo(
-    join(config.workspacesDir, 'source', 'payments-service'),
-    'payments-service',
-  );
-  await supply.connectRepository(
-    { name: 'payments-service', location: paymentsPath },
-    { ...SEED, reason: 'Payments repository connected' },
-  );
-  await supply.connectEnvironment(
-    { name: 'production', tier: 'production' },
-    { ...SEED, reason: 'Production environment connected' },
-  );
+  // Supply (demo only): a small demo repository and a credential for it, issued to Engineers
+  // and Inspection.
+  const demo = opts.demo ? await seedDemoSupply(supply, config) : null;
+  const repo = demo?.repo ?? null;
+  const token = demo?.token ?? null;
+  const tokenName = demo?.tokenName ?? '';
 
   const unitIds: Record<string, string> = {};
   const botIds: Record<string, string[]> = {};
@@ -238,11 +232,14 @@ export async function seedDemoForce(app: INestApplication): Promise<SeedResult> 
     const unitId = randomUUID();
     const overseerId = randomUUID();
     unitIds[u.body.slug] = unitId;
-    const supplied = ['engineers', 'inspection'].includes(u.body.slug)
-      ? [repo.entityId, token.entityId]
-      : u.body.slug === 'guard'
-        ? [repo.entityId]
-        : [];
+    const supplied =
+      !repo || !token
+        ? []
+        : ['engineers', 'inspection'].includes(u.body.slug)
+          ? [repo.entityId, token.entityId]
+          : u.body.slug === 'guard'
+            ? [repo.entityId]
+            : [];
     await force.createUnit(
       { ...u.body, overseerBotId: overseerId, supplyIds: supplied, computeBudget: 100 },
       SEED,
@@ -313,6 +310,8 @@ export async function seedDemoForce(app: INestApplication): Promise<SeedResult> 
       await fieldManual.rerender(w, unitId, overseerCtx(u.fieldManual.add.reason));
     });
   }
+
+  if (!repo) return { seeded: true, units: UNITS.length, bots: botCount, tasks: 0 };
 
   // One operation in flight. Its missions go to the units' Overseers, who draft backbriefs.
   const op = await work.createOperation(
@@ -452,4 +451,33 @@ async function createDemoRepo(path: string, name = 'demo-app'): Promise<string> 
   await git(path, ['add', '-A']);
   await git(path, ['commit', '--quiet', '-m', 'Initial commit']);
   return path;
+}
+
+/** The demo depot: two small repositories, a push token and a production environment. */
+async function seedDemoSupply(supply: SupplyService, config: AppConfig) {
+  const sourcePath = await createDemoRepo(join(config.workspacesDir, 'source', 'demo-app'));
+  const repo = await supply.connectRepository(
+    { name: 'demo-app', location: sourcePath },
+    { ...SEED, reason: 'Demo repository connected' },
+  );
+  const tokenName = 'demo-app-push-token';
+  const token = await supply.storeCredential(
+    { name: tokenName, value: `demo-${randomBytes(18).toString('base64url')}` },
+    { ...SEED, reason: 'Demo credential stored' },
+  );
+
+  // In the depot but not issued to anyone yet: the payments service and production.
+  const paymentsPath = await createDemoRepo(
+    join(config.workspacesDir, 'source', 'payments-service'),
+    'payments-service',
+  );
+  await supply.connectRepository(
+    { name: 'payments-service', location: paymentsPath },
+    { ...SEED, reason: 'Payments repository connected' },
+  );
+  await supply.connectEnvironment(
+    { name: 'production', tier: 'production', site: false },
+    { ...SEED, reason: 'Production environment connected' },
+  );
+  return { repo, token, tokenName };
 }

@@ -5,7 +5,10 @@ import { config as loadDotenv } from 'dotenv';
 import { z } from 'zod';
 import { DEFAULT_PRODUCT_NAME } from '@orbot/shared';
 
-export const REPO_ROOT = findRepoRoot(dirname(fileURLToPath(import.meta.url)));
+/** The repository root: `ORBOT_ROOT` when set (containers), else the nearest docker-compose.yml. */
+export const REPO_ROOT = process.env['ORBOT_ROOT']
+  ? resolve(process.env['ORBOT_ROOT'])
+  : findRepoRoot(dirname(fileURLToPath(import.meta.url)));
 
 function findRepoRoot(start: string): string {
   let dir = start;
@@ -37,6 +40,18 @@ const Env = z.object({
   }),
   ORBOT_API_PORT: z.coerce.number().int().default(3000),
   ORBOT_WEB_ORIGIN: z.string().default('http://localhost:4200'),
+  /**
+   * The built web app to serve from the API (one origin, no CORS): a path to Angular's
+   * `browser` output. Empty in development, where `ng serve` proxies to the API.
+   */
+  ORBOT_WEB_DIST: z.string().default(''),
+  /** Behind a reverse proxy (Caddy, nginx): trust its X-Forwarded-* headers for IPs and scheme. */
+  ORBOT_TRUST_PROXY: z
+    .enum(['on', 'off'])
+    .default('off')
+    .transform((v) => v === 'on'),
+  /** Session cookie `Secure` flag: auto = on when ORBOT_WEB_ORIGIN is https. */
+  ORBOT_COOKIE_SECURE: z.enum(['auto', 'on', 'off']).default('auto'),
   ORBOT_RUNTIME: z.string().default('simulated'),
   ORBOT_SIM_SPEED: z.coerce.number().min(0).default(1),
   ORBOT_WORKSPACES_DIR: z.string().default('./workspaces'),
@@ -87,6 +102,12 @@ export interface AppConfig {
   sessionSecret: string;
   apiPort: number;
   webOrigin: string;
+  /** Absolute path of the web build to serve, or null (development). */
+  webDist: string | null;
+  trustProxy: boolean;
+  cookieSecure: boolean;
+  /** NODE_ENV=production: stricter checks, no demo defaults. */
+  production: boolean;
   defaultRuntime: string;
   simSpeed: number;
   workspacesDir: string;
@@ -116,6 +137,13 @@ export function loadConfig(overrides: Record<string, string | undefined> = {}): 
     throw new Error(`ORBOT configuration is invalid:\n${problems}`);
   }
   const e = parsed.data;
+  const production = (overrides['NODE_ENV'] ?? process.env['NODE_ENV']) === 'production';
+  const problems = production ? productionProblems(e) : [];
+  if (problems.length) {
+    throw new Error(
+      `ORBOT is not safe to run in production with this configuration:\n${problems.map((p) => `  - ${p}`).join('\n')}`,
+    );
+  }
   const base = { host: e.ORBOT_DB_HOST, port: e.ORBOT_DB_PORT, database: e.ORBOT_DB_NAME };
   return {
     productName: e.ORBOT_PRODUCT_NAME,
@@ -135,6 +163,13 @@ export function loadConfig(overrides: Record<string, string | undefined> = {}): 
     sessionSecret: e.ORBOT_SESSION_SECRET,
     apiPort: e.ORBOT_API_PORT,
     webOrigin: e.ORBOT_WEB_ORIGIN,
+    webDist: e.ORBOT_WEB_DIST ? resolve(REPO_ROOT, e.ORBOT_WEB_DIST) : null,
+    trustProxy: e.ORBOT_TRUST_PROXY,
+    cookieSecure:
+      e.ORBOT_COOKIE_SECURE === 'auto'
+        ? e.ORBOT_WEB_ORIGIN.startsWith('https://')
+        : e.ORBOT_COOKIE_SECURE === 'on',
+    production,
     defaultRuntime: e.ORBOT_RUNTIME,
     simSpeed: e.ORBOT_SIM_SPEED,
     workspacesDir: resolve(REPO_ROOT, e.ORBOT_WORKSPACES_DIR),
@@ -150,6 +185,37 @@ export function loadConfig(overrides: Record<string, string | undefined> = {}): 
     appsPollMs: e.ORBOT_APPS_POLL_SECONDS * 1000,
     logLevel: e.ORBOT_LOG_LEVEL,
   };
+}
+
+/**
+ * What must not reach production: the compose file's placeholder passwords, and a web origin
+ * served over plain http to anyone but localhost (the session cookie would travel in clear).
+ */
+export function productionProblems(e: z.infer<typeof Env>): string[] {
+  const out: string[] = [];
+  const placeholders: [string, string][] = [
+    ['ORBOT_DB_OWNER_PASSWORD', e.ORBOT_DB_OWNER_PASSWORD],
+    ['ORBOT_DB_APP_PASSWORD', e.ORBOT_DB_APP_PASSWORD],
+    ['ORBOT_DB_SECRETS_PASSWORD', e.ORBOT_DB_SECRETS_PASSWORD],
+  ];
+  for (const [name, value] of placeholders) {
+    if (value.startsWith('change-me')) {
+      out.push(`${name} is still the placeholder: set a real password (openssl rand -base64 24).`);
+    }
+  }
+  let origin: URL | null = null;
+  try {
+    origin = new URL(e.ORBOT_WEB_ORIGIN);
+  } catch {
+    out.push(`ORBOT_WEB_ORIGIN is not a URL: ${e.ORBOT_WEB_ORIGIN}`);
+  }
+  const local = origin && ['localhost', '127.0.0.1', '[::1]'].includes(origin.hostname);
+  if (origin && origin.protocol === 'http:' && !local) {
+    out.push(
+      `ORBOT_WEB_ORIGIN is plain http (${e.ORBOT_WEB_ORIGIN}): put ORBOT behind HTTPS (the tls profile in docker-compose.prod.yml) and use its https URL.`,
+    );
+  }
+  return out;
 }
 
 /** The config values that are themselves secrets; fed to the redactor at startup. */

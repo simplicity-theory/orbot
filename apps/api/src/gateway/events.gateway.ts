@@ -17,9 +17,10 @@ export const WS_RECORD_EVENT = 'record';
 
 /**
  * Live feed of committed record writes (status changes, sitreps, diary entries…).
- * Only signed-in clients may connect; every payload is redacted before emit.
+ * Only signed-in clients may connect; every payload is redacted before emit. CORS is set by
+ * the adapter in `bootstrap.ts` (the configured web origin only).
  */
-@WebSocketGateway({ path: '/api/ws', cors: { origin: true, credentials: true } })
+@WebSocketGateway({ path: '/api/ws' })
 export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnModuleDestroy {
   @WebSocketServer() server: Server;
   private sub: Subscription | undefined;

@@ -1,0 +1,80 @@
+# ORBOT in production: Postgres, the API with the web app built in, and (with --profile tls)
+# Caddy for automatic HTTPS. See docs/deploy.md.
+#   docker compose -f docker-compose.prod.yml up -d --build
+#   docker compose -f docker-compose.prod.yml --profile tls up -d --build
+name: orbot-prod
+
+services:
+  db:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: orbot_admin
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:?set POSTGRES_ADMIN_PASSWORD in .env}
+      POSTGRES_DB: postgres
+      ORBOT_DB_OWNER_PASSWORD: ${ORBOT_DB_OWNER_PASSWORD:?set ORBOT_DB_OWNER_PASSWORD in .env}
+      ORBOT_DB_APP_PASSWORD: ${ORBOT_DB_APP_PASSWORD:?set ORBOT_DB_APP_PASSWORD in .env}
+      ORBOT_DB_SECRETS_PASSWORD: ${ORBOT_DB_SECRETS_PASSWORD:?set ORBOT_DB_SECRETS_PASSWORD in .env}
+    volumes:
+      - orbot-prod-pg:/var/lib/postgresql
+      - ./docker/postgres-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U orbot_admin -d orbot']
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  api:
+    build: .
+    image: orbot:latest
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # Pinned here so a development .env copied over cannot point the container elsewhere.
+      NODE_ENV: production
+      ORBOT_ROOT: /app
+      ORBOT_WEB_DIST: /app/apps/web/dist/web/browser
+      ORBOT_WORKSPACES_DIR: /app/workspaces
+      ORBOT_DEPLOY_DIR: /app/deploy
+      ORBOT_DB_HOST: db
+      ORBOT_DB_PORT: 5432
+      ORBOT_API_PORT: 3000
+      ORBOT_TRUST_PROXY: 'on'
+      ORBOT_SEED: ${ORBOT_SEED:-force}
+    ports:
+      # Loopback only: the reverse proxy (Caddy below, or your own) faces the internet.
+      - '${ORBOT_BIND:-127.0.0.1}:${ORBOT_API_PORT:-3000}:3000'
+    volumes:
+      - orbot-prod-workspaces:/app/workspaces
+      # The claude-code runtime (your own Claude plan): the `claude` login from this machine.
+      - ${ORBOT_CLAUDE_HOME:-./.claude-login}:/home/orbot/.claude
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'curl', '-fsS', 'http://localhost:3000/api/health']
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
+
+  caddy:
+    image: caddy:2
+    profiles: ['tls']
+    restart: unless-stopped
+    environment:
+      ORBOT_DOMAIN: ${ORBOT_DOMAIN:-}
+    ports:
+      - '80:80'
+      - '443:443'
+      - '443:443/udp'
+    volumes:
+      - ./deploy/orbot/Caddyfile:/etc/caddy/Caddyfile:ro
+      - orbot-prod-caddy:/data
+    depends_on:
+      - api
+
+volumes:
+  orbot-prod-pg:
+  orbot-prod-workspaces:
+  orbot-prod-caddy:
