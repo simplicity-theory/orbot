@@ -118,6 +118,21 @@ const NEW_PROJECT =
 /** "Open a theatre called Ledger: a personal ledger", "New theatre Ledger on the todo repo". */
 const NEW_THEATRE =
   /^(?:(?:please|maybe|perhaps|possibly|let'?s)\s+)*(?:open|start|create|begin|new)\s+(?:a\s+)?(?:new\s+)?theatre(?:\s+(?:called|named))?\s*["“]?([A-Za-z0-9][A-Za-z0-9 ._-]{0,59}?)["”]?(?:\s+(?:on|for|with|using)\s+(?:the\s+)?(.+?)\s+repo(?:sitory)?)?\s*(?:[:,–—-]\s*(.+))?[.!]?$/i;
+/**
+ * "Run a campaign called Polish in theatre Todo: 1. add due dates 2. add priorities", steps
+ * separated by numbers, semicolons or lines. Matched against the whole message.
+ */
+const CAMPAIGN =
+  /^(?:(?:please|maybe|perhaps|possibly|let'?s)\s+)*(?:run|start|launch|plan|open|begin)\s+(?:a\s+)?(?:new\s+)?campaign(?:\s+(?:called|named))?\s*["“]?([A-Za-z0-9][A-Za-z0-9 ._-]{0,59}?)["”]?(?:\s+in\s+(?:the\s+)?theatre\s+["“]?([A-Za-z0-9][A-Za-z0-9 ._-]*?)["”]?)?\s*:\s*([\s\S]+)$/i;
+const CANCEL_CAMPAIGN =
+  /^(?:please\s+)?(?:cancel|call off|scrub|abandon|stop)\s+(?:the\s+)?campaign(?:\s+(.+?))?(?:\s*(?::|—|\bbecause\b)\s*(.+))?$/i;
+const RESUME_CAMPAIGN =
+  /^(?:please\s+)?(?:resume|continue|carry on with|go on with|restart)\s+(?:the\s+)?campaign(?:\s+(.+?))?$/i;
+const SKIP_STEP =
+  /^(?:please\s+)?skip\s+(?:the\s+|this\s+|that\s+)?(?:current\s+)?step(?:\s+(?:of|in)\s+(?:the\s+)?campaign(?:\s+(.+?))?)?$/i;
+/** "Put theatre Todo on GitHub as acme/todo using credential gh-token". */
+const GITHUB_THEATRE =
+  /^(?:please\s+)?put\s+(?:the\s+)?(?:theatre\s+)?(.+?)\s+on\s+github(?:\s+as\s+([\w.-]+)\/([\w.-]+))?(?:\s+(?:with|using)\s+(?:the\s+|my\s+)?(?:credential|token)\s+([\w.-]+))?$/i;
 const KIND_WORDS =
   /\b(repo|repository|repositories|server|environment|env|model|credential|token|key)\b/gi;
 const MAIN_EFFORT_CLEAR =
@@ -194,6 +209,47 @@ export class SimulatedInterpreter {
     };
     const answers: string[] = [];
     const kinds = new Set<MessageKind>();
+
+    // A campaign order spans sentences (its steps); it is read as one.
+    const campaign = !input.channelUnitId && CAMPAIGN.exec(stripEnd(input.message.trim()));
+    if (campaign) {
+      const hedged = HEDGE.test(campaign[0]!.slice(0, 40));
+      const theatreName = (campaign[2] ?? '').trim();
+      const th = theatreName
+        ? (input.theatres ?? []).find(
+            (t) => t.status === 'open' && t.name.toLowerCase() === theatreName.toLowerCase(),
+          )
+        : null;
+      if (theatreName && !th) {
+        out.unclear.push(`${input.message} — there is no open theatre called ${theatreName}.`);
+      } else {
+        const steps = campaign[3]!
+          .split(/\s*(?:;|\n|(?:^|\s)\d+[.)]\s*)\s*/)
+          .map((s) =>
+            s
+              .trim()
+              .replace(/^\d+[.)]\s*/, '')
+              .replace(/[.!]+$/, ''),
+          )
+          .filter(Boolean)
+          .map((s) => ({ name: null, intent: `${sentenceCase(s)}.` }));
+        if (!steps.length) {
+          out.unclear.push(`${input.message} — list the steps after the colon.`);
+        } else {
+          const action: ChatAction = {
+            kind: 'create-campaign',
+            unitId: null,
+            theatreId: th?.id ?? null,
+            name: campaign[1]!.trim(),
+            steps,
+          };
+          kinds.add(hedged ? 'musing' : 'order');
+          (hedged ? out.musings : out.actions).push(action);
+        }
+      }
+      out.kinds = [...kinds];
+      return out;
+    }
 
     for (const raw of input.message
       .split(/(?<=[.!?])\s+/)
@@ -283,6 +339,43 @@ export class SimulatedInterpreter {
       if (RESTART_QUEUES.test(sentence)) {
         kinds.add('order');
         out.actions.push({ kind: 'restart-queues', unitId: null });
+        continue;
+      }
+      const campaignCourse = this.campaignCourse(sentence, input);
+      if (campaignCourse) {
+        if ('unclear' in campaignCourse) out.unclear.push(`${raw} — ${campaignCourse.unclear}`);
+        else {
+          kinds.add(hedged ? 'musing' : 'order');
+          (hedged ? out.musings : out.actions).push(campaignCourse);
+        }
+        continue;
+      }
+      const github = !input.channelUnitId && GITHUB_THEATRE.exec(sentence);
+      if (github) {
+        const name = github[1]!.trim();
+        const open = (input.theatres ?? []).filter((t) => t.status === 'open');
+        const th =
+          open.find((t) => t.name.toLowerCase() === name.toLowerCase()) ??
+          (/^(it|this|the project|the repo(sitory)?)$/i.test(name) && open.length === 1
+            ? open[0]
+            : null);
+        if (!th) {
+          out.unclear.push(`${raw} — there is no open theatre called ${name}.`);
+        } else if (!github[4]) {
+          out.unclear.push(
+            `${raw} — say which stored token to use: “… using credential <name>” (store it in the Supply Depot first).`,
+          );
+        } else {
+          kinds.add('order');
+          out.actions.push({
+            kind: 'github-theatre',
+            unitId: null,
+            theatreId: th.id,
+            owner: github[2] ?? '',
+            repo: github[3] ?? null,
+            credentialName: github[4],
+          });
+        }
         continue;
       }
       const course =
@@ -614,6 +707,47 @@ export class SimulatedInterpreter {
     return {
       unclear: `which operation? ${open.length ? `Under way: ${open.map((o) => o.name).join(', ')}.` : 'None is under way.'}`,
     };
+  }
+
+  /** "Cancel the campaign", "Carry on with campaign Polish", "Skip the step". */
+  private campaignCourse(
+    sentence: string,
+    input: InterpretInput,
+  ):
+    | Extract<ChatAction, { kind: 'cancel-campaign' | 'resume-campaign' }>
+    | { unclear: string }
+    | null {
+    const cancel = CANCEL_CAMPAIGN.exec(sentence);
+    const resume = cancel ? null : RESUME_CAMPAIGN.exec(sentence);
+    const skip = cancel || resume ? null : SKIP_STEP.exec(sentence);
+    if (!cancel && !resume && !skip) return null;
+    const phrase = ((cancel ?? resume ?? skip)![1] ?? '').trim().replace(/[.!]+$/, '');
+    const live = (input.campaigns ?? []).filter(
+      (c) => c.status !== 'done' && c.status !== 'cancelled',
+    );
+    const c = phrase
+      ? live.find((x) => x.name.toLowerCase() === phrase.toLowerCase())
+      : live.length === 1
+        ? live[0]
+        : null;
+    if (!c) {
+      return {
+        unclear: phrase
+          ? `there is no campaign under way called ${phrase}.`
+          : live.length
+            ? `which campaign? Under way: ${live.map((x) => x.name).join(', ')}.`
+            : 'no campaign is under way.',
+      };
+    }
+    if (cancel) {
+      return {
+        kind: 'cancel-campaign',
+        unitId: null,
+        campaignId: c.id,
+        note: (cancel[2] ?? '').replace(/[.!]+$/, '').trim(),
+      };
+    }
+    return { kind: 'resume-campaign', unitId: null, campaignId: c.id, skip: !!skip };
   }
 
   /** "Change the repo from demo-app to subframe" / "Make subframe the main repository of …". */

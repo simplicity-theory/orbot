@@ -17,6 +17,7 @@ const ATTENTION_ICON = {
   budget: 'coins',
   dispute: 'users',
   'sand-table': 'activity',
+  campaign: 'flag',
   resources: 'key',
 } as const;
 

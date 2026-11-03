@@ -66,6 +66,13 @@ import { SandTable } from './sand-table';
                 >
                 ·
               }
+              @if (v.campaign; as c) {
+                <a [routerLink]="['/campaigns', c.id]"
+                  ><orb-term key="campaign">Campaign</orb-term> {{ c.name }} · step {{ c.step }} of
+                  {{ c.of }}</a
+                >
+                ·
+              }
               <orb-term key="operation">Operation</orb-term> · {{ v.operation.phase }}
             </p>
             <h1>Operation {{ v.operation.name }}</h1>

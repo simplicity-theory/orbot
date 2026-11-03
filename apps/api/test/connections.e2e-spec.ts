@@ -6,9 +6,12 @@ import { join } from 'node:path';
 import type {
   ConnectionView,
   IssueView,
+  NewTheatreView,
   OperationDetailView,
   RecordEvent,
+  SupplyView,
   TaskDetailView,
+  TheatreDetailView,
   UnitDetailView,
 } from '@orbot/shared';
 import { git } from '../src/common/git.js';
@@ -36,6 +39,11 @@ class FakeGitHub {
     },
   ];
   unauthorised = 0;
+  /** Repositories that exist under acme. */
+  repos = new Set(['app']);
+  /** Where a repository's clone URL points (a bare repo), existing or not yet. */
+  cloneUrls = new Map<string, string>();
+  created: { owner: string; name: string; private: boolean }[] = [];
 
   async start() {
     this.server = createServer((req, res) => {
@@ -49,9 +57,24 @@ class FakeGitHub {
           return send(401, { message: 'Bad credentials' });
         }
         const url = new URL(req.url ?? '/', 'http://x');
-        const p = url.pathname.replace(/^\/repos\/acme\/app/, '');
         const body = raw ? JSON.parse(raw) : {};
-        if (req.method === 'GET' && p === '') return send(200, { default_branch: 'main' });
+        const repoJson = (name: string) => ({
+          default_branch: 'main',
+          html_url: `https://github.example/acme/${name}`,
+          clone_url: this.cloneUrls.get(name) ?? '',
+        });
+        if (req.method === 'GET' && url.pathname === '/user') return send(200, { login: 'acme' });
+        const mk = /^\/(?:user|orgs\/([^/]+))\/repos$/.exec(url.pathname);
+        if (req.method === 'POST' && mk) {
+          this.created.push({ owner: mk[1] ?? 'acme', name: body.name, private: !!body.private });
+          this.repos.add(body.name);
+          return send(201, repoJson(body.name));
+        }
+        const r = /^\/repos\/acme\/([^/]+)(.*)$/.exec(url.pathname);
+        if (!r) return send(404, { message: 'Not Found' });
+        if (!this.repos.has(r[1]!)) return send(404, { message: 'Not Found' });
+        const p = r[2]!;
+        if (req.method === 'GET' && p === '') return send(200, repoJson(r[1]!));
         if (req.method === 'GET' && p === '/pulls') {
           const head = (url.searchParams.get('head') ?? '').replace(/^acme:/, '');
           return send(
@@ -353,6 +376,82 @@ describe('Connections', () => {
     expect(gh.pulls.at(-1)).toMatchObject({ title: `Task #${task.number}: Tidy the README` });
   });
 
+  it('a theatre is put on GitHub: the repository is made there, main pushed now, and every landing after', async () => {
+    const bare = mkdtempSync(join(tmpdir(), 'orbot-gh-'));
+    await git(bare, ['init', '--quiet', '--bare', '-b', 'main']);
+    gh.cloneUrls.set('pocket-notes', bare);
+    const th: NewTheatreView = (
+      await t.agent
+        .post('/api/theatres')
+        .send({
+          name: 'Pocket Notes',
+          description: 'Notes that work offline.',
+          repository: { kind: 'template', template: 'single-html' },
+          site: true,
+        })
+        .expect(201)
+    ).body;
+    const local = th.repository!.spec.kind === 'repository' ? th.repository!.spec.localPath : '';
+    await t.agent
+      .post(`/api/theatres/${th.theatre.id}/github`)
+      .send({ apiUrl: gh.url, owner: 'acme' })
+      .expect(400)
+      .expect((r) => expect(JSON.stringify(r.body)).toContain('A token is needed'));
+    await t.agent
+      .post(`/api/theatres/${th.theatre.id}/github`)
+      .send({ apiUrl: gh.url, owner: 'acme', token: 'ghp_wrong' })
+      .expect(400)
+      .expect((r) => expect(r.body.error.message).toMatch(/^Could not reach GitHub as acme/));
+    // A token pasted here is stored as a credential (never recorded) and used by name.
+    const v: TheatreDetailView = (
+      await t.agent
+        .post(`/api/theatres/${th.theatre.id}/github`)
+        .send({ apiUrl: gh.url, owner: 'acme', token: TOKEN })
+        .expect(200)
+    ).body;
+    expect(v.github).toEqual({
+      connectionId: expect.any(String),
+      owner: 'acme',
+      repo: 'pocket-notes',
+      // Browsed where the API lives (github.com for api.github.com; the host, for an Enterprise API).
+      url: `${gh.url}/acme/pocket-notes`,
+    });
+    expect(gh.created).toEqual([{ owner: 'acme', name: 'pocket-notes', private: true }]);
+    expect(await git(bare, ['rev-parse', 'main'])).toBe(await git(local, ['rev-parse', 'main']));
+    const depot: SupplyView[] = (await t.agent.get('/api/supply').expect(200)).body;
+    expect(depot.map((s) => s.name)).toEqual(
+      expect.arrayContaining(['token-github-acme', 'GitHub acme/pocket-notes']),
+    );
+    await t.agent
+      .post(`/api/theatres/${th.theatre.id}/github`)
+      .send({ apiUrl: gh.url, owner: 'acme', credentialName: 'token-github-acme' })
+      .expect(400)
+      .expect((r) =>
+        expect(r.body.error.message).toMatch(/already on GitHub as acme\/pocket-notes/),
+      );
+
+    // An operation in the theatre: HQ lands it on main, and main on GitHub follows.
+    const launched = (
+      await t.agent
+        .post(`/api/theatres/${th.theatre.id}/operations`)
+        .send({ intent: 'Build the first version.', name: 'Notes' })
+        .expect(201)
+    ).body;
+    const closed = await waitFor(async () => {
+      const x = await op(launched.id);
+      return x.operation.deployment ? x : null;
+    }, 30_000);
+    const head = await git(local, ['rev-parse', 'main']);
+    expect(head).not.toBe(await git(local, ['rev-parse', 'main~1']).catch(() => head));
+    await waitFor(async () => ((await git(bare, ['rev-parse', 'main'])) === head ? true : null));
+    const texts = closed.timeline
+      .concat((await op(launched.id)).timeline)
+      .map((e) => (e.body as { text?: string }).text ?? '');
+    expect(texts).toContainEqual(
+      expect.stringMatching(/^main pushed to GitHub \(acme\/pocket-notes\) at [0-9a-f]{10}\./),
+    );
+  });
+
   it('the token is in no record and no response', async () => {
     const everything = JSON.stringify([
       await connections(),
@@ -360,7 +459,7 @@ describe('Connections', () => {
       (await t.agent.get('/api/record/events').query({ limit: 1000 }).expect(200)).body,
     ]);
     expect(everything).not.toContain(TOKEN);
-    expect(gh.unauthorised).toBe(1); // only the attempt with no credential
+    expect(gh.unauthorised).toBe(2); // the attempt with no credential, and the wrong token
     const errors = (
       (await t.agent.get('/api/record/events').query({ kinds: 'connection.error' }).expect(200))
         .body as RecordEvent<'connection.error'>[]
@@ -370,7 +469,7 @@ describe('Connections', () => {
 
   it('disconnecting keeps the history; the connection no longer acts', async () => {
     await t.agent.post(`/api/supply/connections/${connId}/disconnect`).expect(200);
-    expect(await connections()).toEqual([]);
+    expect((await connections()).map((c) => c.supply.id)).not.toContain(connId);
     const history = (await t.agent.get(`/api/record/${connId}/history`).expect(200)).body as {
       superseded: { reason: string } | null;
     }[];

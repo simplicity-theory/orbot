@@ -12,7 +12,8 @@ import { TaskRunner } from '../execution/task-runner.js';
 import { HqService } from '../overseer/hq.service.js';
 import { TheatresService } from '../overseer/theatres.service.js';
 import { MainEffortService } from '../overseer/main-effort.service.js';
-import { ConnectionsService } from '../connections/connections.service.js';
+import { ConnectionsService, slug } from '../connections/connections.service.js';
+import { CampaignsService } from '../overseer/campaigns.service.js';
 import { ReconService } from '../overseer/recon.service.js';
 import { SandTableService } from '../overseer/sand-table.service.js';
 import { StandDownService } from '../overseer/stand-down.service.js';
@@ -55,6 +56,7 @@ export class ActionsService {
     private readonly recon: ReconService,
     private readonly sandTables: SandTableService,
     private readonly connections: ConnectionsService,
+    private readonly campaigns: CampaignsService,
     private readonly projects: ProjectsService,
     private readonly holds: HoldPolicyService,
   ) {}
@@ -153,6 +155,79 @@ export class ActionsService {
               ]
             : []),
         ],
+        inverse: null,
+        affects: [],
+      };
+    }
+    if (action.kind === 'create-campaign') {
+      const theatre = await this.theatreOrOnlyOpen(action.theatreId);
+      const c = await this.campaigns.create(
+        theatre.entityId,
+        { name: action.name, description: '', steps: action.steps },
+        ctx,
+      );
+      const first = c.body.steps[0]!;
+      return {
+        summary: `Campaign ${c.body.name} planned in Theatre ${theatre.body.name}: ${c.body.steps.length} step(s). Step 1 launched as Operation ${first.name}; each next step launches when the one before it closes.`,
+        links: [
+          { label: `Campaign ${c.body.name}`, link: `/campaigns/${c.entityId}` },
+          ...(first.operationId
+            ? [{ label: `Operation ${first.name}`, link: `/operations/${first.operationId}` }]
+            : []),
+        ],
+        inverse: {
+          kind: 'cancel-campaign',
+          unitId: null,
+          campaignId: c.entityId,
+          note: 'Undone from chat',
+        },
+        affects: [],
+      };
+    }
+    if (action.kind === 'cancel-campaign') {
+      const c = await this.campaigns.cancel(action.campaignId, action.note, ctx.actor);
+      return {
+        summary: `Campaign ${c.body.name} called off${action.note ? `: ${action.note}` : ''}. ${c.body.current} of ${c.body.steps.length} step(s) were done; its operation under way was cancelled.`,
+        links: [{ label: `Campaign ${c.body.name}`, link: `/campaigns/${c.entityId}` }],
+        inverse: null,
+        affects: [],
+      };
+    }
+    if (action.kind === 'resume-campaign') {
+      const c = await this.campaigns.resume(action.campaignId, action.skip, ctx.actor);
+      const step = c.body.steps[c.body.current];
+      return {
+        summary:
+          c.body.status === 'done'
+            ? `Campaign ${c.body.name} complete: its last step was skipped.`
+            : `Campaign ${c.body.name} goes on: step ${c.body.current + 1} of ${c.body.steps.length}${action.skip ? '' : ' started over'} as Operation ${step?.name ?? ''}.`,
+        links: [
+          { label: `Campaign ${c.body.name}`, link: `/campaigns/${c.entityId}` },
+          ...(step?.operationId
+            ? [{ label: `Operation ${step.name}`, link: `/operations/${step.operationId}` }]
+            : []),
+        ],
+        inverse: null,
+        affects: [],
+      };
+    }
+    if (action.kind === 'github-theatre') {
+      const theatre = await this.theatreOrOnlyOpen(action.theatreId);
+      const r = await this.connections.putTheatreOnGitHub(
+        theatre.entityId,
+        {
+          apiUrl: 'https://api.github.com',
+          owner: action.owner,
+          repo: action.repo ?? slug(theatre.body.name),
+          credentialName: action.credentialName,
+          token: null,
+          private: true,
+        },
+        ctx.actor,
+      );
+      return {
+        summary: `Theatre ${theatre.body.name} is on GitHub at ${r.url}${r.created ? ' (repository created, private)' : ''}: main pushed, and every landing is pushed from now on.`,
+        links: [{ label: `Theatre ${theatre.body.name}`, link: `/theatres/${theatre.entityId}` }],
         inverse: null,
         affects: [],
       };
@@ -705,5 +780,18 @@ export class ActionsService {
       if (bot?.body.status === 'idle')
         await this.runner.start(taskId, ctx.actor).catch(() => undefined);
     }
+  }
+
+  /** The theatre named, else the only open one; several open and none named is unclear. */
+  private async theatreOrOnlyOpen(theatreId: string | null) {
+    if (theatreId) return this.record.requireActive('theatre', theatreId);
+    const open = (await this.record.listActive('theatre')).filter((t) => t.body.status === 'open');
+    if (open.length === 1) return open[0]!;
+    throw new BadRequestException({
+      message: open.length
+        ? `Several theatres are open: ${open.map((t) => t.body.name).join(', ')}.`
+        : 'No theatre is open.',
+      action: open.length ? 'Say which one: “… in theatre <name>”.' : 'Open a theatre first.',
+    });
   }
 }

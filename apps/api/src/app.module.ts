@@ -49,6 +49,8 @@ import { SimulatedRuntime } from './runtime/simulated.runtime.js';
 import { WorkspaceManager } from './runtime/workspace-manager.js';
 import { TheatresService } from './overseer/theatres.service.js';
 import { TheatresController } from './overseer/theatres.controller.js';
+import { CampaignsController } from './overseer/campaigns.controller.js';
+import { CampaignsService } from './overseer/campaigns.service.js';
 import { createSecretsPool, SECRETS_POOL, SecretsService } from './secrets/secrets.service.js';
 import { SupplyController } from './supply/supply.controller.js';
 import { SupplyService } from './supply/supply.service.js';
@@ -134,6 +136,7 @@ export class AppModule {
         SitesController,
         ProjectsController,
         TheatresController,
+        CampaignsController,
       ],
       providers: [
         { provide: LOG_DESTINATION, useValue: opts.logDestination ?? null },
@@ -202,6 +205,7 @@ export class AppModule {
         SettingsService,
         HqService,
         TheatresService,
+        CampaignsService,
         StandDownService,
         MainEffortService,
         ReconService,

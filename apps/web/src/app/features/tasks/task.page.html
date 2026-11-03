@@ -160,6 +160,13 @@
             <a [routerLink]="['/theatres', th.id]">Theatre {{ th.name }}</a>
           </li>
         }
+        @if (v.campaign; as c) {
+          <li>
+            <span class="chain__level"><orb-term key="campaign">Campaign</orb-term></span>
+            <a [routerLink]="['/campaigns', c.id]">Campaign {{ c.name }}</a>
+            <span class="meta">step {{ c.step }} of {{ c.of }}</span>
+          </li>
+        }
         @if (v.operation; as op) {
           <li>
             <span class="chain__level"><orb-term key="operation">Operation</orb-term></span>

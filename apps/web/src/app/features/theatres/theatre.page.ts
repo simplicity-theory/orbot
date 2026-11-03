@@ -4,7 +4,7 @@ import { httpResource } from '@angular/common/http';
 import { Component, computed, effect, inject, input, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import type { SupplyView, TheatreDetailView } from '@orbot/shared';
+import type { CampaignSummary, SupplyView, TheatreDetailView } from '@orbot/shared';
 import { Api, apiUrl } from '../../core/api';
 import { toUserError, type UserFacingError } from '../../core/api-error';
 import { Breadcrumbs, ORBAT_CRUMB } from '../../core/breadcrumbs';
@@ -17,8 +17,10 @@ import { PhaseStepper } from '../../ui/phase-stepper';
 import { Skeleton } from '../../ui/skeleton';
 import { Term } from '../../ui/term';
 import { Toasts } from '../../ui/toast';
+import { NewCampaignDialog, type NewCampaignData } from '../campaigns/new-campaign.dialog';
 import { IntentDialog } from '../operations/intent.dialog';
 import { MissionChain } from '../operations/mission-chain';
+import { GitHubDialog, type GitHubData } from './github.dialog';
 
 interface CloseData {
   theatreId: string;
@@ -114,12 +116,22 @@ export class CloseTheatreDialog {
                 <orb-icon name="link" /> Open the app
               </a>
             }
+            @if (v.github; as gh) {
+              <a class="btn" [href]="gh.url" target="_blank" rel="noopener">
+                <orb-icon name="git-branch" /> On GitHub: {{ gh.owner }}/{{ gh.repo }}
+              </a>
+            } @else if (v.theatre.status === 'open' && v.theatre.repoSupplyId) {
+              <button type="button" class="btn" *orbCan="null" (click)="github()">
+                <orb-icon name="git-branch" /> Put on GitHub…
+              </button>
+            }
           </div>
           @if (v.theatre.status === 'open') {
             <div class="header-actions" *orbCan="null">
               <button type="button" class="btn" (click)="closeTheatre()">
                 <orb-icon name="x" /> Close theatre…
               </button>
+              <button type="button" class="btn" (click)="planCampaign()">Plan a campaign…</button>
               <button type="button" class="btn" (click)="stateIntent()">State intent</button>
             </div>
           }
@@ -190,6 +202,45 @@ export class CloseTheatreDialog {
             </form>
           }
         </section>
+
+        @if (v.campaigns.length) {
+          <section class="panel" aria-labelledby="th-camp-h">
+            <h2 id="th-camp-h" class="panel__title">
+              <orb-term key="campaign">Campaigns</orb-term>
+            </h2>
+            <ul class="list-reset campaigns" aria-label="Campaigns in this theatre">
+              @for (c of v.campaigns; track c.campaign.id) {
+                <li class="campaign">
+                  <h3>
+                    <a [routerLink]="['/campaigns', c.campaign.id]"
+                      >Campaign {{ c.campaign.name }}</a
+                    >
+                  </h3>
+                  <span class="meta">
+                    {{ c.campaign.status }} · {{ doneSteps(c) }} of {{ c.steps.length }} step(s)
+                    done
+                  </span>
+                  @if (c.needsYou.length) {
+                    <a class="needs" [routerLink]="['/campaigns', c.campaign.id]"
+                      >{{ c.needsYou.length }} need you</a
+                    >
+                  }
+                  <ol class="list-reset chips" aria-label="Steps">
+                    @for (s of c.steps; track s.index) {
+                      <li
+                        class="chip"
+                        [class.main]="s.status === 'under-way' || s.status === 'held'"
+                      >
+                        {{ s.index + 1 }}. {{ s.name }}
+                        <span class="kind">{{ s.status }}</span>
+                      </li>
+                    }
+                  </ol>
+                </li>
+              }
+            </ul>
+          </section>
+        }
 
         <section class="panel" aria-labelledby="th-ops-h">
           <h2 id="th-ops-h" class="panel__title">
@@ -300,6 +351,27 @@ export class CloseTheatreDialog {
       color: var(--tone-warning);
       font-weight: var(--font-weight-semibold);
     }
+    .campaigns {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-3);
+    }
+    .campaign {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: var(--space-3);
+      h3 {
+        margin: 0;
+        font-size: var(--font-size-md);
+      }
+    }
+    .chips {
+      flex-basis: 100%;
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-2);
+    }
   `,
 })
 export class TheatrePage {
@@ -330,7 +402,9 @@ export class TheatrePage {
     reloadOnLive(
       (n) =>
         n.type === 'version' &&
-        ['theatre', 'operation', 'mission', 'task', 'supply'].includes(n.version.entityType),
+        ['theatre', 'campaign', 'operation', 'mission', 'task', 'supply'].includes(
+          n.version.entityType,
+        ),
       () => this.view.reload(),
     );
   }
@@ -347,6 +421,40 @@ export class TheatrePage {
   protected assignable(list: SupplyView[], held: SupplyView[]): SupplyView[] {
     const have = new Set(held.map((s) => s.id));
     return list.filter((s) => s.connected && !have.has(s.id) && s.spec.kind !== 'connection');
+  }
+
+  protected doneSteps(c: CampaignSummary): number {
+    return c.steps.filter((s) => s.status === 'done').length;
+  }
+
+  protected planCampaign(): void {
+    const v = this.view.value();
+    if (!v) return;
+    openDialog<void, NewCampaignData, NewCampaignDialog>(
+      this.dialog,
+      NewCampaignDialog,
+      { theatreId: v.theatre.id, theatreName: v.theatre.name },
+      'Plan a campaign',
+    );
+  }
+
+  protected github(): void {
+    const v = this.view.value();
+    if (!v) return;
+    openDialog<string | boolean | undefined, GitHubData, GitHubDialog>(
+      this.dialog,
+      GitHubDialog,
+      { theatreId: v.theatre.id, name: v.theatre.name },
+      `Put Theatre ${v.theatre.name} on GitHub`,
+    ).closed.subscribe((done) => {
+      if (!done) return;
+      this.toasts.show({
+        tone: 'success',
+        message: `Theatre ${v.theatre.name} is on GitHub; main pushed, and every landing follows.`,
+        detail: typeof done === 'string' ? done : undefined,
+      });
+      this.view.reload();
+    });
   }
 
   protected stateIntent(): void {

@@ -1,4 +1,4 @@
-import { ConnectorError, type Connector } from './connector.js';
+import { ConnectorError, type Connector, type RemoteRepository } from './connector.js';
 
 interface GitHubOptions {
   apiUrl: string;
@@ -8,6 +8,18 @@ interface GitHubOptions {
   token: () => Promise<string | null>;
 }
 
+interface GitHubRepo {
+  html_url: string;
+  clone_url: string;
+  default_branch: string;
+}
+
+const remote = (r: GitHubRepo): RemoteRepository => ({
+  url: r.html_url,
+  pushUrl: r.clone_url,
+  defaultBranch: r.default_branch || 'main',
+});
+
 /**
  * GitHub (or GitHub Enterprise) through its REST API: pull requests, issues, and check runs
  * (falling back to commit statuses) for the pipeline.
@@ -15,9 +27,13 @@ interface GitHubOptions {
 export class GitHubConnector implements Connector {
   constructor(private readonly o: GitHubOptions) {}
 
-  private async call<T>(method: string, path: string, body?: unknown): Promise<T> {
+  private call<T>(method: string, path: string, body?: unknown): Promise<T> {
+    return this.api(method, `/repos/${this.o.owner}/${this.o.repo}${path}`, body);
+  }
+
+  private async api<T>(method: string, path: string, body?: unknown): Promise<T> {
     const token = await this.o.token();
-    const url = `${this.o.apiUrl.replace(/\/$/, '')}/repos/${this.o.owner}/${this.o.repo}${path}`;
+    const url = `${this.o.apiUrl.replace(/\/$/, '')}${path}`;
     const res = await fetch(url, {
       method,
       headers: {
@@ -37,6 +53,7 @@ export class GitHubConnector implements Connector {
         .catch(() => '');
       throw new ConnectorError(
         `GitHub answered ${res.status} for ${method} ${path}${detail ? `: ${detail}` : ''}.`,
+        res.status,
       );
     }
     return (res.status === 204 ? null : await res.json()) as T;
@@ -45,6 +62,33 @@ export class GitHubConnector implements Connector {
   async verify() {
     const r = await this.call<{ default_branch: string }>('GET', '');
     return { defaultBranch: r.default_branch };
+  }
+
+  async repository(): Promise<RemoteRepository | null> {
+    try {
+      return remote(await this.call<GitHubRepo>('GET', ''));
+    } catch (err) {
+      if (err instanceof ConnectorError && err.status === 404) return null;
+      throw err;
+    }
+  }
+
+  async createRepository(input: { private: boolean; description: string }) {
+    const me = await this.api<{ login: string }>('GET', '/user');
+    const mine = me.login.toLowerCase() === this.o.owner.toLowerCase();
+    const body = {
+      name: this.o.repo,
+      private: input.private,
+      description: input.description.slice(0, 350),
+      auto_init: false,
+    };
+    return remote(
+      await this.api<GitHubRepo>(
+        'POST',
+        mine ? '/user/repos' : `/orgs/${this.o.owner}/repos`,
+        body,
+      ),
+    );
   }
 
   async openPullRequest(input: { head: string; base: string; title: string; body: string }) {

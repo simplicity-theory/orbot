@@ -9,6 +9,7 @@ import { BotStatus, TaskStatus } from '../status/status.js';
  */
 export const ENTITY_TYPES = [
   'theatre',
+  'campaign',
   'unit',
   'bot',
   'operation',
@@ -238,6 +239,42 @@ export const TheatreBody = z.object({
 });
 export type TheatreBody = z.infer<typeof TheatreBody>;
 
+export const CampaignStatus = z.enum(['under-way', 'held', 'done', 'cancelled']);
+export type CampaignStatus = z.infer<typeof CampaignStatus>;
+
+/** One step of a campaign: an intent HQ turns into an operation when its turn comes. */
+export const CampaignStep = z.object({
+  name: z.string().min(1),
+  intent: z.string().min(1),
+  /** The operation launched for it (the latest, if it was started over). */
+  operationId: Id.nullable().default(null),
+});
+export type CampaignStep = z.infer<typeof CampaignStep>;
+
+/**
+ * A campaign is a sequence of operations toward one end, inside a theatre: each step is
+ * launched as an operation when the one before it closes. A step whose operation is cancelled
+ * holds the campaign until the Commander starts the step over, skips it or calls the campaign
+ * off (D126).
+ */
+export const CampaignBody = z.object({
+  theatreId: Id,
+  name: z.string().min(1),
+  /** The end state, in a sentence or two. */
+  description: z.string().default(''),
+  status: CampaignStatus.default('under-way'),
+  steps: z.array(CampaignStep).min(1),
+  /** The step under way (or held), 0-based; steps.length once every step is done. */
+  current: z.number().int().nonnegative().default(0),
+  /** Why the campaign holds, when it does. */
+  held: z.string().nullable().default(null),
+  closed: z
+    .object({ by: z.string(), note: z.string(), at: z.iso.datetime({ offset: true }) })
+    .nullable()
+    .default(null),
+});
+export type CampaignBody = z.infer<typeof CampaignBody>;
+
 export const OperationBody = z.object({
   name: z.string().min(1),
   intent: z.string().min(1),
@@ -246,6 +283,8 @@ export const OperationBody = z.object({
   theatreId: Id.nullable().default(null),
   /** From a fully automatic theatre: plans pre-approved, nothing holds, HQ lands and publishes at the end. */
   autonomous: z.boolean().default(false),
+  /** The campaign this operation is a step of, if any. */
+  campaignId: Id.nullable().default(null),
   /**
    * Resources assigned to the operation (depot items), in the order they were assigned. The
    * first repository is where the work is handed off and deployed from.
@@ -894,6 +933,7 @@ export const ENTITY_BODY_SCHEMAS = {
   dispute: DisputeBody,
   officer: OfficerBody,
   theatre: TheatreBody,
+  campaign: CampaignBody,
 } as const satisfies Record<EntityType, z.ZodType>;
 
 export interface EntityBodyMap {
@@ -910,6 +950,7 @@ export interface EntityBodyMap {
   dispute: DisputeBody;
   officer: OfficerBody;
   theatre: TheatreBody;
+  campaign: CampaignBody;
 }
 
 /** What a write may supply: defaulted fields are optional and filled in by the schema. */

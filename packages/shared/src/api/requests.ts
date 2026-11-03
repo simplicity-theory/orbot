@@ -284,6 +284,45 @@ export const TheatreIntentRequest = z.object({
 });
 export type TheatreIntentRequest = z.input<typeof TheatreIntentRequest>;
 
+/** Plan a campaign in a theatre: its steps, each an intent HQ launches as an operation in turn. */
+export const CreateCampaignRequest = z.object({
+  name: z.string().trim().min(1).max(100),
+  description: z.string().trim().max(1000).default(''),
+  steps: z
+    .array(
+      z.object({
+        name: z.string().trim().min(1).max(100).nullable().default(null),
+        intent: z.string().trim().min(1).max(1000),
+      }),
+    )
+    .min(1)
+    .max(30),
+});
+export type CreateCampaignRequest = z.input<typeof CreateCampaignRequest>;
+
+/** Put a theatre's repository on GitHub: the repository is created there if it does not exist, main is pushed, and every landing follows. */
+export const GitHubTheatreRequest = z
+  .object({
+    apiUrl: z.string().trim().url().default('https://api.github.com'),
+    owner: z.string().trim().min(1).max(100),
+    /** The repository name on GitHub; null = the theatre's name as a slug. */
+    repo: z
+      .string()
+      .trim()
+      .regex(/^[A-Za-z0-9._-]{1,100}$/)
+      .nullable()
+      .default(null),
+    /** A stored credential holding the token… */
+    credentialName: z.string().trim().min(1).nullable().default(null),
+    /** …or the token itself, stored now under `token-github-<owner>` (never recorded). */
+    token: z.string().trim().min(1).max(500).nullable().default(null),
+    private: z.boolean().default(true),
+  })
+  .refine((r) => r.credentialName || r.token, {
+    message: 'A token is needed: choose a stored credential or paste one.',
+  });
+export type GitHubTheatreRequest = z.input<typeof GitHubTheatreRequest>;
+
 /** Abort a mission, start a mission over, start an operation over: why (optional). */
 export const CourseNoteRequest = CancelOperationRequest;
 export type CourseNoteRequest = z.input<typeof CourseNoteRequest>;

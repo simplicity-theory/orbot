@@ -10,6 +10,8 @@ import type {
   MissionBody,
   OperationBody,
   TheatreBody,
+  CampaignBody,
+  OperationPhase,
   SupplyBody,
   TaskBody,
   TaskPermission,
@@ -36,6 +38,22 @@ export type TaskView = Versioned<TaskBody>;
 export type MissionView = Versioned<MissionBody>;
 export type OperationView = Versioned<OperationBody>;
 export type TheatreView = Versioned<TheatreBody>;
+export type CampaignView = Versioned<CampaignBody>;
+
+/** A campaign: its steps, each with the operation launched for it (if its turn has come). */
+export interface CampaignSummary {
+  campaign: CampaignView;
+  theatre: { id: string; name: string };
+  steps: {
+    index: number;
+    name: string;
+    intent: string;
+    operation: { id: string; name: string; phase: OperationPhase; cancelled: boolean } | null;
+    status: 'done' | 'under-way' | 'held' | 'waiting' | 'cancelled';
+  }[];
+  /** Things on the campaign's operation waiting on the Commander (the hold itself included). */
+  needsYou: AttentionItem[];
+}
 
 /** A theatre on the board: what it holds and the operations run in it. */
 export interface TheatreSummary {
@@ -44,6 +62,9 @@ export interface TheatreSummary {
   /** Its static site, with where ORBOT serves it and whether anything is published yet. */
   site: { id: string; name: string; url: string; published: boolean } | null;
   resources: SupplyView[];
+  /** The GitHub repository the theatre's code is pushed to, if it is on GitHub. */
+  github: { connectionId: string; owner: string; repo: string; url: string } | null;
+  campaigns: CampaignSummary[];
   operations: { id: string; name: string; phase: string; needsYou: number }[];
   needsYou: number;
 }
@@ -94,7 +115,8 @@ export type AttentionKind =
   | 'budget'
   | 'dispute'
   | 'sand-table'
-  | 'resources';
+  | 'resources'
+  | 'campaign';
 
 /** A compute budget and what has been spent against it. */
 export interface BudgetView {
@@ -258,6 +280,8 @@ export interface TaskDetailView {
   operation: OperationView | null;
   /** The theatre the operation runs in, if any. */
   theatre: { id: string; name: string } | null;
+  /** The campaign the operation is a step of, if any. */
+  campaign: { id: string; name: string; step: number; of: number } | null;
   /** Every task of the mission in number order (this one among them). */
   missionTasks: TaskView[];
   events: RecordEvent[];
@@ -348,6 +372,8 @@ export interface OperationSummary {
   operation: OperationView;
   /** The theatre it runs in, if any. */
   theatre: { id: string; name: string } | null;
+  /** The campaign it is a step of, if any. */
+  campaign: { id: string; name: string; step: number; of: number } | null;
   budget: BudgetView;
   missions: OperationMissionView[];
   /** Things on this operation waiting on the Commander. */

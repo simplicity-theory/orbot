@@ -500,4 +500,106 @@ describe('SimulatedInterpreter', () => {
       );
     });
   });
+
+  describe('campaigns and GitHub (to HQ)', () => {
+    const hq = { channelUnitId: null as string | null };
+    const theatres = [
+      { id: '00000000-0000-4000-8000-0000000000d1', name: 'Todo', status: 'open' },
+      { id: '00000000-0000-4000-8000-0000000000d2', name: 'Old', status: 'closed' },
+    ];
+    const campaigns = [
+      {
+        id: '00000000-0000-4000-8000-0000000000e1',
+        name: 'Polish',
+        theatreId: theatres[0]!.id,
+        status: 'held',
+        step: 2,
+      },
+    ];
+
+    it('reads a numbered list after "campaign called X:" as one campaign, its steps in order', () => {
+      const r = i.interpret(
+        input(
+          'Run a campaign called Polish in theatre Todo: 1. Add due dates. 2. Add priorities; 3. add filters',
+          {
+            ...hq,
+            theatres,
+          },
+        ),
+      );
+      expect(r.kinds).toEqual(['order']);
+      expect(r.actions).toEqual([
+        {
+          kind: 'create-campaign',
+          unitId: null,
+          theatreId: theatres[0]!.id,
+          name: 'Polish',
+          steps: [
+            { name: null, intent: 'Add due dates.' },
+            { name: null, intent: 'Add priorities.' },
+            { name: null, intent: 'Add filters.' },
+          ],
+        },
+      ]);
+      // No theatre named: HQ picks the only open one.
+      expect(
+        i.interpret(input('Start a campaign Spring: add tags; add search', { ...hq, theatres }))
+          .actions[0],
+      ).toMatchObject({
+        theatreId: null,
+        steps: [{ intent: 'Add tags.' }, { intent: 'Add search.' }],
+      });
+      expect(
+        i.interpret(input('Run a campaign X in theatre Nope: do it', { ...hq, theatres }))
+          .unclear[0],
+      ).toMatch(/no open theatre called Nope/);
+    });
+
+    it('cancels, resumes and skips a step of the campaign under way', () => {
+      expect(
+        i.interpret(input('Cancel the campaign: not worth it.', { ...hq, campaigns })).actions,
+      ).toEqual([
+        {
+          kind: 'cancel-campaign',
+          unitId: null,
+          campaignId: campaigns[0]!.id,
+          note: 'not worth it',
+        },
+      ]);
+      expect(
+        i.interpret(input('Carry on with the campaign Polish.', { ...hq, campaigns })).actions,
+      ).toEqual([
+        { kind: 'resume-campaign', unitId: null, campaignId: campaigns[0]!.id, skip: false },
+      ]);
+      expect(i.interpret(input('Skip the step.', { ...hq, campaigns })).actions).toEqual([
+        { kind: 'resume-campaign', unitId: null, campaignId: campaigns[0]!.id, skip: true },
+      ]);
+      expect(
+        i.interpret(input('Cancel the campaign.', { ...hq, campaigns: [] })).unclear[0],
+      ).toMatch(/no campaign is under way/);
+    });
+
+    it('puts a theatre on GitHub with a stored token, never a pasted one', () => {
+      expect(
+        i.interpret(
+          input('Put Todo on GitHub as acme/todo-app using credential gh-token', {
+            ...hq,
+            theatres,
+          }),
+        ).actions,
+      ).toEqual([
+        {
+          kind: 'github-theatre',
+          unitId: null,
+          theatreId: theatres[0]!.id,
+          owner: 'acme',
+          repo: 'todo-app',
+          credentialName: 'gh-token',
+        },
+      ]);
+      expect(
+        i.interpret(input('Put it on GitHub as acme/todo', { ...hq, theatres })).unclear[0],
+      ).toMatch(/which stored token/);
+    });
+  });
 });

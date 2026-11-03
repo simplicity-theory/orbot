@@ -7,6 +7,9 @@ import type {
   OperationDetailView,
   TheatreDetailView,
   NewTheatreView,
+  CampaignSummary,
+  CreateCampaignRequest,
+  GitHubTheatreRequest,
   TheatreIntentRequest,
   CreateTheatreRequest,
   QueuesRestartView,
@@ -87,6 +90,8 @@ export const apiUrl = {
   palette: () => `${API}/palette`,
   theatres: () => `${API}/theatres`,
   theatre: (id: string) => `${API}/theatres/${id}`,
+  campaigns: () => `${API}/campaigns`,
+  campaign: (id: string) => `${API}/campaigns/${id}`,
   operations: () => `${API}/operations`,
   operation: (id: string) => `${API}/operations/${id}`,
   chat: (channel: string) => `${API}/chat/${channel}`,
@@ -468,6 +473,33 @@ export class Api {
   closeTheatre(theatreId: string, note: string) {
     return firstValueFrom(
       this.http.post<TheatreDetailView>(`${apiUrl.theatre(theatreId)}/close`, { note }),
+    );
+  }
+
+  /** Put the theatre's repository on GitHub: made there if need be, main pushed, every landing after. */
+  putTheatreOnGitHub(theatreId: string, req: GitHubTheatreRequest) {
+    return firstValueFrom(
+      this.http.post<TheatreDetailView>(`${apiUrl.theatre(theatreId)}/github`, req),
+    );
+  }
+
+  /** Plan a campaign in a theatre: step 1 launches now, each next step when the one before it closes. */
+  planCampaign(theatreId: string, req: CreateCampaignRequest) {
+    return firstValueFrom(
+      this.http.post<CampaignSummary>(`${apiUrl.theatre(theatreId)}/campaigns`, req),
+    );
+  }
+
+  /** A held campaign goes on: its step started over, or skipped. */
+  resumeCampaign(campaignId: string, skip: boolean) {
+    return firstValueFrom(
+      this.http.post<CampaignSummary>(`${apiUrl.campaign(campaignId)}/resume`, { skip }),
+    );
+  }
+
+  cancelCampaign(campaignId: string, note: string) {
+    return firstValueFrom(
+      this.http.post<CampaignSummary>(`${apiUrl.campaign(campaignId)}/cancel`, { note }),
     );
   }
 

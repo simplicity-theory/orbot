@@ -2,6 +2,10 @@
 export interface Connector {
   /** Check the connection works (the repository is reachable with the token). */
   verify(): Promise<{ defaultBranch: string }>;
+  /** The repository on the host, or null if there is none by that name. */
+  repository(): Promise<RemoteRepository | null>;
+  /** Make the repository on the host (under the token's user, or the owner organisation). */
+  createRepository(input: { private: boolean; description: string }): Promise<RemoteRepository>;
   openPullRequest(input: {
     head: string;
     base: string;
@@ -21,4 +25,19 @@ export interface Connector {
   ): Promise<{ state: 'success' | 'failure' | 'pending' | 'none'; url: string | null }>;
 }
 
-export class ConnectorError extends Error {}
+export interface RemoteRepository {
+  /** Where people browse it. */
+  url: string;
+  /** Where git pushes to (no credentials in it). */
+  pushUrl: string;
+  defaultBranch: string;
+}
+
+export class ConnectorError extends Error {
+  constructor(
+    message: string,
+    readonly status: number | null = null,
+  ) {
+    super(message);
+  }
+}

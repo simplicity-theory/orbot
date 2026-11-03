@@ -1,10 +1,11 @@
 import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post } from '@nestjs/common';
-import { ConnectServiceRequest, TakeIssueRequest } from '@orbot/shared';
+import { ConnectServiceRequest, GitHubTheatreRequest, TakeIssueRequest } from '@orbot/shared';
 import type { z } from 'zod';
 import { Actor } from '../auth/auth.guard.js';
 import { ZodPipe } from '../common/zod.pipe.js';
 import { toView } from '../domain/view.js';
 import { Authority, unitOf } from '../officers/authority.js';
+import { ViewsService } from '../domain/views.service.js';
 import { ConnectionsService } from './connections.service.js';
 
 const Uuid = new ParseUUIDPipe();
@@ -12,7 +13,22 @@ const Uuid = new ParseUUIDPipe();
 /** Code host, issue tracker and build pipeline connections. Connecting is the Commander's. */
 @Controller()
 export class ConnectionsController {
-  constructor(private readonly connections: ConnectionsService) {}
+  constructor(
+    private readonly connections: ConnectionsService,
+    private readonly views: ViewsService,
+  ) {}
+
+  /** Put a theatre's repository on GitHub: made there if need be, main pushed, every landing after. */
+  @Post('theatres/:id/github')
+  @HttpCode(200)
+  async github(
+    @Param('id', Uuid) id: string,
+    @Body(new ZodPipe(GitHubTheatreRequest)) body: z.output<typeof GitHubTheatreRequest>,
+    @Actor() actor: string,
+  ) {
+    await this.connections.putTheatreOnGitHub(id, body, actor);
+    return this.views.theatre(id);
+  }
 
   @Get('connections')
   list() {

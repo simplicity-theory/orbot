@@ -85,7 +85,9 @@ import { scrollToFragment } from './scroll-to-fragment';
                               ? 'users'
                               : a.kind === 'resources'
                                 ? 'key'
-                                : 'octagon-pause'
+                                : a.kind === 'campaign'
+                                  ? 'flag'
+                                  : 'octagon-pause'
                     "
                   />
                   <span class="meta">{{ a.unitName }}</span>

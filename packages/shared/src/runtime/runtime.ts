@@ -411,6 +411,8 @@ export interface InterpretInput {
   }[];
   /** Open theatres (projects): an intent with none named goes to the only open one. */
   theatres?: { id: string; name: string; status: string }[];
+  /** Campaigns under way or held, for "cancel the campaign", "carry on with the campaign". */
+  campaigns?: { id: string; name: string; theatreId: string; status: string; step: number }[];
   /** Whether "everything, stand down" is in force. */
   allHalted: boolean;
   /** The operation that is the main effort, if any. */

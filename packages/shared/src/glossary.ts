@@ -32,6 +32,12 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     meaning:
       'The standing home of a codebase: its repository, its site or environments, and the operations run in it. Open one per project.',
   },
+  campaign: {
+    term: 'Campaign',
+    short: 'A sequence of operations toward one end',
+    meaning:
+      'Several operations run one after another inside a theatre, each launched when the one before it closes. Plan the steps once; HQ runs them in turn.',
+  },
   operation: {
     term: 'Operation',
     short: 'A large piece of work owned by HQ',

@@ -55,6 +55,10 @@ const COMMANDER_ONLY: ChatAction['kind'][] = [
   'grant-deploy-rights',
   'create-operation',
   'create-theatre',
+  'create-campaign',
+  'cancel-campaign',
+  'resume-campaign',
+  'github-theatre',
   'assign-resource',
   'release-resource',
   'set-main-repository',
@@ -192,6 +196,10 @@ export class ChatService {
       action.unitId !== channelUnit ||
       action.kind === 'create-operation' ||
       action.kind === 'create-theatre' ||
+      action.kind === 'create-campaign' ||
+      action.kind === 'cancel-campaign' ||
+      action.kind === 'resume-campaign' ||
+      action.kind === 'github-theatre' ||
       action.kind === 'assign-resource' ||
       action.kind === 'release-resource' ||
       action.kind === 'set-main-repository' ||
@@ -634,6 +642,15 @@ export class ChatService {
         name: t.body.name,
         status: t.body.status,
       })),
+      campaigns: (await this.record.listActive('campaign'))
+        .filter((c) => c.body.status === 'under-way' || c.body.status === 'held')
+        .map((c) => ({
+          id: c.entityId,
+          name: c.body.name,
+          theatreId: c.body.theatreId,
+          status: c.body.status,
+          step: c.body.current + 1,
+        })),
       operations: (await this.record.listActive('operation')).map((o) => ({
         id: o.entityId,
         name: o.body.name,
@@ -672,6 +689,7 @@ export class ChatService {
   private async drastic(a: ChatAction): Promise<boolean> {
     if (
       a.kind === 'cancel-operation' ||
+      a.kind === 'cancel-campaign' ||
       a.kind === 'restart-operation' ||
       a.kind === 'withdraw-mission' ||
       a.kind === 'restart-mission'
@@ -685,6 +703,20 @@ export class ChatService {
   /** A one-line, human description of an action that has not run yet. */
   private async describe(a: ChatAction): Promise<string> {
     if (a.kind === 'create-operation') return `Launch Operation ${a.name}: “${a.intent}”`;
+    if (a.kind === 'create-campaign')
+      return `Plan Campaign ${a.name} (${a.steps.length} step(s): ${a.steps.map((s) => s.intent).join(' ')})`;
+    if (a.kind === 'cancel-campaign') {
+      const c = await this.record.requireActive('campaign', a.campaignId);
+      return `Call off Campaign ${c.body.name}${a.note ? `: ${a.note}` : ''}`;
+    }
+    if (a.kind === 'resume-campaign') {
+      const c = await this.record.requireActive('campaign', a.campaignId);
+      return a.skip
+        ? `Skip step ${c.body.current + 1} of Campaign ${c.body.name}`
+        : `Start step ${c.body.current + 1} of Campaign ${c.body.name} over`;
+    }
+    if (a.kind === 'github-theatre')
+      return `Put the theatre on GitHub as ${a.owner}/${a.repo ?? '<its name>'} (token: ${a.credentialName})`;
     if (a.kind === 'create-theatre')
       return `Open Theatre ${a.name}${a.repoSupplyId ? ' on an existing repository' : a.projectKind ? ' (one HTML file, published by ORBOT)' : ''}${a.intent ? `: “${a.intent}”` : ''}`;
     if (a.kind === 'hold-policy') {

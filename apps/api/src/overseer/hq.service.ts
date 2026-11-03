@@ -162,7 +162,12 @@ export class HqService implements OnApplicationBootstrap, OnModuleDestroy {
     budgetUnits: number | null = null,
     reconFirst = false,
     supplyIds: string[] = [],
-    opts: { theatreId?: string | null; holdPolicy?: HoldPolicy | null; autonomous?: boolean } = {},
+    opts: {
+      theatreId?: string | null;
+      holdPolicy?: HoldPolicy | null;
+      autonomous?: boolean;
+      campaignId?: string | null;
+    } = {},
   ): Promise<RecordVersion<OperationBody>> {
     const opName = name ?? intent.split(/\s+/).slice(0, 3).join(' ');
     const resources: RecordVersion<SupplyBody>[] = [];
@@ -176,6 +181,7 @@ export class HqService implements OnApplicationBootstrap, OnModuleDestroy {
           phase: 'intent',
           theatreId: opts.theatreId ?? null,
           autonomous: opts.autonomous ?? false,
+          campaignId: opts.campaignId ?? null,
           holdPolicy: opts.holdPolicy ?? null,
           supplyIds: resources.map((r) => r.entityId),
           budgetUnits,

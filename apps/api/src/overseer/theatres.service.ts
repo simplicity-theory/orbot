@@ -132,7 +132,12 @@ export class TheatresService {
   }
 
   /** State intent inside a theatre: the operation starts with everything the theatre holds. */
-  async launch(theatreId: string, input: z.output<typeof TheatreIntentRequest>, actor: string) {
+  async launch(
+    theatreId: string,
+    input: z.output<typeof TheatreIntentRequest>,
+    actor: string,
+    opts: { campaignId?: string | null } = {},
+  ) {
     const theatre = await this.require(theatreId);
     this.assertOpen(theatre, 'Launch an operation in');
     return this.hq.createOperation(
@@ -142,7 +147,7 @@ export class TheatresService {
       input.budgetUnits ?? null,
       input.reconFirst ?? false,
       [...theatre.body.supplyIds, ...(input.supplyIds ?? [])],
-      TheatresService.launchOptions(theatre),
+      { ...TheatresService.launchOptions(theatre), campaignId: opts.campaignId ?? null },
     );
   }
 
@@ -220,6 +225,15 @@ export class TheatresService {
   async close(theatreId: string, note: string, actor: string) {
     const theatre = await this.require(theatreId);
     this.assertOpen(theatre, 'Close');
+    const campaigns = (
+      await this.record.listActive('campaign', { bodyContains: { theatreId } })
+    ).filter((c) => c.body.status === 'under-way' || c.body.status === 'held');
+    if (campaigns.length) {
+      throw new ConflictException({
+        message: `Theatre ${theatre.body.name} still has ${campaigns.length} campaign(s) under way: ${campaigns.map((c) => c.body.name).join(', ')}.`,
+        action: 'Let them finish, or call them off, then close the theatre.',
+      });
+    }
     const open = (
       await this.record.listActive('operation', { bodyContains: { theatreId } })
     ).filter((o) => o.body.phase !== 'closed');

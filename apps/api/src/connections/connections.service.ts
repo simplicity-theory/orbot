@@ -12,6 +12,7 @@ import {
   type ConnectionSupply,
   type ConnectServiceRequest,
   type ConnectionView,
+  type GitHubTheatreRequest,
   type IssueView,
   type PolicyRule,
   type RecordEvent,
@@ -35,8 +36,17 @@ import { RecordService } from '../record/record.service.js';
 import { RedactionService } from '../redaction/redaction.service.js';
 import { WorkspaceManager } from '../runtime/workspace-manager.js';
 import { SecretsService } from '../secrets/secrets.service.js';
+import { SupplyService } from '../supply/supply.service.js';
 import type { Connector } from './connector.js';
 import { GitHubConnector } from './github.connector.js';
+
+/** A GitHub repository name from a theatre's name: lowercase, dashes. */
+export const slug = (name: string) =>
+  name
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 100) || 'project';
 
 /** Status reason on production deploys held until the build pipeline is green. */
 export const PIPELINE_HELD = 'The build pipeline is not green';
@@ -71,6 +81,7 @@ export class ConnectionsService implements OnModuleInit, OnApplicationBootstrap,
     private readonly overseer: OverseerService,
     private readonly work: WorkService,
     private readonly workspaces: WorkspaceManager,
+    private readonly supply: SupplyService,
   ) {}
 
   onModuleInit() {
@@ -153,6 +164,120 @@ export class ConnectionsService implements OnModuleInit, OnApplicationBootstrap,
       { name: input.name, connected: true, spec },
       { actor, reason: `Connected ${input.provider} ${input.owner}/${input.repo}` },
     );
+  }
+
+  /**
+   * Put a theatre's repository on GitHub (D127): the repository is made there if there is none
+   * by that name, the connection is recorded (code host, issues and pipeline), the default
+   * branch is pushed now, and every landing HQ makes from then on is pushed too. The token is
+   * a credential by name; one pasted here is stored first and never recorded.
+   */
+  async putTheatreOnGitHub(
+    theatreId: string,
+    input: z.output<typeof GitHubTheatreRequest>,
+    actor: string,
+  ) {
+    const theatre = await this.record.requireActive('theatre', theatreId);
+    if (!theatre.body.repoSupplyId) {
+      throw new BadRequestException({
+        message: `Theatre ${theatre.body.name} has no repository yet.`,
+        action: 'Assign one to the theatre, then put it on GitHub.',
+      });
+    }
+    const repo = await this.record.requireActive('supply', theatre.body.repoSupplyId);
+    if (repo.body.spec.kind !== 'repository') throw new BadRequestException('Not a repository.');
+    const already = await this.forRepo(repo.entityId, 'codeHost');
+    if (already) {
+      throw new BadRequestException({
+        message: `${repo.body.name} is already on GitHub as ${already.spec.owner}/${already.spec.repo}.`,
+        action: 'Disconnect it in the Supply Depot first to move it.',
+      });
+    }
+    const repoName = input.repo ?? slug(theatre.body.name);
+    let credentialName = input.credentialName;
+    if (input.token) {
+      credentialName = credentialName ?? `token-github-${slug(input.owner)}`;
+      await this.supply.storeCredential(
+        { name: credentialName, value: input.token },
+        { actor, reason: `GitHub token for ${input.owner} stored` },
+      );
+    }
+    const spec: ConnectionSupply = {
+      kind: 'connection',
+      provider: 'github',
+      apiUrl: input.apiUrl,
+      owner: input.owner,
+      repo: repoName,
+      pushUrl: '',
+      repoSupplyId: repo.entityId,
+      credentialName,
+      services: { codeHost: true, issues: true, pipeline: true },
+      closeIssues: true,
+    };
+    const c = this.connector(spec);
+    let remote;
+    let made = false;
+    try {
+      remote = await c.repository();
+      if (!remote) {
+        remote = await c.createRepository({
+          private: input.private,
+          description: theatre.body.description,
+        });
+        made = true;
+      }
+    } catch (err) {
+      throw new BadRequestException({
+        message: `Could not reach GitHub as ${input.owner}: ${this.redaction.clean((err as Error).message)}`,
+        action:
+          'Check the owner (your GitHub user or organisation) and the token: it needs the repo scope, and to create repositories in an organisation it needs to be allowed there.',
+      });
+    }
+    const conn = await this.connect(
+      {
+        name: `GitHub ${input.owner}/${repoName}`,
+        provider: 'github',
+        apiUrl: input.apiUrl,
+        owner: input.owner,
+        repo: repoName,
+        pushUrl: remote.pushUrl,
+        repoSupplyId: repo.entityId,
+        credentialName,
+        services: spec.services,
+        closeIssues: true,
+      },
+      actor,
+    );
+    const branch = repo.body.spec.defaultBranch;
+    try {
+      const sha = await this.push(
+        Object.assign(conn, { spec: conn.body.spec as ConnectionSupply }),
+        repo.body,
+        branch,
+      );
+      await this.record.event(
+        'sitrep',
+        {
+          level: 'hq',
+          text: `Theatre ${theatre.body.name} is on GitHub: ${remote.url}${made ? ' (repository created)' : ''}. ${branch} pushed at ${sha.slice(0, 10)}; every landing is pushed from now on.`,
+          status: null,
+        },
+        {},
+        actor,
+      );
+    } catch (err) {
+      await this.failed(
+        Object.assign(conn, { spec: conn.body.spec as ConnectionSupply }),
+        `push ${branch}`,
+        err,
+      );
+      throw new BadRequestException({
+        message: `${remote.url} is connected, but ${branch} could not be pushed: ${this.redaction.clean((err as Error).message)}`,
+        action:
+          'Check the token can push to it. The next landing tries again, or disconnect it in the Supply Depot.',
+      });
+    }
+    return { connection: conn, url: remote.url, created: made };
   }
 
   /** Disconnect: a new version, connected no longer. Its history stays on the record. */
@@ -271,6 +396,28 @@ export class ConnectionsService implements OnModuleInit, OnApplicationBootstrap,
     const branch = op.body.integrationBranch;
     try {
       const sha = await this.push(conn, repo.body, branch);
+      const main = repo.body.spec.kind === 'repository' ? repo.body.spec.defaultBranch : 'main';
+      const local = repo.body.spec.kind === 'repository' ? repo.body.spec.localPath : '';
+      const landed = await git(local, ['merge-base', '--is-ancestor', branch, main])
+        .then(() => true)
+        .catch(() => false);
+      if (landed) {
+        // HQ (or the Commander) landed the work: the default branch goes up too, and no pull
+        // request is opened for work that is already on it.
+        const head = await this.push(conn, repo.body, main);
+        await this.record.event(
+          'sitrep',
+          {
+            level: 'hq',
+            text: `${main} pushed to GitHub (${conn.spec.owner}/${conn.spec.repo}) at ${head.slice(0, 10)}.`,
+            status: null,
+          },
+          { operationId: opId },
+          HQ_ACTOR,
+        );
+        await this.watch(op.body.repoSupplyId, main, head, { operationId: opId });
+        if (!op.body.pullRequest) return;
+      }
       if (!op.body.pullRequest) {
         const c = this.connector(conn.spec);
         const base = repo.body.spec.kind === 'repository' ? repo.body.spec.defaultBranch : 'main';

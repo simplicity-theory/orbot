@@ -11,6 +11,8 @@ import {
   type TheatreDetailView,
   type TheatreBody,
   type SupplyBody,
+  type CampaignBody,
+  type CampaignSummary,
 } from '@orbot/shared';
 import type {
   ApprovalsView,
@@ -158,6 +160,10 @@ export class ViewsService {
         unitName: 'HQ',
         unitId: null,
       });
+    }
+    for (const c of await this.record.listActive('campaign')) {
+      if (c.body.status !== 'held') continue;
+      waiting.push({ ...campaignHold(c), unitName: 'HQ', unitId: null });
     }
     return {
       backbriefs: orbat.units.flatMap((u) => u.backbriefs),
@@ -338,6 +344,7 @@ export class ViewsService {
           : null;
         return th ? { id: th.entityId, name: th.body.name } : null;
       })(),
+      campaign: operation ? await this.campaignOf(operation) : null,
       missionTasks,
       events,
       versions,
@@ -368,7 +375,7 @@ export class ViewsService {
         .map(async (t) => {
           const mine = ops.filter((o) => o.operation.theatreId === t.entityId);
           return {
-            ...(await this.theatreBase(t)),
+            ...(await this.theatreBase(t, mine)),
             operations: mine.map((o) => ({
               id: o.operation.id,
               name: o.operation.name,
@@ -385,13 +392,13 @@ export class ViewsService {
     const t = await this.record.requireActive('theatre', id);
     const ops = (await this.operations()).filter((o) => o.operation.theatreId === id);
     return {
-      ...(await this.theatreBase(t)),
+      ...(await this.theatreBase(t, ops)),
       operations: ops,
       needsYou: ops.reduce((n, o) => n + o.needsYou.length, 0),
     };
   }
 
-  private async theatreBase(t: RecordVersion<TheatreBody>) {
+  private async theatreBase(t: RecordVersion<TheatreBody>, ops: OperationSummary[]) {
     const resources: RecordVersion<SupplyBody>[] = [];
     for (const sid of t.body.supplyIds) {
       const s = await this.record.getActive('supply', sid);
@@ -400,8 +407,30 @@ export class ViewsService {
     const repo = resources.find((s) => s.entityId === t.body.repoSupplyId) ?? null;
     const site =
       resources.find((s) => s.body.spec.kind === 'environment' && s.body.spec.site) ?? null;
+    const gh = repo
+      ? (await this.record.listActive('supply')).find(
+          (s) =>
+            s.body.connected &&
+            s.body.spec.kind === 'connection' &&
+            s.body.spec.repoSupplyId === repo.entityId &&
+            s.body.spec.services.codeHost,
+        )
+      : null;
+    const campaigns = (
+      await this.record.listActive('campaign', { bodyContains: { theatreId: t.entityId } })
+    ).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     return {
       theatre: toView(t),
+      github:
+        gh && gh.body.spec.kind === 'connection'
+          ? {
+              connectionId: gh.entityId,
+              owner: gh.body.spec.owner,
+              repo: gh.body.spec.repo,
+              url: githubUrl(gh.body.spec),
+            }
+          : null,
+      campaigns: campaigns.map((c) => campaignSummary(c, t, ops)),
       repository: repo ? toView(repo) : null,
       site:
         site && site.body.spec.kind === 'environment'
@@ -414,6 +443,37 @@ export class ViewsService {
           : null,
       resources: toViews(resources),
     };
+  }
+
+  /** Which campaign an operation is a step of, and which step. */
+  private async campaignOf(op: RecordVersion<OperationBody>) {
+    const c = op.body.campaignId
+      ? await this.record.getActive('campaign', op.body.campaignId)
+      : null;
+    if (!c) return null;
+    const step = c.body.steps.findIndex((s) => s.operationId === op.entityId);
+    return { id: c.entityId, name: c.body.name, step: step + 1, of: c.body.steps.length };
+  }
+
+  async campaigns(): Promise<CampaignSummary[]> {
+    const [list, ops, theatres] = await Promise.all([
+      this.record.listActive('campaign'),
+      this.operations(),
+      this.record.listActive('theatre'),
+    ]);
+    return list
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .flatMap((c) => {
+        const t = theatres.find((x) => x.entityId === c.body.theatreId);
+        return t ? [campaignSummary(c, t, ops)] : [];
+      });
+  }
+
+  async campaign(id: string): Promise<CampaignSummary> {
+    const c = await this.record.requireActive('campaign', id);
+    const t = await this.record.requireActive('theatre', c.body.theatreId);
+    const ops = (await this.operations()).filter((o) => o.operation.campaignId === id);
+    return campaignSummary(c, t, ops);
   }
 
   async operations(): Promise<OperationSummary[]> {
@@ -535,6 +595,7 @@ export class ViewsService {
     return {
       operation: toView(op),
       theatre: theatre ? { id: theatre.entityId, name: theatre.body.name } : null,
+      campaign: await this.campaignOf(op),
       budget,
       missions: rows,
       needsYou,
@@ -918,4 +979,78 @@ function attentionFor(
     });
   }
   return items;
+}
+
+/** A campaign with each step's operation and standing (D126). */
+function campaignSummary(
+  c: RecordVersion<CampaignBody>,
+  t: RecordVersion<TheatreBody>,
+  ops: OperationSummary[],
+): CampaignSummary {
+  const steps = c.body.steps.map((s, index) => {
+    const o = s.operationId ? ops.find((x) => x.operation.id === s.operationId) : null;
+    const status: CampaignSummary['steps'][number]['status'] =
+      index < c.body.current
+        ? 'done'
+        : index > c.body.current
+          ? c.body.status === 'cancelled'
+            ? 'cancelled'
+            : 'waiting'
+          : c.body.status === 'held'
+            ? 'held'
+            : c.body.status === 'cancelled'
+              ? 'cancelled'
+              : c.body.status === 'done'
+                ? 'done'
+                : 'under-way';
+    return {
+      index,
+      name: s.name,
+      intent: s.intent,
+      operation: o
+        ? {
+            id: o.operation.id,
+            name: o.operation.name,
+            phase: o.operation.phase,
+            cancelled: !!o.operation.cancelled,
+          }
+        : null,
+      status,
+    };
+  });
+  const current = steps[c.body.current];
+  const currentOp = current?.operation
+    ? ops.find((x) => x.operation.id === current.operation!.id)
+    : null;
+  return {
+    campaign: toView(c),
+    theatre: { id: t.entityId, name: t.body.name },
+    steps,
+    needsYou: [
+      ...(c.body.status === 'held' ? [campaignHold(c)] : []),
+      ...(currentOp?.needsYou ?? []),
+    ],
+  };
+}
+
+/** The decision a held campaign waits for. */
+function campaignHold(c: RecordVersion<CampaignBody>): AttentionItem {
+  const step = c.body.current + 1;
+  return {
+    kind: 'campaign',
+    label: `Campaign ${c.body.name} holds at step ${step} of ${c.body.steps.length}: ${c.body.held ?? 'its operation was cancelled'}`,
+    title: `Campaign ${c.body.name} · step ${step} of ${c.body.steps.length}`,
+    detail: brief(c.body.held ?? 'Its operation was cancelled.'),
+    next: 'Start the step over, skip it, or call the campaign off.',
+    link: `/campaigns/${c.entityId}`,
+    entityId: c.entityId,
+  };
+}
+
+/** Where a GitHub connection's repository is browsed. */
+function githubUrl(spec: { apiUrl: string; owner: string; repo: string }): string {
+  const api = spec.apiUrl.replace(/\/$/, '');
+  const host =
+    api === 'https://api.github.com' ? 'https://github.com' : api.replace(/\/api\/v3$/, '');
+  return `${host}/${spec.owner}/${spec.repo}`;
 }

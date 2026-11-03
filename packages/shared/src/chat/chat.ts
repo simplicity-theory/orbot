@@ -81,6 +81,46 @@ export const ChatAction = z.discriminatedUnion('kind', [
     repoSupplyId: Id.nullable().default(null),
     intent: z.string().min(1).max(1000).nullable().default(null),
   }),
+  /** Through HQ: plan a campaign in a theatre: steps launched as operations one after another. */
+  z.object({
+    kind: z.literal('create-campaign'),
+    unitId: Id.nullable(),
+    /** null = the only open theatre. */
+    theatreId: Id.nullable().default(null),
+    name: z.string().min(1).max(100),
+    steps: z
+      .array(
+        z.object({
+          name: z.string().max(100).nullable().default(null),
+          intent: z.string().min(1).max(1000),
+        }),
+      )
+      .min(1)
+      .max(30),
+  }),
+  /** Through HQ: call a campaign off (its operation under way is cancelled). */
+  z.object({
+    kind: z.literal('cancel-campaign'),
+    unitId: Id.nullable(),
+    campaignId: Id,
+    note: z.string().max(500).default(''),
+  }),
+  /** Through HQ: a held campaign goes on: its step is started over (or skipped). */
+  z.object({
+    kind: z.literal('resume-campaign'),
+    unitId: Id.nullable(),
+    campaignId: Id,
+    skip: z.boolean().default(false),
+  }),
+  /** Through HQ: put a theatre's repository on GitHub (token by credential name only). */
+  z.object({
+    kind: z.literal('github-theatre'),
+    unitId: Id.nullable(),
+    theatreId: Id.nullable().default(null),
+    owner: z.string().min(1).max(100),
+    repo: z.string().max(100).nullable().default(null),
+    credentialName: z.string().min(1),
+  }),
   /** Through HQ: assign a depot item to an operation. A missing required one blocks it. */
   z.object({
     kind: z.literal('assign-resource'),

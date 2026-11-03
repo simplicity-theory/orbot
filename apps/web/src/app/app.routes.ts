@@ -54,6 +54,11 @@ export const routes: Routes = [
         loadComponent: () => import('./features/theatres/theatre.page').then((m) => m.TheatrePage),
       },
       {
+        path: 'campaigns/:campaignId',
+        loadComponent: () =>
+          import('./features/campaigns/campaign.page').then((m) => m.CampaignPage),
+      },
+      {
         path: 'operations',
         title: 'Operations',
         loadComponent: () =>
