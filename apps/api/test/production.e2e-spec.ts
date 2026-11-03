@@ -98,6 +98,8 @@ describe('production readiness', () => {
       expect(u.botCount).toBe(3);
       expect(u.overseer?.isOverseer).toBe(true);
       expect(u.unit.supplyIds).toEqual([]);
+      // The force runs on the configured runtime (ORBOT_RUNTIME), not the demo's scripted bots.
+      for (const b of [...u.bots, u.overseer]) expect(b.runtime).toBe(t.config.defaultRuntime);
     }
     expect((await t.agent.get('/api/operations').expect(200)).body).toEqual([]);
     expect((await t.agent.get('/api/supply').expect(200)).body).toEqual([]);

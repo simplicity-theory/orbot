@@ -276,12 +276,13 @@ export async function seedDemoForce(
       SEED,
       unitId,
     );
+    // The demo's bots play scripted scenarios; the force itself runs on the configured runtime.
     const base = {
       unitId,
       status: 'idle' as const,
       currentTaskId: null,
       queue: [],
-      runtime: 'simulated',
+      runtime: opts.demo ? 'simulated' : config.defaultRuntime,
     };
     await force.createBot(
       { ...base, callsign: `${u.body.callsignPrefix}-0`, role: u.overseerRole, isOverseer: true },
