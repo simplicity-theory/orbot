@@ -259,6 +259,8 @@ export const OperationBody = z.object({
     ]),
   /** HQ's plan, kept while the operation waits for resources so it is not planned twice. */
   plan: z.array(PlannedMission).nullable().default(null),
+  /** Why HQ could not plan at the O Group (the staff runtime failed); cleared when it plans. */
+  planningError: z.string().nullable().default(null),
   /** Missions in handoff order (Engineers → Inspection → Guard → Logistics). */
   missionIds: z.array(Id).default([]),
   /** Missions withdrawn when the operation was issued again (a new main repository). */

@@ -53,7 +53,9 @@ COPY --from=build /app/apps/api/package.json apps/api/
 COPY --from=build /app/apps/api/dist apps/api/dist
 COPY --from=build /app/apps/web/dist apps/web/dist
 COPY deploy deploy
-RUN mkdir -p /app/workspaces && chown -R orbot:orbot /app/workspaces /app/deploy \
+# Writable by whoever the container runs as (compose maps it to the operator's uid, D123).
+RUN mkdir -p /app/workspaces && chown -R orbot:orbot /app/workspaces /app/deploy /home/orbot \
+  && chmod -R a+rwX /app/workspaces /app/deploy /home/orbot \
   && chmod +x /app/deploy/orbot/entrypoint.sh
 USER orbot
 EXPOSE 3000

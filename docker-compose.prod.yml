@@ -32,9 +32,13 @@ services:
     image: orbot:latest
     restart: unless-stopped
     env_file: .env
+    # Runs as you (orbot setup writes your uid and gid), so the `claude` login mounted below
+    # is readable however Claude rewrites it; 1001 is the image's own user (D123).
+    user: '${ORBOT_UID:-1001}:${ORBOT_GID:-1001}'
     environment:
       # Pinned here so a development .env copied over cannot point the container elsewhere.
       NODE_ENV: production
+      HOME: /home/orbot
       ORBOT_ROOT: /app
       ORBOT_WEB_DIST: /app/apps/web/dist/web/browser
       ORBOT_WORKSPACES_DIR: /app/workspaces

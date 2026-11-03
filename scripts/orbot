@@ -108,21 +108,14 @@ cmd_setup() {
     -e "s|^ORBOT_COMMANDER_PASSPHRASE=.*|ORBOT_COMMANDER_PASSPHRASE=$passphrase|" \
     -e "s|^ORBOT_RUNTIME=.*|ORBOT_RUNTIME=$runtime|" \
     -e "s|^ORBOT_CLAUDE_HOME=.*|ORBOT_CLAUDE_HOME=$claude_home|" \
+    -e "s|^ORBOT_UID=.*|ORBOT_UID=$(id -u)|" \
+    -e "s|^ORBOT_GID=.*|ORBOT_GID=$(id -g)|" \
     deploy/orbot/env.production.example > .env
   chmod 600 .env
 
   if [[ "$runtime" == "claude-code" ]]; then
-    if [[ -d "$claude_home" ]]; then
-      if command -v setfacl >/dev/null; then
-        say "Letting the container's user (uid 1001) use the Claude login in $claude_home"
-        setfacl -R -m u:1001:rwX "$claude_home" && setfacl -R -d -m u:1001:rwX "$claude_home" \
-          || echo "  Could not set the ACL; run it yourself: setfacl -R -m u:1001:rwX $claude_home"
-      else
-        echo "  setfacl is not installed: give uid 1001 read/write access to $claude_home yourself."
-      fi
-    else
-      echo "  $claude_home does not exist yet: run \`claude\` once and log in, then: setfacl -R -m u:1001:rwX $claude_home"
-    fi
+    say "Bots run as you (uid $(id -u)) inside the container, with the Claude login in $claude_home"
+    [[ -d "$claude_home" ]] || echo "  $claude_home does not exist yet: run \`claude\` once and log in before orbot up."
   fi
   if [[ "$runtime" == "claude" ]]; then
     echo "  Put your key in .env: ANTHROPIC_API_KEY=…"

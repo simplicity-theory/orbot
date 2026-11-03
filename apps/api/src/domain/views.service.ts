@@ -494,6 +494,17 @@ export class ViewsService {
       st?.computeLimits === 'on',
     );
     needsYou.push(...budgetAttention(`Operation ${op.body.name}`, `/operations/${id}`, id, budget));
+    if (op.body.planningError && !['after-action', 'closed'].includes(op.body.phase)) {
+      needsYou.unshift({
+        kind: 'resources',
+        label: `HQ could not plan Operation ${op.body.name}: ${op.body.planningError}`,
+        title: `Planning · Operation ${op.body.name}`,
+        detail: `HQ could not plan: ${brief(op.body.planningError)}`,
+        next: 'Put it right (the runtime, the login, the repository), then Start over on the operation to plan again.',
+        link: `/operations/${id}`,
+        entityId: id,
+      });
+    }
     // A rehearsal that found blockers, while the plan can still be put right.
     const sand = await this.sandTables.latest(id);
     if (sand?.body.verdict === 'no-go' && !['after-action', 'closed'].includes(op.body.phase)) {

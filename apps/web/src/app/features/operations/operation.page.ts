@@ -75,6 +75,12 @@ import { SandTable } from './sand-table';
             @if (v.operation.cancelled; as c) {
               <p><orb-status status="stood-down" /> Cancelled{{ c.note ? ': ' + c.note : '' }}</p>
             }
+            @if (v.operation.planningError; as e) {
+              <p class="planning-error" role="status">
+                <orb-status status="blocked" /> HQ could not plan: {{ e }}
+                <span class="meta">Put it right, then press Start over to plan again.</span>
+              </p>
+            }
             @if (v.operation.reconTaskId) {
               <p>
                 <orb-term key="recon">Recon</orb-term> first:
@@ -363,6 +369,13 @@ import { SandTable } from './sand-table';
         grid-column: 1 / -1;
         padding-bottom: var(--space-2);
       }
+    }
+    .planning-error {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--space-2);
+      color: var(--tone-danger);
     }
     .deployed {
       color: var(--tone-success);

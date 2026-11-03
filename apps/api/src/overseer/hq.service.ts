@@ -831,22 +831,28 @@ export class HqService implements OnApplicationBootstrap, OnModuleDestroy {
           );
         }
       }
-      const plan = await this.staff.planOperation({
-        name: op.body.name,
-        intent: op.body.intent,
-        units: units.map((u) => ({
-          id: u.entityId,
-          name: u.body.name,
-          role: u.body.role,
-          standingMission: u.body.standingMission,
-        })),
-        resources: resources.map((r) => ({
-          name: r.body.name,
-          kind: resourceKindOf(r.body) ?? r.body.spec.kind,
-          project: r.body.spec.kind === 'repository' ? r.body.spec.project : null,
-        })),
-        recon,
-      });
+      let plan: Awaited<ReturnType<typeof this.staff.planOperation>>;
+      try {
+        plan = await this.planWithStaff(op, units, resources, recon);
+      } catch (err) {
+        const why = (err as Error).message;
+        await this.record.revise('operation', opId, (o) => ({ ...o, planningError: why }), {
+          actor: HQ_ACTOR,
+          reason: 'O Group could not plan',
+        });
+        await this.hqSitrep(
+          null,
+          opId,
+          `HQ could not plan Operation ${op.body.name}: ${why} Put it right, then Start over on the operation to plan again.`,
+        );
+        return;
+      }
+      if (op.body.planningError) {
+        await this.record.revise('operation', opId, (o) => ({ ...o, planningError: null }), {
+          actor: HQ_ACTOR,
+          reason: 'O Group planned',
+        });
+      }
       if (op.body.reconFirst && !op.body.reconTaskId && plan.missions.length) {
         // The unit that would build it looks first; HQ plans once its report is in.
         const builder = units.find((u) => u.entityId === plan.missions[0]!.unitId)!;
@@ -913,6 +919,31 @@ export class HqService implements OnApplicationBootstrap, OnModuleDestroy {
       return;
     }
     await this.issueMissions(op, units);
+  }
+
+  /** HQ's staff plans the operation: a mission per unit from the intent, the units and the resources. */
+  private planWithStaff(
+    op: RecordVersion<OperationBody>,
+    units: RecordVersion<UnitBody>[],
+    resources: RecordVersion<SupplyBody>[],
+    recon: { unit: string; title: string; markdown: string }[],
+  ) {
+    return this.staff.planOperation({
+      name: op.body.name,
+      intent: op.body.intent,
+      units: units.map((u) => ({
+        id: u.entityId,
+        name: u.body.name,
+        role: u.body.role,
+        standingMission: u.body.standingMission,
+      })),
+      resources: resources.map((r) => ({
+        name: r.body.name,
+        kind: resourceKindOf(r.body) ?? r.body.spec.kind,
+        project: r.body.spec.kind === 'repository' ? r.body.spec.project : null,
+      })),
+      recon,
+    });
   }
 
   /** Issue the planned missions, equip the chain, and open the integration branch. */

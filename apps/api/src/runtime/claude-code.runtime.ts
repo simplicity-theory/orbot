@@ -117,7 +117,7 @@ const userMessage = (text: string): SDKUserMessage => ({
 /** Assistant errors the Commander, not the bot, has to resolve. */
 const ACCOUNT_ERRORS: Record<string, string> = {
   authentication_failed:
-    'Claude Code is not signed in. Run `claude` once on the ORBOT machine and log in with your Claude plan, then resume the task.',
+    'Claude Code is not signed in. Run `claude` once on the ORBOT machine and log in with your Claude plan; in production, check the container runs as you (ORBOT_UID/ORBOT_GID in .env) so it can read ~/.claude/.credentials.json. Then Start over or resume.',
   oauth_org_not_allowed:
     'Your Claude login is not allowed to use Claude Code here. Check your plan, then resume the task.',
   account_on_hold: 'Your Claude account is on hold. Resolve it at claude.ai, then resume the task.',

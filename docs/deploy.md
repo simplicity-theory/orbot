@@ -53,11 +53,10 @@ orbot setup --origin https://orbot.example.com --runtime claude
 | `--runtime …`   | `claude-code`           | `claude-code` (your Claude plan), `claude` (needs `ANTHROPIC_API_KEY` in `.env`), or `simulated` (scripted bots, free; installed in production only when chosen). |
 | `--claude-home` | `~/.claude`             | For `claude-code`: the `claude` login to mount into the container.                                                                                                |
 
-For `claude-code`, run `claude` once as yourself and log in before `orbot up`. The container's
-user (uid 1001) needs to read and write that folder; `orbot setup` grants it with an ACL
-(`setfacl -R -m u:1001:rwX ~/.claude`), which leaves your own access as it was. Anthropic's
-terms allow a Pro/Max login for one person's own use, so don't give other officers orders
-while bots run on it.
+For `claude-code`, run `claude` once as yourself and log in before `orbot up`. The container
+runs as you (`orbot setup` writes your uid and gid into `.env` as `ORBOT_UID`/`ORBOT_GID`), so
+it reads that login however Claude rewrites its files. Anthropic's terms allow a Pro/Max login
+for one person's own use, so don't give other officers orders while bots run on it.
 
 Anything else (`ORBOT_CLAUDE_MODEL`, the pace settings, `ORBOT_SEED`) is edited in `.env`.
 `ORBOT_SEED=force` (the default) seeds the four units with their Overseers, bots and Field
@@ -141,6 +140,7 @@ is not obvious.
 | A task reads **Working** but its last activity is old                   | Settings → **Restart the queues** (or in chat to HQ: "Restart the queues"): a task shown working with no run behind it is queued again and every unit dispatches. The escalation sweep does the same by itself every half minute, and so does every start of the API.                                                |
 | A Guard finding holds the work you did not want held                    | Set the unit's hold policy (Rules tab, or in chat: "Guard, hold only on critical findings"; "Go fully automatic" never holds), or order the fix in chat ("Fix it").                                                                                                                                                  |
 | "Needs a decision" in a sitrep, nothing in Needs you                    | The task is failed: it is on the bot's page and the unit's task list, with a Retry button.                                                                                                                                                                                                                           |
+| "Claude Code is not signed in" although you are                         | The container cannot read `~/.claude/.credentials.json`. Check `.env` has `ORBOT_UID`/`ORBOT_GID` equal to `id -u`/`id -g` (an install from before D123 lacks them: add them, then `orbot up`), and that `claude` is logged in on this machine. Then Start over on the operation.                                    |
 | A bot keeps failing with "runtime crashed" or "No bot runtime called …" | `orbot logs` shows the error. Settings shows each bot's runtime: for `claude-code`, run `claude` on the host and check the login is still valid; for `claude`, the API key in `.env`.                                                                                                                                |
 | The sand table lists blockers                                           | Each blocker names its fix and links to where to do it (chat to HQ, the Supply Depot).                                                                                                                                                                                                                               |
 | `orbot update` refuses: local changes                                   | `git -C /var/www/orbot status`; commit or discard them (`git checkout -- .`), then update again.                                                                                                                                                                                                                     |
