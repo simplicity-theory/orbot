@@ -27,9 +27,15 @@ describe('Theatres', () => {
   const theatres = async (): Promise<TheatreSummary[]> =>
     (await t.agent.get('/api/theatres').expect(200)).body;
 
+  let engineers: { unitId: string; botId: string };
+
   beforeAll(async () => {
     t = await startTestApp();
-    await makeUnitWithBot(t.app, { name: 'Engineers' });
+    const eng = await makeUnitWithBot(t.app, {
+      name: 'Engineers',
+      roe: { mayDoAlone: ['Run the tests'], mustEscalate: ['Adding a dependency'] },
+    });
+    engineers = { unitId: eng.unit.entityId, botId: eng.bot.entityId };
     await makeUnitWithBot(t.app, { name: 'Logistics', role: 'Deploy', prefix: 'L' });
   });
   afterAll(() => t.close());
@@ -202,6 +208,42 @@ describe('Theatres', () => {
     expect(named.readback.body.items[0]!.summary).toMatch(
       /^Operation Tags Notes launched in Theatre Pocket Notes/,
     );
+  });
+
+  it('in an automatic theatre HQ answers a permission request for the Commander; the task carries on', async () => {
+    const list = await theatres();
+    const notes = list.find((x) => x.theatre.name === 'Pocket Notes')!;
+    const launched = (
+      await t.agent
+        .post(`/api/theatres/${notes.theatre.id}/operations`)
+        .send({ intent: 'Add note numbering.', name: 'Numbering' })
+        .expect(201)
+    ).body;
+    const v = await waitFor(async () => {
+      const x = await op(launched.id);
+      return x.missions.find((m) => m.unit.id === engineers.unitId) ? x : null;
+    });
+    const mission = v.missions.find((m) => m.unit.id === engineers.unitId)!.mission;
+    const task = (
+      await t.agent
+        .post('/api/tasks')
+        .send({
+          unitId: engineers.unitId,
+          botId: engineers.botId,
+          missionId: mission.id,
+          title: 'Add the numbering library',
+          repoSupplyId: notes.theatre.repoSupplyId,
+          scenario: 'needs-permission',
+        })
+        .expect(201)
+    ).body;
+    await t.agent.post(`/api/tasks/${task.id}/run`).expect(202);
+    const done = await waitFor(async () => {
+      const x = (await t.agent.get(`/api/tasks/${task.id}`).expect(200)).body;
+      return x.task.status === 'done' ? x : null;
+    }, 30_000);
+    expect(done.task.permission).toMatchObject({ status: 'approved', by: 'system:hq' });
+    expect(done.task.permission.note).toMatch(/^Automatic theatre: HQ decides for the Commander/);
   });
 
   it('a gated theatre waits for the Commander; it closes only once its operations are over', async () => {

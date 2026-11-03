@@ -86,9 +86,7 @@ test('state intent, approve the plans and the deploy, give deploy rights in chat
     { timeout: 30_000 },
   );
   await expect(page.getByText(/Deployed to production at/)).toBeVisible();
-  await expect(page.getByRole('region', { name: /After Action review/ })).toContainText(
-    'Lessons kept as standing orders',
-  );
+  await expect(page.getByRole('region', { name: /After Action review/ })).toContainText('Lessons');
 
   await page.goto('/operations');
   await expect(page.getByRole('link', { name: 'Operation Ledger' })).toBeVisible();

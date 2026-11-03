@@ -24,6 +24,8 @@ export interface UnitFixtureOptions {
   /** Give the unit an Overseer (default true). */
   overseer?: boolean;
   gate?: 'approve-everything' | 'backbriefs-and-deploys' | 'escalations-only';
+  /** Rules of engagement: what a bot may do alone and what it must ask permission for. */
+  roe?: { mayDoAlone: string[]; mustEscalate: string[] };
   role?: string;
   prefix?: string;
   bots?: number;
@@ -50,7 +52,7 @@ export async function makeUnitWithBot(
       callsignPrefix: opts.prefix ?? 'E',
       overseerBotId: overseerId,
       approvalGate: opts.gate ?? 'backbriefs-and-deploys',
-      rulesOfEngagement: { mayDoAlone: [], mustEscalate: [] },
+      rulesOfEngagement: opts.roe ?? { mayDoAlone: [], mustEscalate: [] },
       standingOrders: opts.standingOrders ?? [],
       supplyIds: opts.supplyIds ?? [],
       order: 1,

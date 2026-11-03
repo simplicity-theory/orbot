@@ -550,7 +550,11 @@ export abstract class ClaudeFamilyRuntime implements BotRuntime {
         ? `Standing orders (always apply):\n${brief.unit.standingOrders.map((o) => `- ${o}`).join('\n')}`
         : '',
       brief.unit.rulesOfEngagement.mustEscalate.length
-        ? `Rules of engagement:\n${roe(brief.unit.rulesOfEngagement)}\nBefore you do anything under "Must ask permission first", use request_permission (after a handover) and wait for the decision. Never do it on your own judgement. A refused action stays refused: find another way, or report blocked with what you would need.`
+        ? `Rules of engagement:\n${roe(brief.unit.rulesOfEngagement)}\n${
+            brief.autonomous
+              ? 'This theatre runs fully automatically: nothing waits for the Commander. Where these rules say to ask permission first, do not ask and do not wait: take the cautious course within the rules (a check you have no tool to run is informational, not a failure; do not install anything new; never touch production) and record exactly what you did and did not do in your handover. If you do ask, HQ answers for the Commander and you carry on.'
+              : 'Before you do anything under "Must ask permission first", use request_permission (after a handover) and wait for the decision. Never do it on your own judgement. A refused action stays refused: find another way, or report blocked with what you would need.'
+          }`
         : '',
     ]
       .filter(Boolean)

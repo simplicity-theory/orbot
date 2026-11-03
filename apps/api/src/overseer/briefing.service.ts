@@ -84,6 +84,7 @@ export class BriefingService {
         rulesOfEngagement: unit.body.rulesOfEngagement,
         holdPolicy: await this.holds.effectiveFor(task, unit),
       },
+      autonomous: await this.autonomous(task),
       workspace,
       repository: await this.repository(task),
       permissions: await this.permissions(task.entityId),
@@ -141,6 +142,17 @@ export class BriefingService {
       });
     }
     return out;
+  }
+
+  /** Whether the task's operation runs in a fully automatic theatre. */
+  private async autonomous(task: RecordVersion<TaskBody>): Promise<boolean> {
+    const mission = task.body.missionId
+      ? await this.record.getActive('mission', task.body.missionId)
+      : null;
+    const op = mission?.body.operationId
+      ? await this.record.getActive('operation', mission.body.operationId)
+      : null;
+    return !!op?.body.autonomous;
   }
 
   /** Decisions on what this task asked permission for, oldest first. */

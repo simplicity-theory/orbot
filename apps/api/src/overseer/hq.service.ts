@@ -67,7 +67,7 @@ export function needsFor(current: OperationNeed[], plan: OperationPlan): Operati
  * HQ, the planning layer. Turns the Commander's intent into an operation, splits it into
  * one mission per unit in handoff order (Engineers → Inspection → Guard → Logistics),
  * passes work down the chain, sends failed checks back up it, and closes the operation
- * with an After Action review whose lessons become standing orders.
+ * with an After Action review whose lessons are recorded for the Commander (D124).
  *
  * Operation lifecycle: Intent → O Group → Backbrief → Execution → Handoffs → Sitreps →
  * After Action → Closed (a Frago may be issued at any time before After Action).
@@ -97,6 +97,7 @@ export class HqService implements OnApplicationBootstrap, OnModuleDestroy {
   }
 
   onApplicationBootstrap(): void {
+    this.background.run('startup', 'hq:permissions', () => this.decidePendingForCommander());
     this.sub = this.bus.notifications$.subscribe((n) => {
       if (n.type === 'version') {
         const v = n.version;
@@ -130,6 +131,10 @@ export class HqService implements OnApplicationBootstrap, OnModuleDestroy {
           if (s.to === 'done' || (s.to === 'stood-down' && s.reason?.startsWith('Sent back:'))) {
             this.enqueue(e.operationId, 'task', () => this.taskChanged(e.taskId!, s.to, s.reason));
           }
+        } else if (e.kind === 'permission.requested' && e.taskId) {
+          // A fully automatic theatre: HQ answers for the Commander (D125).
+          const taskId = e.taskId;
+          this.enqueue(e.operationId, 'permission', () => this.decideForCommander(taskId));
         } else if (e.kind === 'deployment') {
           this.enqueue(e.operationId, 'deployment', () =>
             this.deployed(e as RecordEvent<'deployment'>),
@@ -1313,6 +1318,49 @@ export class HqService implements OnApplicationBootstrap, OnModuleDestroy {
   }
 
   /**
+   * In a fully automatic theatre nothing waits for the Commander: a permission request under a
+   * unit's rules of engagement is granted by HQ on the Commander's behalf, with a note, and the
+   * task carries on (D125). Pending requests are decided at boot too.
+   */
+  private async decideForCommander(taskId: string): Promise<void> {
+    const task = await this.record.getActive('task', taskId);
+    if (
+      !task ||
+      task.body.status !== 'awaiting-approval' ||
+      task.body.permission?.status !== 'pending'
+    )
+      return;
+    const mission = task.body.missionId
+      ? await this.record.getActive('mission', task.body.missionId)
+      : null;
+    const op = mission?.body.operationId
+      ? await this.record.getActive('operation', mission.body.operationId)
+      : null;
+    if (!op?.body.autonomous) return;
+    await this.overseer.decidePermission(
+      taskId,
+      true,
+      'Automatic theatre: HQ decides for the Commander. Take the cautious course and record what you did in the handover.',
+      HQ_ACTOR,
+    );
+    await this.hqSitrep(
+      null,
+      op.entityId,
+      `HQ granted task #${task.body.number}'s request for the Commander (automatic theatre): ${task.body.permission.action.slice(0, 160)}`,
+    );
+  }
+
+  /** Requests left waiting on an automatic operation (a restart in between): decided now. */
+  private async decidePendingForCommander(): Promise<void> {
+    const waiting = await this.record.listActive('task', {
+      bodyContains: { status: 'awaiting-approval' },
+    });
+    for (const t of waiting) {
+      if (t.body.permission?.status === 'pending') await this.decideForCommander(t.entityId);
+    }
+  }
+
+  /**
    * An automatic theatre's operation is over: the integrated work lands on the default branch
    * (the code is in the repository), and if the theatre publishes automatically, the default
    * branch goes to the site, so the Commander opens the app from a link (D122).
@@ -1485,7 +1533,7 @@ export class HqService implements OnApplicationBootstrap, OnModuleDestroy {
       '## What to improve',
       ...(review.toImprove.length ? review.toImprove.map((x) => `- ${x}`) : ['- Nothing noted']),
       '',
-      '## Lessons kept as standing orders',
+      '## Lessons',
       ...(review.lessons.length
         ? review.lessons.map((l) => `- ${l.unitId ? name(l.unitId) : 'All units'}: ${l.text}`)
         : ['- None']),
@@ -1509,29 +1557,6 @@ export class HqService implements OnApplicationBootstrap, OnModuleDestroy {
         actor: HQ_ACTOR,
         reason: 'After Action review written',
       });
-      const reason = `After Action review — Operation ${op.body.name}`;
-      for (const lesson of review.lessons) {
-        const targets = lesson.unitId ? units.filter((u) => u.entityId === lesson.unitId) : units;
-        for (const u of targets) {
-          const current = await w.getActive('unit', u.entityId);
-          if (!current || current.body.standingOrders.some((o) => o.text === lesson.text)) continue;
-          await w.revise(
-            'unit',
-            u.entityId,
-            (b) => ({
-              ...b,
-              standingOrders: [
-                ...b.standingOrders,
-                {
-                  id: `aar-${doc.entityId.slice(0, 8)}-${b.standingOrders.length}`,
-                  text: lesson.text,
-                },
-              ],
-            }),
-            { actor: HQ_ACTOR, reason },
-          );
-        }
-      }
       await w.event(
         'after-action',
         { documentId: doc.entityId, lessons: review.lessons },
@@ -1541,7 +1566,7 @@ export class HqService implements OnApplicationBootstrap, OnModuleDestroy {
       await this.hqSitrep(
         w,
         opId,
-        `After Action review written; ${review.lessons.length} lesson(s) kept as standing orders.`,
+        `After Action review written; ${review.lessons.length} lesson(s) recorded. A lesson becomes an order only when you give it: on the unit's Rules tab, or in chat.`,
       );
     });
     await this.phase(opId, 'closed', 'After Action review complete');

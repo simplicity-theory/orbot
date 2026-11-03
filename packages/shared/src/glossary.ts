@@ -73,7 +73,8 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
   'after-action': {
     term: 'After Action review',
     short: 'Lessons learned',
-    meaning: 'Held at the end of an operation. Lasting lessons become standing orders.',
+    meaning:
+      'Held at the end of an operation. Its lessons are recorded; you promote the ones that should bind to standing orders.',
   },
   wilco: {
     term: 'Wilco',

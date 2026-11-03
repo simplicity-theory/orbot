@@ -229,13 +229,16 @@ describe('Phase 4: intent to deployment across the whole force', () => {
     expect(files).toMatch(/orbot\/fix-\d+\.md/); // the fix after the send-back
   });
 
-  it('the After Action review was written and its lesson saved as a standing order', async () => {
-    expect(op.afterAction?.markdown).toContain('## Lessons kept as standing orders');
+  it('the After Action review was written; its lesson is recorded, not made an order (D124)', async () => {
+    expect(op.afterAction?.markdown).toContain('## Lessons');
+    expect(op.afterAction?.markdown).toMatch(/Before handing over, check: Login tests/);
     const eng: UnitDetailView = (await t.agent.get(`/api/units/${units.eng}`).expect(200)).body;
-    expect(eng.unit.standingOrders.map((o) => o.text)).toContainEqual(
+    expect(eng.unit.standingOrders.map((o) => o.text)).not.toContainEqual(
       expect.stringMatching(/^Before handing over, check: Login tests/),
     );
-    expect(eng.unit.updatedBy).toBe('system:hq');
+    expect(op.timeline.map((e) => (e.body as { text?: string }).text ?? '')).toContainEqual(
+      expect.stringMatching(/^After Action review written; \d+ lesson\(s\) recorded\./),
+    );
   });
 
   it('the shared cross-unit record tells the whole story', () => {

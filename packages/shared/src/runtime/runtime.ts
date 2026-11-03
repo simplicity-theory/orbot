@@ -104,6 +104,8 @@ export interface TaskBrief {
   repository: { name: string; project: ProjectShape | null } | null;
   /** Decisions on this task's permission requests, oldest first: the bot follows them. */
   permissions: BriefPermission[];
+  /** In a fully automatic theatre: nothing waits for the Commander; HQ decides what the rules would escalate (D125). */
+  autonomous: boolean;
   /** The last handover for this work (this task, or the one it continues). */
   lastHandover: BriefHandover | null;
   /** Field Manual entries relevant to the task, plus pinned ones. */

@@ -254,7 +254,7 @@ export function describeEvent(e: RecordEvent): EventSummary {
         icon: 'book',
         label: 'After Action',
         term: 'after-action',
-        text: `${(b['lessons'] as unknown[]).length} lesson(s) kept as standing orders`,
+        text: `${(b['lessons'] as unknown[]).length} lesson(s) recorded in the After Action review`,
         tone: 'info',
       };
     case 'permission.requested':
