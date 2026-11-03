@@ -28,6 +28,7 @@ import { FieldManualTab } from './field-manual-tab';
 import { NewMissionDialog, type NewMissionData } from './new-mission.dialog';
 import { ReconDialog, type ReconData } from './recon.dialog';
 import { RulesTab } from './rules-tab';
+import { MissionCourse } from '../operations/mission-course';
 
 export const UNIT_SECTIONS = [
   { id: 'overview', label: 'Overview' },
@@ -59,6 +60,7 @@ export type UnitSection = (typeof UNIT_SECTIONS)[number]['id'];
     ColdStartCard,
     FieldManualTab,
     RulesTab,
+    MissionCourse,
     RecordTimeline,
   ],
   templateUrl: './unit.page.html',

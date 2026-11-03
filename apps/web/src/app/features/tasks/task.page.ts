@@ -27,6 +27,8 @@ import { Toasts } from '../../ui/toast';
 import { PermissionDecision } from '../../ui/permission-decision';
 import { DeployApproval } from '../../ui/deploy-approval';
 import { RecordTimeline } from './record-timeline';
+import { MissionCourse } from '../operations/mission-course';
+import { missionStatus } from '../operations/mission-chain';
 
 @Component({
   selector: 'orb-task-page',
@@ -43,6 +45,7 @@ import { RecordTimeline } from './record-timeline';
     RelativeTimePipe,
     PermissionDecision,
     DeployApproval,
+    MissionCourse,
   ],
   templateUrl: './task.page.html',
   styleUrl: './task.page.scss',
@@ -55,6 +58,7 @@ export class TaskPage {
   readonly taskId = input.required<string>();
   protected readonly view = httpResource<TaskDetailView>(() => apiUrl.task(this.taskId()));
   protected readonly full = fullDate;
+  protected readonly missionStatus = missionStatus;
 
   /** Report Markdown, with headings demoted under the page's own. */
   protected md(markdown: string): string {

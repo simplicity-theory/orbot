@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Inject,
   Injectable,
   type OnApplicationBootstrap,
@@ -21,6 +22,7 @@ import {
   type RecordEvent,
   type RecordVersion,
   type TaskBody,
+  type MissionBody,
 } from '@orbot/shared';
 import { APP_CONFIG, type AppConfig } from '../config/config.js';
 import { Background } from '../common/background.js';
@@ -303,17 +305,7 @@ export class HqService implements OnApplicationBootstrap, OnModuleDestroy {
       `Main repository changed to ${s.body.name}`,
       actor,
     );
-    // An operation planned before plans were kept: its missions are the plan.
-    const plan =
-      revised.body.plan ??
-      (missions.every((m) => m.body.stage)
-        ? missions.map((m) => ({
-            unitId: m.body.unitId,
-            stage: m.body.stage!,
-            goal: m.body.goal,
-            definitionOfDone: m.body.definitionOfDone,
-          }))
-        : null);
+    const plan = planOf(revised, missions);
     revised = await this.record.transaction(async (w) => {
       const o = await w.revise(
         'operation',
@@ -383,16 +375,33 @@ export class HqService implements OnApplicationBootstrap, OnModuleDestroy {
     const missions = (
       await Promise.all(op.body.missionIds.map((id) => this.record.getActive('mission', id)))
     ).filter((m) => !!m);
-    for (const m of missions) {
+    for (const m of missions) await this.withdrawMission(m, op.entityId, note, actor);
+    return missions;
+  }
+
+  /**
+   * Withdraw one mission: running work stops with a handover, waiting work stands down, a
+   * pending backbrief is rejected. Returns how many tasks were stood down.
+   */
+  private async withdrawMission(
+    m: RecordVersion<MissionBody>,
+    operationId: string | null,
+    note: string,
+    actor: string,
+  ): Promise<number> {
+    let stood = 0;
+    {
       const tasks = await this.record.listActive('task', {
         bodyContains: { missionId: m.entityId },
       });
       for (const t of tasks) {
         if (this.runner.isRunning(t.entityId)) {
           await this.runner.stop(t.entityId, note);
+          stood++;
           continue;
         }
         if (!['queued', 'blocked', 'failed', 'awaiting-approval'].includes(t.body.status)) continue;
+        stood++;
         await this.record.transaction(async (w) => {
           await w.revise(
             'task',
@@ -408,7 +417,7 @@ export class HqService implements OnApplicationBootstrap, OnModuleDestroy {
               botId: t.body.botId,
               taskId: t.entityId,
               missionId: m.entityId,
-              operationId: op.entityId,
+              operationId,
             },
             actor,
           );
@@ -450,7 +459,187 @@ export class HqService implements OnApplicationBootstrap, OnModuleDestroy {
         }
       });
     }
-    return missions;
+    return stood;
+  }
+
+  // ---------- Abort a mission, start it over, start an operation over (D113) ----------
+
+  /**
+   * Abort one mission: its work stands down (running work with a handover), its pending
+   * backbrief is rejected, and it is withdrawn. In an operation the chain is broken until the
+   * mission is started over or the operation cancelled, and HQ says so.
+   */
+  async abortMission(missionId: string, note: string, actor: string) {
+    const mission = await this.record.requireActive('mission', missionId);
+    if (mission.body.status === 'withdrawn') {
+      throw new ConflictException({
+        message: `The mission “${mission.body.goal}” is already withdrawn.`,
+        action: 'A withdrawn mission can be started over.',
+      });
+    }
+    const op = mission.body.operationId
+      ? await this.record.requireActive('operation', mission.body.operationId)
+      : null;
+    if (op) this.assertOpen(op, 'Abort a mission of');
+    const unit = await this.record.requireActive('unit', mission.body.unitId);
+    const why = `Mission aborted${note ? `: ${note}` : ''}`;
+    const stood = await this.withdrawMission(mission, op?.entityId ?? null, why, actor);
+    const kept = `${stood} task(s) stood down; the work stays on record.`;
+    if (op) {
+      await this.hqSitrep(
+        null,
+        op.entityId,
+        `Mission aborted: “${mission.body.goal}” (${unit.body.name})${note ? `, ${note}` : ''}. ${kept} Operation ${op.body.name} cannot finish without it: start the mission over, or cancel the operation.`,
+      );
+      await this.renderRecord(op.entityId);
+    } else {
+      await this.record.event(
+        'sitrep',
+        {
+          level: 'unit',
+          text: `Mission aborted: “${mission.body.goal}”${note ? `, ${note}` : ''}. ${kept}`,
+          status: null,
+        },
+        { unitId: unit.entityId, missionId },
+        actor,
+      );
+    }
+    return this.record.requireActive('mission', missionId);
+  }
+
+  /**
+   * Start a mission over: withdrawn (if it is not already), then issued again to its unit with
+   * the same goal and definition of done, in the same place in the operation's chain (the next
+   * stage waits on the new mission). The unit briefs back afresh. What was done stays on record.
+   */
+  async restartMission(missionId: string, note: string, actor: string) {
+    const old = await this.record.requireActive('mission', missionId);
+    const op = old.body.operationId
+      ? await this.record.requireActive('operation', old.body.operationId)
+      : null;
+    if (op) this.assertOpen(op, 'Start a mission over in');
+    const unit = await this.record.requireActive('unit', old.body.unitId);
+    const why = `Mission started over${note ? `: ${note}` : ''}`;
+    const stood =
+      old.body.status === 'withdrawn' || old.body.status === 'done'
+        ? 0
+        : await this.withdrawMission(old, op?.entityId ?? null, why, actor);
+    const fresh = await this.record.transaction(async (w) => {
+      const m = await w.create(
+        'mission',
+        {
+          operationId: old.body.operationId,
+          unitId: old.body.unitId,
+          goal: old.body.goal,
+          definitionOfDone: old.body.definitionOfDone,
+          status: 'planning',
+          stage: old.body.stage,
+          dependsOnMissionId: old.body.dependsOnMissionId,
+          issue: old.body.issue,
+          preApproved: old.body.preApproved,
+        },
+        { actor, reason: why },
+      );
+      if (old.body.status === 'done') {
+        await w.revise('mission', old.entityId, (x) => ({ ...x, status: 'withdrawn' }), {
+          actor,
+          reason: why,
+        });
+      }
+      const kept = `${stood} task(s) stood down; the work stays on record.`;
+      if (op) {
+        await w.revise(
+          'operation',
+          op.entityId,
+          (o) => ({
+            ...o,
+            missionIds: o.missionIds.includes(old.entityId)
+              ? o.missionIds.map((id) => (id === old.entityId ? m.entityId : id))
+              : [...o.missionIds, m.entityId],
+            withdrawnMissionIds: o.withdrawnMissionIds.includes(old.entityId)
+              ? o.withdrawnMissionIds
+              : [...o.withdrawnMissionIds, old.entityId],
+          }),
+          { actor, reason: why },
+        );
+        // The next stage hands off from the new mission, not the withdrawn one.
+        const downstream = (
+          await w.listActive('mission', { bodyContains: { dependsOnMissionId: old.entityId } })
+        ).filter((d) => d.body.operationId === op.entityId);
+        for (const d of downstream) {
+          await w.revise('mission', d.entityId, (x) => ({ ...x, dependsOnMissionId: m.entityId }), {
+            actor,
+            reason: why,
+          });
+        }
+        await this.hqSitrep(
+          w,
+          op.entityId,
+          `Mission started over: “${old.body.goal}” issued again to ${unit.body.name}${note ? ` (${note})` : ''}. ${kept} ${unit.body.name} briefs back afresh.`,
+        );
+      } else {
+        await w.event(
+          'sitrep',
+          {
+            level: 'unit',
+            text: `Mission started over: “${old.body.goal}”${note ? ` (${note})` : ''}. ${kept} ${unit.body.name} briefs back afresh.`,
+            status: null,
+          },
+          { unitId: unit.entityId, missionId: m.entityId },
+          actor,
+        );
+      }
+      return m;
+    });
+    if (op) {
+      // An operation that had every mission done is back in execution.
+      const now = await this.record.requireActive('operation', op.entityId);
+      if (now.body.phase === 'sitreps')
+        await this.phase(op.entityId, 'execution', `Mission “${old.body.goal}” started over`);
+      await this.renderRecord(op.entityId);
+    }
+    return fresh;
+  }
+
+  /**
+   * Start an operation over: every mission is withdrawn and HQ issues them again from the same
+   * plan, on the same resources, so each unit briefs back afresh. Work already integrated stays
+   * on the integration branch (nothing is deleted): the new missions build on it.
+   */
+  async restartOperation(opId: string, note: string, actor: string) {
+    const op = await this.record.requireActive('operation', opId);
+    this.assertOpen(op, 'Start over');
+    if (!op.body.missionIds.length) {
+      throw new ConflictException({
+        message: `Operation ${op.body.name} has no missions out yet.`,
+        action: 'It is still being planned; there is nothing to start over.',
+      });
+    }
+    const why = `Operation ${op.body.name} started over${note ? `: ${note}` : ''}`;
+    const missions = await this.withdrawMissions(op, why, actor);
+    const plan = planOf(op, missions);
+    await this.record.transaction(async (w) => {
+      await w.revise(
+        'operation',
+        opId,
+        (x) => ({
+          ...x,
+          plan,
+          missionIds: [],
+          withdrawnMissionIds: [...x.withdrawnMissionIds, ...x.missionIds],
+          deployment: null,
+        }),
+        { actor, reason: why },
+      );
+      await this.hqSitrep(
+        w,
+        opId,
+        `Operation ${op.body.name} started over${note ? `: ${note}` : ''}. ${missions.length} mission(s) withdrawn and issued again from the same plan; what was done stays on record and on the integration branch.`,
+      );
+    });
+    await this.phase(opId, 'o-group', 'Started over');
+    this.enqueue(opId, 'o-group', () => this.oGroup(opId));
+    return this.record.requireActive('operation', opId);
   }
 
   /** Take a depot item off an operation. Units that hold it keep it. */
@@ -1229,4 +1418,22 @@ export class HqService implements OnApplicationBootstrap, OnModuleDestroy {
       reason: 'Shared record updated',
     });
   }
+}
+
+/** The plan to issue an operation's missions again from: its own, or (planned before plans were kept) its missions. */
+function planOf(
+  op: RecordVersion<OperationBody>,
+  missions: RecordVersion<MissionBody>[],
+): OperationBody['plan'] {
+  return (
+    op.body.plan ??
+    (missions.every((m) => m.body.stage)
+      ? missions.map((m) => ({
+          unitId: m.body.unitId,
+          stage: m.body.stage!,
+          goal: m.body.goal,
+          definitionOfDone: m.body.definitionOfDone,
+        }))
+      : null)
+  );
 }

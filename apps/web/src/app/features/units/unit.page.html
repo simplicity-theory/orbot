@@ -57,6 +57,15 @@
             <p class="meta">
               {{ f.mission.stage ?? 'mission' }} · {{ f.done }} of {{ f.total }} task(s) done
             </p>
+            <orb-mission-course
+              [missionId]="f.mission.id"
+              [goal]="f.mission.goal"
+              [status]="f.mission.status"
+              [unitId]="v.unit.id"
+              [unitName]="v.unit.name"
+              [inOperation]="!!f.mission.operationId"
+              (changed)="view.reload()"
+            />
             @if (f.mission.definitionOfDone.length) {
               <h3 class="sub">Definition of done</h3>
               <ul class="dod">
@@ -142,7 +151,17 @@
                     · <orb-term key="backbrief">backbrief</orb-term> round {{ bb.round }},
                     {{ bb.status }}
                   }
+                  · <a [routerLink]="[]" [queryParams]="{ mission: m.mission.id }">Tasks</a>
                 </p>
+                <orb-mission-course
+                  [missionId]="m.mission.id"
+                  [goal]="m.mission.goal"
+                  [status]="m.mission.status"
+                  [unitId]="v.unit.id"
+                  [unitName]="v.unit.name"
+                  [inOperation]="!!m.mission.operationId"
+                  (changed)="view.reload()"
+                />
               </div>
             } @empty {
               <p class="meta">No mission in hand. Standing mission: {{ v.unit.standingMission }}</p>

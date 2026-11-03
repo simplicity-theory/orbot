@@ -73,6 +73,22 @@ test('make another repository the main one, then cancel the operation', async ({
   await resources.getByRole('button', { name: 'Take demo-app off the operation' }).click();
   await expect(assigned).not.toContainText('demo-app');
 
+  // Abort and start over, one mission at a time: the stage is issued again to the same unit.
+  const missions = page.getByRole('list', { name: 'Missions and their tasks' });
+  const first = missions.getByRole('listitem').first();
+  await first.getByRole('button', { name: 'Start over…' }).click();
+  const restart = page.getByRole('dialog', { name: /^Start the mission/ });
+  await expect(restart).toContainText('briefs back afresh');
+  await restart.getByLabel('Why (optional)').fill('Wrong brief');
+  await expectAccessible(page, 'start a mission over');
+  await restart.getByRole('button', { name: 'Start over' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Mission started over.' })).toBeVisible();
+  await expect(page.getByRole('region', { name: /Timeline/ })).toContainText(
+    'Mission started over',
+  );
+  // Four withdrawn by the move to subframe, one by starting over.
+  await expect(page.locator('main')).toContainText('5 earlier mission(s) withdrawn');
+
   await page.getByRole('button', { name: 'Cancel operation…' }).click();
   const cancel = page.getByRole('dialog', { name: 'Cancel Operation Pivot' });
   await cancel.getByLabel('Why (optional)').fill('Testing a change of course');

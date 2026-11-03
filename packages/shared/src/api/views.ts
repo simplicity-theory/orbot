@@ -176,6 +176,10 @@ export interface TaskDetailView {
   unit: UnitView;
   bot: BotView | null;
   mission: MissionView | null;
+  /** The operation the mission belongs to, for the chain of command on the task. */
+  operation: OperationView | null;
+  /** Every task of the mission in number order (this one among them). */
+  missionTasks: TaskView[];
   events: RecordEvent[];
   versions: VersionWithStatus[];
   handover: DocumentView | null;

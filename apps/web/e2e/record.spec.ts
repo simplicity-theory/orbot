@@ -52,6 +52,9 @@ test.describe('one bot, one task, on the record', () => {
     await expect(decision).toContainText('Open problems the bot reports');
     await expect(decision.getByRole('link', { name: /Give Engineers an order/ })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Resume task' })).toBeVisible();
+    // The chain of command is on the task: its mission, and the mission's tasks around it.
+    const chain = page.getByRole('region', { name: 'Chain of command' });
+    await expect(chain).toContainText('(this task)');
     // The orders are there, folded away under the decision.
     const orders = page.locator('details.orders');
     await expect(orders).not.toHaveAttribute('open', '');

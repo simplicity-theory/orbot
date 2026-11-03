@@ -243,6 +243,10 @@ export const CancelOperationRequest = z.object({
 });
 export type CancelOperationRequest = z.input<typeof CancelOperationRequest>;
 
+/** Abort a mission, start a mission over, start an operation over: why (optional). */
+export const CourseNoteRequest = CancelOperationRequest;
+export type CourseNoteRequest = z.input<typeof CourseNoteRequest>;
+
 export const DeployDecisionRequest = z.object({
   approve: z.boolean(),
   note: z.string().trim().max(1000).nullable().default(null),

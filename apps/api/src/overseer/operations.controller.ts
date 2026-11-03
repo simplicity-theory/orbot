@@ -2,6 +2,7 @@ import { Authority, unitOf } from '../officers/authority.js';
 import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Put } from '@nestjs/common';
 import {
   CancelOperationRequest,
+  CourseNoteRequest,
   CreateOperationRequest,
   DeployDecisionRequest,
   OperationHoldPolicyRequest,
@@ -126,7 +127,40 @@ export class OperationsController {
     return this.views.operation(id);
   }
 
-  /** Set the operation's compute budget cap (null = none); work held at the old cap resumes. */
+  /** Start the operation over: every mission withdrawn and issued again from the same plan. */
+  @Post('operations/:id/restart')
+  @HttpCode(200)
+  async restart(
+    @Param('id', Uuid) id: string,
+    @Body(new ZodPipe(CourseNoteRequest)) body: z.output<typeof CourseNoteRequest>,
+    @Actor() actor: string,
+  ) {
+    await this.hq.restartOperation(id, body.note, actor);
+    return this.views.operation(id);
+  }
+
+  /** Abort one mission: its work stands down and it is withdrawn; the operation waits for a decision. */
+  @Post('missions/:id/abort')
+  @HttpCode(200)
+  async abortMission(
+    @Param('id', Uuid) id: string,
+    @Body(new ZodPipe(CourseNoteRequest)) body: z.output<typeof CourseNoteRequest>,
+    @Actor() actor: string,
+  ) {
+    return toView(await this.hq.abortMission(id, body.note, actor));
+  }
+
+  /** Start one mission over: withdrawn and issued again to its unit, which briefs back afresh. Returns the new mission. */
+  @Post('missions/:id/restart')
+  @HttpCode(200)
+  async restartMission(
+    @Param('id', Uuid) id: string,
+    @Body(new ZodPipe(CourseNoteRequest)) body: z.output<typeof CourseNoteRequest>,
+    @Actor() actor: string,
+  ) {
+    return toView(await this.hq.restartMission(id, body.note, actor));
+  }
+
   /** Rehearse the plan on the sand table (changes nothing; the result is kept). */
   @Authority({ level: 'officer' })
   @Post('operations/:id/sand-table')

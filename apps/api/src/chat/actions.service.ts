@@ -184,6 +184,15 @@ export class ActionsService {
         affects: [],
       };
     }
+    if (action.kind === 'restart-operation') {
+      const op = await this.hq.restartOperation(action.operationId, action.note, ctx.actor);
+      return {
+        summary: `Operation ${op.body.name} started over: its missions are withdrawn and issued again from the same plan; each unit briefs back afresh.`,
+        links: [{ label: `Operation ${op.body.name}`, link: `/operations/${op.entityId}` }],
+        inverse: null,
+        affects: [],
+      };
+    }
     if (action.kind === 'rehearse') {
       const e = await this.sandTables.rehearse(action.operationId, ctx.actor);
       const op = await this.record.requireActive('operation', action.operationId);
@@ -275,38 +284,18 @@ export class ActionsService {
         };
       }
       case 'withdraw-mission': {
-        const mission = await this.record.requireActive('mission', action.missionId);
-        const tasks = await this.record.listActive('task', {
-          bodyContains: { missionId: action.missionId },
-        });
-        const [bb] = await this.record.listActive('backbrief', {
-          bodyContains: { missionId: action.missionId },
-        });
-        const live = tasks.filter((t) => ['queued', 'working', 'blocked'].includes(t.body.status));
-        for (const t of live)
-          await this.standDown(t.entityId, t.body, `Mission withdrawn: ${action.note}`, ctx);
-        await this.record.transaction(async (w) => {
-          if (bb?.body.status === 'awaiting-approval') {
-            await w.revise(
-              'backbrief',
-              bb.entityId,
-              (b) => ({
-                ...b,
-                status: 'rejected',
-                decision: {
-                  outcome: 'rejected',
-                  by: ctx.actor,
-                  note: 'Mission withdrawn',
-                  at: new Date().toISOString(),
-                },
-              }),
-              ctx,
-            );
-          }
-          await w.revise('mission', action.missionId, (m) => ({ ...m, status: 'withdrawn' }), ctx);
-        });
+        const mission = await this.hq.abortMission(action.missionId, action.note, ctx.actor);
         return {
-          summary: `Withdrew the mission “${mission.body.goal}” from ${u}${live.length ? `; stood down ${live.length} task(s)` : ''}.`,
+          summary: `Aborted the mission “${mission.body.goal}” (${u}): its work stood down and stays on record${mission.body.operationId ? '; the operation waits until it is started over or cancelled' : ''}.`,
+          links: [{ label: mission.body.goal, link: unitLink(action.unitId) }],
+          inverse: null,
+          affects: [],
+        };
+      }
+      case 'restart-mission': {
+        const mission = await this.hq.restartMission(action.missionId, action.note, ctx.actor);
+        return {
+          summary: `Mission “${mission.body.goal}” started over: issued again to ${u}, which briefs back afresh. What was done stays on record.`,
           links: [{ label: mission.body.goal, link: unitLink(action.unitId) }],
           inverse: null,
           affects: [],

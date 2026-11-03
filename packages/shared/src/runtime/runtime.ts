@@ -370,7 +370,16 @@ export interface InterpretUnit {
     botCallsign: string | null;
     kind: string;
   }[];
-  missions: { id: string; goal: string; status: string; done: number; total: number }[];
+  missions: {
+    id: string;
+    goal: string;
+    status: string;
+    /** In an operation: build, inspect, guard or deploy, and the operation. */
+    stage?: string | null;
+    operationId?: string | null;
+    done: number;
+    total: number;
+  }[];
 }
 
 export interface InterpretInput {

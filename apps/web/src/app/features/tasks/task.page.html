@@ -131,6 +131,70 @@
       </details>
     }
 
+    <section class="panel chain" aria-labelledby="chain-h">
+      <h2 id="chain-h" class="panel__title">Chain of command</h2>
+      <ol class="list-reset chain__levels">
+        @if (v.operation; as op) {
+          <li>
+            <span class="chain__level"><orb-term key="operation">Operation</orb-term></span>
+            <a [routerLink]="['/operations', op.id]">Operation {{ op.name }}</a>
+            <span class="meta">{{ op.phase }}</span>
+          </li>
+        }
+        @if (v.mission; as m) {
+          <li>
+            <span class="chain__level"><orb-term key="mission">Mission</orb-term></span>
+            <a [routerLink]="['/units', v.unit.id]" [queryParams]="{ mission: m.id }">{{
+              m.goal
+            }}</a>
+            <span class="meta">{{ m.stage ?? v.unit.name }}</span>
+            <orb-status [status]="missionStatus(m.status)" />
+            <orb-mission-course
+              [missionId]="m.id"
+              [goal]="m.goal"
+              [status]="m.status"
+              [unitId]="v.unit.id"
+              [unitName]="v.unit.name"
+              [inOperation]="!!m.operationId"
+              (changed)="view.reload()"
+            />
+          </li>
+          <li>
+            <span class="chain__level">Tasks</span>
+            <ul class="list-reset chain__tasks">
+              @for (s of v.missionTasks; track s.id) {
+                <li
+                  [class.current]="s.id === t.id"
+                  [attr.aria-current]="s.id === t.id ? 'true' : null"
+                >
+                  @if (s.id === t.id) {
+                    <span
+                      ><span class="mono">#{{ s.number }}</span> {{ s.title }} (this task)</span
+                    >
+                  } @else {
+                    <a
+                      [routerLink]="
+                        s.botId
+                          ? ['/units', v.unit.id, 'bots', s.botId, 'tasks', s.id]
+                          : ['/units', v.unit.id, 'tasks', s.id]
+                      "
+                      ><span class="mono">#{{ s.number }}</span> {{ s.title }}</a
+                    >
+                  }
+                  <orb-status [status]="s.status" />
+                </li>
+              }
+            </ul>
+          </li>
+        } @else {
+          <li>
+            <span class="chain__level">Task</span>
+            <span>Given straight to {{ v.unit.name }}, under no mission.</span>
+          </li>
+        }
+      </ol>
+    </section>
+
     <section class="panel">
       <dl class="dl">
         <dt>Bot</dt>

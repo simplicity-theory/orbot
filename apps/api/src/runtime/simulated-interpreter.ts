@@ -92,6 +92,15 @@ const MAIN_REPO_MOVE =
 /** "Cancel Operation Ledger: wrong approach". */
 const CANCEL_OPERATION =
   /^(?:please\s+)?(?:cancel|call off|abort|scrub)\s+(?:the\s+)?(?:operation|op)\b\s*([^:]*?)(?:\s*(?::|—|\bbecause\b)\s*(.+))?$/i;
+/** "Start Operation Ledger over", "Restart Operation Ledger: wrong plan". */
+const RESTART_OPERATION =
+  /^(?:please\s+)?(?:restart|redo|start)\s+(?:the\s+)?(?:operation|op)\b\s*([^:]*?)(?:\s+(over|again|afresh|from scratch))?(?:\s*(?::|—|\bbecause\b)\s*(.+))?$/i;
+/** "Abort the guard mission", "Scrub Guard's mission: wrong brief". */
+const ABORT_MISSION =
+  /^(?:please\s+)?(?:abort|scrub|withdraw|call off)\s+(?:the\s+)?(.*?)\s*mission\b(?:\s+(?:in|of|for|on)\s+(?:operation|op)\s+([^:—]+?))?(?:\s*(?::|—|\bbecause\b)\s*(.+))?$/i;
+/** "Start the guard mission over", "Restart Guard's mission", "Redo the build mission". */
+const RESTART_MISSION =
+  /^(?:please\s+)?(?:(?:restart|redo)\s+(?:the\s+)?(.*?)\s*mission\b(?:\s+(?:in|of|for|on)\s+(?:operation|op)\s+([^:—]+?))?|start\s+(?:the\s+)?(.*?)\s*mission\b(?:\s+(?:in|of|for|on)\s+(?:operation|op)\s+([^:—]+?))?\s+(?:over|again|afresh|from scratch))(?:\s*(?::|—|\bbecause\b)\s*(.+))?$/i;
 /** "…, using payments-service and gpu1" at the end of a statement of intent. */
 const INTENT_RESOURCES = /,?\s+(?:using|with|on|against)\s+(?:the\s+|our\s+)?(.+)$/i;
 /**
@@ -252,7 +261,9 @@ export class SimulatedInterpreter {
       const course =
         this.operationHold(sentence, input) ??
         this.mainRepository(sentence, input) ??
-        this.cancelOperation(sentence, input);
+        this.cancelOperation(sentence, input) ??
+        this.restartOperation(sentence, input) ??
+        this.missionCourse(sentence, unit, input);
       if (course) {
         if ('unclear' in course) {
           out.unclear.push(course.unclear);
@@ -570,6 +581,108 @@ export class SimulatedInterpreter {
       unitId: null,
       operationId: op.id,
       note: (m[2] ?? '').replace(/[.!]+$/, '').trim(),
+    };
+  }
+
+  /** "Start Operation Ledger over": every mission withdrawn and issued again. */
+  private restartOperation(
+    sentence: string,
+    input: InterpretInput,
+  ): Extract<ChatAction, { kind: 'restart-operation' }> | { unclear: string } | null {
+    const m = RESTART_OPERATION.exec(sentence);
+    if (!m) return null;
+    // "Start Operation X" without "over" is a launch, not a restart.
+    if (/^(?:please\s+)?start\b/i.test(sentence) && !m[2]) return null;
+    const op = this.operationFor(m[1] ?? '', null, input);
+    if ('unclear' in op) return { unclear: `${sentence} — ${op.unclear}` };
+    return {
+      kind: 'restart-operation',
+      unitId: null,
+      operationId: op.id,
+      note: (m[3] ?? '').replace(/[.!]+$/, '').trim(),
+    };
+  }
+
+  /** "Abort the guard mission" / "Start Guard's mission over": one mission, named by its unit, stage or goal. */
+  private missionCourse(
+    sentence: string,
+    unit: InterpretUnit | null,
+    input: InterpretInput,
+  ):
+    | Extract<ChatAction, { kind: 'withdraw-mission' | 'restart-mission' }>
+    | { unclear: string }
+    | null {
+    const restart = RESTART_MISSION.exec(sentence);
+    const abort = restart ? null : ABORT_MISSION.exec(sentence);
+    if (!restart && !abort) return null;
+    const phrase = (restart ? (restart[1] ?? restart[3]) : abort![1]) ?? '';
+    const opName = (restart ? (restart[2] ?? restart[4]) : abort![2]) ?? '';
+    const note = (restart ? restart[5] : abort![3]) ?? '';
+    let operationId: string | null = null;
+    if (opName.trim()) {
+      const op = this.operationFor(opName.trim(), null, input);
+      if ('unclear' in op) return { unclear: `${sentence} — ${op.unclear}` };
+      operationId = op.id;
+    }
+    const found = this.missionFor(phrase, unit, input, operationId, !!restart);
+    if ('unclear' in found) return { unclear: `${sentence} — ${found.unclear}` };
+    return {
+      kind: restart ? 'restart-mission' : 'withdraw-mission',
+      unitId: found.unitId,
+      missionId: found.mission.id,
+      note: note.replace(/[.!]+$/, '').trim(),
+    };
+  }
+
+  /** The mission "the guard mission" / "Guard's mission" / "the rate-limiting mission" means. */
+  private missionFor(
+    phrase: string,
+    unit: InterpretUnit | null,
+    input: InterpretInput,
+    operationId: string | null,
+    restarting: boolean,
+  ): { unitId: string; mission: InterpretUnit['missions'][number] } | { unclear: string } {
+    const q = phrase
+      .replace(/['’]s$/i, '')
+      .replace(/^(?:the|this|that|its|their)\s+/i, '')
+      .trim()
+      .toLowerCase();
+    const named = input.units.find((u) => u.name.toLowerCase() === q || u.slug === q);
+    const scope = named
+      ? [named]
+      : unit && !q
+        ? [unit]
+        : unit
+          ? [unit, ...input.units.filter((u) => u !== unit)]
+          : input.units;
+    // Starting over takes a withdrawn mission too; aborting only one under way.
+    const live = scope.flatMap((u) =>
+      u.missions
+        .filter(
+          (x) =>
+            x.status !== 'done' &&
+            (restarting || x.status !== 'withdrawn') &&
+            (!operationId || x.operationId === operationId),
+        )
+        .map((mission) => ({ unitId: u.id, mission })),
+    );
+    if (!live.length)
+      return { unclear: `no mission is under way${named ? ` for ${named.name}` : ''}.` };
+    if ((named || operationId) && live.length === 1) return live[0]!;
+    if (q) {
+      const byStage = live.filter((x) => (x.mission.stage ?? '').toLowerCase() === q);
+      if (byStage.length === 1) return byStage[0]!;
+      const best = live
+        .map((x) => ({ x, score: overlap(topic(x.mission.goal), q) }))
+        .sort((a, b) => b.score - a.score)[0]!;
+      if (best.score >= 0.5) return best.x;
+    } else if (live.length === 1) {
+      return live[0]!;
+    }
+    return {
+      unclear: `which mission? Under way: ${live
+        .map((x) => `“${x.mission.goal}” (${input.units.find((u) => u.id === x.unitId)?.name})`)
+        .join(', ')}.`,
     };
   }
 

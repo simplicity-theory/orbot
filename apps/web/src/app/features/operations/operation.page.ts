@@ -22,6 +22,8 @@ import { MainEfforts } from '../../core/main-effort';
 import { MainEffortBadge, MainEffortButton } from '../../ui/main-effort';
 import { MissionChain } from './mission-chain';
 import { CancelOperationButton } from './operation-course';
+import { MissionCourse, RestartOperationButton } from './mission-course';
+import { missionStatus } from './mission-chain';
 import { OperationResources } from './operation-resources';
 import { SandTable } from './sand-table';
 
@@ -46,6 +48,8 @@ import { SandTable } from './sand-table';
     SandTable,
     OperationResources,
     CancelOperationButton,
+    MissionCourse,
+    RestartOperationButton,
   ],
   template: `
     @if (view.error(); as err) {
@@ -92,6 +96,13 @@ import { SandTable } from './sand-table';
                 [name]="'Operation ' + v.operation.name"
               />
               @if (v.operation.phase !== 'after-action') {
+                @if (v.missions.length) {
+                  <orb-restart-operation
+                    [operationId]="v.operation.id"
+                    [name]="v.operation.name"
+                    (restarted)="view.reload()"
+                  />
+                }
                 <orb-cancel-operation
                   [operationId]="v.operation.id"
                   [name]="v.operation.name"
@@ -166,25 +177,63 @@ import { SandTable } from './sand-table';
             <span>Missions, in <orb-term key="handoff">handoff</orb-term> order</span>
           </h2>
           <orb-mission-chain [missions]="v.missions" />
-          <ul class="list-reset tasks">
+          <ol class="list-reset missions" aria-label="Missions and their tasks">
             @for (m of v.missions; track m.mission.id) {
-              @for (t of m.tasks; track t.id) {
-                <li>
-                  <a
-                    [routerLink]="
-                      t.botId
-                        ? ['/units', m.unit.id, 'bots', t.botId, 'tasks', t.id]
-                        : ['/units', m.unit.id, 'tasks', t.id]
-                    "
+              <li class="mission">
+                <div class="mission__head">
+                  <span class="mission__stage">{{ m.mission.stage ?? 'mission' }}</span>
+                  <a [routerLink]="['/units', m.unit.id]" [queryParams]="{ mission: m.mission.id }"
+                    >{{ m.unit.name }}: {{ m.mission.goal }}</a
                   >
-                    <span class="mono">#{{ t.number }}</span> {{ t.title }}
-                  </a>
-                  <span class="meta">{{ m.unit.name }} · {{ t.kind }}</span>
-                  <orb-status [status]="t.status" />
-                </li>
-              }
+                  <orb-status [status]="missionStatus(m.mission.status)" />
+                  @if (v.operation.phase !== 'closed' && v.operation.phase !== 'after-action') {
+                    <orb-mission-course
+                      [missionId]="m.mission.id"
+                      [goal]="m.mission.goal"
+                      [status]="m.mission.status"
+                      [unitId]="m.unit.id"
+                      [unitName]="m.unit.name"
+                      [inOperation]="true"
+                      (changed)="view.reload()"
+                    />
+                  }
+                </div>
+                <ul class="list-reset tasks">
+                  @for (t of m.tasks; track t.id) {
+                    <li>
+                      <a
+                        [routerLink]="
+                          t.botId
+                            ? ['/units', m.unit.id, 'bots', t.botId, 'tasks', t.id]
+                            : ['/units', m.unit.id, 'tasks', t.id]
+                        "
+                      >
+                        <span class="mono">#{{ t.number }}</span> {{ t.title }}
+                      </a>
+                      <span class="meta">{{ t.kind }}</span>
+                      <orb-status [status]="t.status" />
+                    </li>
+                  } @empty {
+                    <li class="meta">
+                      No tasks yet{{
+                        m.backbrief?.status === 'awaiting-approval'
+                          ? ': the backbrief waits for approval'
+                          : m.mission.status === 'planning'
+                            ? ': the Overseer is planning'
+                            : ''
+                      }}.
+                    </li>
+                  }
+                </ul>
+              </li>
             }
-          </ul>
+          </ol>
+          @if (withdrawn(); as n) {
+            <p class="meta">
+              {{ n }} earlier mission(s) withdrawn (started over, or issued again elsewhere); their
+              work stays on record.
+            </p>
+          }
           @if (v.operation.integrationBranch) {
             <p class="meta">
               Integration branch <span class="mono">{{ v.operation.integrationBranch }}</span>
@@ -269,8 +318,30 @@ import { SandTable } from './sand-table';
       flex-direction: column;
       gap: var(--space-2);
     }
-    .tasks {
+    .missions {
       margin-top: var(--space-4);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-3);
+    }
+    .mission__head {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--space-3);
+      min-height: var(--row-height-dense);
+      a {
+        font-weight: var(--font-weight-semibold);
+      }
+    }
+    .mission__stage {
+      font-size: var(--font-size-xs);
+      letter-spacing: var(--letter-spacing-caps);
+      text-transform: uppercase;
+      color: var(--color-text-muted);
+    }
+    .tasks {
+      margin-left: var(--space-5);
       li {
         display: grid;
         grid-template-columns: minmax(0, 1fr) max-content max-content;
@@ -326,6 +397,11 @@ import { SandTable } from './sand-table';
   `,
 })
 export class OperationPage {
+  protected readonly missionStatus = missionStatus;
+  /** Missions withdrawn when the operation was started over or moved; their work stays on record. */
+  protected readonly withdrawn = computed(
+    () => this.view.value()?.operation.withdrawnMissionIds.length ?? 0,
+  );
   protected readonly efforts = inject(MainEfforts);
   private readonly connections = httpResource<ConnectionView[]>(() => apiUrl.connections());
   /** The latest pipeline result on this operation's integration branch. */

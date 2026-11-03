@@ -57,6 +57,44 @@
   }
 }
 
+.chain {
+  &__levels {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    > li {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--space-3);
+      padding-left: var(--space-4);
+      border-left: var(--border-width) solid var(--color-border);
+      & + li {
+        margin-left: var(--space-4);
+      }
+    }
+  }
+  &__level {
+    font-size: var(--font-size-xs);
+    letter-spacing: var(--letter-spacing-caps);
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+  }
+  &__tasks {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    li {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+    }
+    .current {
+      font-weight: var(--font-weight-semibold);
+    }
+  }
+}
+
 .orders {
   summary {
     cursor: pointer;

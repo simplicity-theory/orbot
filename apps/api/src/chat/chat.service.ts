@@ -57,6 +57,7 @@ const COMMANDER_ONLY: ChatAction['kind'][] = [
   'release-resource',
   'set-main-repository',
   'cancel-operation',
+  'restart-operation',
   'main-effort',
 ];
 
@@ -186,7 +187,8 @@ export class ChatService {
       action.kind === 'assign-resource' ||
       action.kind === 'release-resource' ||
       action.kind === 'set-main-repository' ||
-      action.kind === 'cancel-operation'
+      action.kind === 'cancel-operation' ||
+      action.kind === 'restart-operation'
         ? HQ
         : null;
     const result = await this.actions.run(action, { actor, reason: opts.reason });
@@ -603,6 +605,8 @@ export class ChatService {
                 id: m.entityId,
                 goal: m.body.goal,
                 status: m.body.status,
+                stage: m.body.stage,
+                operationId: m.body.operationId,
                 done: mt.filter((t) => t.body.status === 'done').length,
                 total: mt.length,
               };
@@ -652,7 +656,13 @@ export class ChatService {
    * cancelling an operation, or moving one whose missions are out to another repository.
    */
   private async drastic(a: ChatAction): Promise<boolean> {
-    if (a.kind === 'cancel-operation') return true;
+    if (
+      a.kind === 'cancel-operation' ||
+      a.kind === 'restart-operation' ||
+      a.kind === 'withdraw-mission' ||
+      a.kind === 'restart-mission'
+    )
+      return true;
     if (a.kind !== 'set-main-repository') return false;
     const op = await this.record.getActive('operation', a.operationId);
     return !!op?.body.missionIds.length && op.body.repoSupplyId !== a.supplyId;
@@ -687,6 +697,16 @@ export class ChatService {
     if (a.kind === 'cancel-operation') {
       const op = await this.record.requireActive('operation', a.operationId);
       return `Cancel Operation ${op.body.name}${a.note ? `: ${a.note}` : ''}`;
+    }
+    if (a.kind === 'restart-operation') {
+      const op = await this.record.requireActive('operation', a.operationId);
+      return `Start Operation ${op.body.name} over (its missions are withdrawn and issued again)${a.note ? `: ${a.note}` : ''}`;
+    }
+    if (a.kind === 'withdraw-mission' || a.kind === 'restart-mission') {
+      const m = await this.record.requireActive('mission', a.missionId);
+      return a.kind === 'withdraw-mission'
+        ? `Abort the mission “${m.body.goal}” (its work stands down)${a.note ? `: ${a.note}` : ''}`
+        : `Start the mission “${m.body.goal}” over (its work stands down; it is issued again)${a.note ? `: ${a.note}` : ''}`;
     }
     if (a.kind === 'rehearse') {
       const op = await this.record.requireActive('operation', a.operationId);

@@ -99,6 +99,20 @@ export const ChatAction = z.discriminatedUnion('kind', [
     operationId: Id,
     note: z.string().max(500).default(''),
   }),
+  /** Start a mission over: withdrawn, then issued again to its unit, which briefs back afresh. */
+  z.object({
+    kind: z.literal('restart-mission'),
+    unitId: Id,
+    missionId: Id,
+    note: z.string().max(500).default(''),
+  }),
+  /** Through HQ: start an operation over: every mission withdrawn and issued again from the same plan. */
+  z.object({
+    kind: z.literal('restart-operation'),
+    unitId: Id.nullable(),
+    operationId: Id,
+    note: z.string().max(500).default(''),
+  }),
   /** Approve (or reject) a production deploy waiting on the Commander. */
   z.object({ kind: z.literal('approve-deploy'), unitId: Id, taskId: Id, approve: z.boolean() }),
   /** Decide what a bot asked permission for under its unit's rules of engagement. */

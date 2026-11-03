@@ -444,6 +444,27 @@ export class Api {
     );
   }
 
+  /** Start the operation over: every mission withdrawn and issued again from the same plan. */
+  restartOperation(operationId: string, note: string) {
+    return firstValueFrom(
+      this.http.post<OperationDetailView>(`${API}/operations/${operationId}/restart`, { note }),
+    );
+  }
+
+  /** Abort one mission: its work stands down and it is withdrawn. */
+  abortMission(missionId: string, note: string) {
+    return firstValueFrom(
+      this.http.post<MissionView>(`${API}/missions/${missionId}/abort`, { note }),
+    );
+  }
+
+  /** Start one mission over: withdrawn and issued again to its unit. Returns the new mission. */
+  restartMission(missionId: string, note: string) {
+    return firstValueFrom(
+      this.http.post<MissionView>(`${API}/missions/${missionId}/restart`, { note }),
+    );
+  }
+
   releaseResource(operationId: string, supplyId: string) {
     return firstValueFrom(
       this.http.post<OperationDetailView>(`${API}/operations/${operationId}/resources/release`, {

@@ -292,11 +292,21 @@ export class ViewsService {
       this.record.listActive('document', { bodyContains: { kind: 'handover', taskId: id } }),
       this.record.listActive('document', { bodyContains: { kind: 'recon', taskId: id } }),
     ]);
+    const operation = mission?.body.operationId
+      ? await this.record.getActive('operation', mission.body.operationId)
+      : null;
+    const missionTasks = mission
+      ? toViews(
+          await this.record.listActive('task', { bodyContains: { missionId: mission.entityId } }),
+        ).sort((a, b) => a.number - b.number)
+      : [];
     return {
       task: toView(t),
       unit: toView(unit),
       bot: bot ? toView(bot) : null,
       mission: mission ? toView(mission) : null,
+      operation: operation ? toView(operation) : null,
+      missionTasks,
       events,
       versions,
       handover: handovers[0] ? toView(handovers[0]) : null,

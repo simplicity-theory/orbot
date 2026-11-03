@@ -27,6 +27,10 @@
   margin-top: var(--space-4);
 }
 
+.mission .meta a {
+  text-decoration: underline;
+}
+
 .mission-head {
   display: flex;
   justify-content: space-between;
