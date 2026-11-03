@@ -348,6 +348,15 @@ import { ThemeService } from '../../core/theme';
             }
           </dd>
         </dl>
+        <div class="queues" *orbCan="null">
+          <button type="button" class="btn" [disabled]="restarting()" (click)="restartQueues()">
+            {{ restarting() ? 'Restarting…' : 'Restart the queues' }}
+          </button>
+          <p class="meta">
+            Queues again any task shown working with no run behind it, and every Overseer looks at
+            its bots now. Nothing is thrown away. In chat: “Restart the queues”.
+          </p>
+        </div>
         <form class="runtime-all" *orbCan="null" (ngSubmit)="switchAll()">
           <label for="runtime-all">Run every bot on</label>
           <select id="runtime-all" name="runtimeAll" class="input" [(ngModel)]="runtimeAll">
@@ -377,6 +386,16 @@ import { ThemeService } from '../../core/theme';
     }
     .num {
       text-align: right;
+    }
+    .queues {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--space-3);
+      margin: var(--space-4) 0;
+      p {
+        margin: 0;
+      }
     }
 
     .runtime-all {
@@ -468,6 +487,26 @@ export class SettingsPage {
   protected phrase = '';
   protected warnAt = 80;
   protected computeLimits: 'off' | 'on' = 'off';
+  protected readonly restarting = signal(false);
+
+  protected async restartQueues(): Promise<void> {
+    this.restarting.set(true);
+    try {
+      const r = await this.api.restartQueues();
+      this.toasts.show({
+        tone: 'success',
+        message: `Queues restarted: ${r.requeued.length} task(s) queued again.`,
+        detail: r.requeued.length
+          ? r.requeued.map((x) => `#${x.number} (${x.unitName})`).join(', ')
+          : `Every one of the ${r.units} units dispatches now.`,
+      });
+    } catch (err) {
+      const e = toUserError(err);
+      this.toasts.show({ tone: 'danger', message: e.message, detail: e.action });
+    } finally {
+      this.restarting.set(false);
+    }
+  }
   protected stallMinutes = 10;
   protected timeoutMinutes = 60;
   protected repeatedFailures = 2;

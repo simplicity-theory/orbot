@@ -21,6 +21,7 @@ import {
   SETTINGS_ID,
   type RecordVersion,
   type TaskStatus,
+  type QueuesRestartView,
 } from '@orbot/shared';
 import type { z } from 'zod';
 import { Background } from '../common/background.js';
@@ -90,6 +91,32 @@ export class OverseerService implements OnApplicationBootstrap, OnModuleDestroy 
 
   onModuleDestroy(): void {
     this.sub?.unsubscribe();
+  }
+
+  /**
+   * "Restart the queues": what a restart does at boot, without one. Every task shown working
+   * with no run behind it is queued again, and every Overseer looks at its bots now (D115).
+   */
+  async restartQueues(actor: string): Promise<QueuesRestartView> {
+    const recovered = await this.runner.recoverStranded(actor);
+    const units = await this.record.listActive('unit');
+    const unitName = new Map(units.map((u) => [u.entityId, u.body.name]));
+    const requeued = recovered.map((r) => ({
+      ...r,
+      unitName: unitName.get(r.unitId) ?? '',
+    }));
+    await this.record.event(
+      'sitrep',
+      {
+        level: 'hq',
+        text: `Queues restarted: ${requeued.length ? `${requeued.map((r) => `#${r.number}`).join(', ')} queued again; ` : 'no task was stranded; '}every unit dispatches now.`,
+        status: null,
+      },
+      {},
+      actor,
+    );
+    for (const u of units) this.dispatchSoon(u.entityId);
+    return { requeued, units: units.length };
   }
 
   /** Ask the unit's Overseer to start whatever it can (after a handoff, an approval…). */

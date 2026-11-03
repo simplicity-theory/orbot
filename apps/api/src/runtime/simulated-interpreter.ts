@@ -92,6 +92,9 @@ const MAIN_REPO_MOVE =
 /** "Cancel Operation Ledger: wrong approach". */
 const CANCEL_OPERATION =
   /^(?:please\s+)?(?:cancel|call off|abort|scrub)\s+(?:the\s+)?(?:operation|op)\b\s*([^:]*?)(?:\s*(?::|—|\bbecause\b)\s*(.+))?$/i;
+/** "Restart the queues", "Kick the queues", "Unstick the dispatch". */
+const RESTART_QUEUES =
+  /^(?:please\s+)?(?:restart|kick|unstick|nudge|re-?run|re-?dispatch)\s+(?:the\s+)?(?:queues?|dispatch(?:er)?|dispatching)\b/i;
 /** "Start Operation Ledger over", "Restart Operation Ledger: wrong plan". */
 const RESTART_OPERATION =
   /^(?:please\s+)?(?:restart|redo|start)\s+(?:the\s+)?(?:operation|op)\b\s*([^:]*?)(?:\s+(over|again|afresh|from scratch))?(?:\s*(?::|—|\bbecause\b)\s*(.+))?$/i;
@@ -256,6 +259,11 @@ export class SimulatedInterpreter {
           for (const { u, t } of waiting)
             out.actions.push({ kind: 'approve-deploy', unitId: u.id, taskId: t.id, approve });
         }
+        continue;
+      }
+      if (RESTART_QUEUES.test(sentence)) {
+        kinds.add('order');
+        out.actions.push({ kind: 'restart-queues', unitId: null });
         continue;
       }
       const course =

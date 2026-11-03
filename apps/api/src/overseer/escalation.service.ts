@@ -90,6 +90,8 @@ export class EscalationService implements OnApplicationBootstrap, OnModuleDestro
 
   /** Look at every run in progress for stalls and timeouts. */
   async sweep(now = Date.now()): Promise<void> {
+    // A task the record shows working with no run behind it is queued again (D115).
+    await this.runner.recoverStranded('system:runner');
     const { escalation: s } = await this.settings.get();
     for (const run of this.runner.running()) {
       const chains = await this.chains({ taskId: run.taskId, runId: run.runId });

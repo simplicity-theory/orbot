@@ -14,6 +14,12 @@
           <orb-main-effort-badge />
         }
         <orb-status [status]="t.status" />
+        @if (t.status === 'working' && lastActivity(); as at) {
+          <span class="meta"
+            >last activity
+            <time [attr.datetime]="at" [attr.title]="full(at)">{{ at | relativeTime }}</time></span
+          >
+        }
         @if (t.pullRequest; as pr) {
           <a class="btn btn--ghost" [href]="pr.url" target="_blank" rel="noopener"
             ><orb-icon name="link" /> Pull request #{{ pr.number }}</a

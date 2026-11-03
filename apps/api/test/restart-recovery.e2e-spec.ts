@@ -87,6 +87,29 @@ describe('Restart recovery: a task left working by a restart goes again', () => 
     await waitFor(async () => ((await detail(task.id)).task.status === 'done' ? true : null));
   });
 
+  it('"Restart the queues" does the same on demand: from the web and in chat', async () => {
+    const task = await strand('Add a metrics endpoint', false);
+    const r = (await t.agent.post('/api/queues/restart').expect(200)).body as {
+      requeued: { taskId: string; number: number; unitName: string }[];
+      units: number;
+    };
+    expect(r.requeued).toEqual([
+      expect.objectContaining({ taskId: task.id, number: task.number, unitName: 'Engineers' }),
+    ]);
+    expect(r.units).toBeGreaterThanOrEqual(1);
+    expect((await detail(task.id)).task.status).toBe('queued');
+
+    const chat = (
+      await t.agent.post('/api/chat/hq').send({ text: 'Restart the queues.' }).expect(201)
+    ).body;
+    await settled(t.app);
+    expect(chat.readback.body.items[0]!.summary).toBe(
+      'Queues restarted: no task was stranded; every unit dispatches now.',
+    );
+    await t.agent.post(`/api/tasks/${task.id}/run`).expect(202);
+    await waitFor(async () => ((await detail(task.id)).task.status === 'done' ? true : null));
+  });
+
   it('an Overseer-issued task (auto-start) is picked up again without anyone', async () => {
     const task = await strand('Add a health check', true);
     await t.app.get(TaskRunner).onApplicationBootstrap();

@@ -8,5 +8,10 @@ test('Settings: switch every bot to one runtime', async ({ page }) => {
   await expect(select).toHaveValue('simulated');
   await page.getByRole('button', { name: 'Switch all bots' }).click();
   await expect(page.getByText('Every bot already runs on simulated.')).toBeVisible();
+  // Restart the queues from here too: nothing stranded, every unit dispatches.
+  await page.getByRole('button', { name: 'Restart the queues' }).click();
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Queues restarted: 0 task(s) queued again.' }),
+  ).toBeVisible();
   await expectAccessible(page, 'settings with runtime switch');
 });

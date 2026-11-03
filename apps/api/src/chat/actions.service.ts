@@ -184,6 +184,22 @@ export class ActionsService {
         affects: [],
       };
     }
+    if (action.kind === 'restart-queues') {
+      const r = await this.overseer.restartQueues(ctx.actor);
+      return {
+        summary: `Queues restarted: ${
+          r.requeued.length
+            ? `${r.requeued.map((x) => `#${x.number} (${x.unitName})`).join(', ')} queued again; `
+            : 'no task was stranded; '
+        }every unit dispatches now.`,
+        links: r.requeued.map((x) => ({
+          label: `Task #${x.number}`,
+          link: `/units/${x.unitId}/tasks/${x.taskId}`,
+        })),
+        inverse: null,
+        affects: [],
+      };
+    }
     if (action.kind === 'restart-operation') {
       const op = await this.hq.restartOperation(action.operationId, action.note, ctx.actor);
       return {

@@ -82,6 +82,18 @@ export interface BudgetView {
   enforced: boolean;
 }
 
+/** "Restart the queues": the tasks queued again, and how many units were told to dispatch. */
+export interface QueuesRestartView {
+  requeued: {
+    taskId: string;
+    number: number;
+    unitId: string;
+    unitName: string;
+    botCallsign: string | null;
+  }[];
+  units: number;
+}
+
 /** Compute spent so far, by task, unit and operation: the baseline for setting limits (D114). */
 export interface ComputeUsageView {
   limits: 'off' | 'on';

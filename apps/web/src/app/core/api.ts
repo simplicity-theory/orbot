@@ -5,6 +5,7 @@ import type {
   AppointOfficerRequest,
   AppProgressView,
   OperationDetailView,
+  QueuesRestartView,
   ConnectServerRequest,
   InstallAppRequest,
   UpdateEnvironmentRequest,
@@ -444,6 +445,11 @@ export class Api {
     return firstValueFrom(
       this.http.post<OperationDetailView>(`${API}/operations/${operationId}/cancel`, { note }),
     );
+  }
+
+  /** Restart the queues: stranded tasks queued again, every unit dispatched. */
+  restartQueues() {
+    return firstValueFrom(this.http.post<QueuesRestartView>(`${API}/queues/restart`, {}));
   }
 
   /** Start the operation over: every mission withdrawn and issued again from the same plan. */

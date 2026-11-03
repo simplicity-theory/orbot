@@ -139,22 +139,37 @@ export class TaskRunner implements OnApplicationBootstrap {
    * is freed, so the Overseer starts it again from its branch (D115).
    */
   async onApplicationBootstrap(): Promise<void> {
+    await this.recoverStranded('system:runner');
+  }
+
+  /**
+   * Every task the record shows working that has no run in this process is stranded (the
+   * process restarted under it, or its run was lost). Each is queued again with the reason,
+   * its run closed and its bot freed. Safe to call at any time: the escalation sweep does, and
+   * so does "Restart the queues" (D115).
+   */
+  async recoverStranded(
+    actor: string,
+  ): Promise<{ taskId: string; number: number; unitId: string; botCallsign: string | null }[]> {
     const working = await this.record.listActive('task', { bodyContains: { status: 'working' } });
+    const out: { taskId: string; number: number; unitId: string; botCallsign: string | null }[] =
+      [];
     for (const task of working) {
+      if (this.active.has(task.entityId)) continue;
       try {
-        await this.recover(task);
+        out.push(await this.recover(task, actor));
       } catch (err) {
         this.logger.error(
-          `Could not recover task #${task.body.number} after the restart: ${this.message(err)}`,
+          `Could not recover task #${task.body.number}: ${this.message(err)}`,
           'TaskRunner',
         );
       }
     }
+    return out;
   }
 
-  private async recover(task: RecordVersion<TaskBody>): Promise<void> {
+  private async recover(task: RecordVersion<TaskBody>, actor: string) {
     const t = task.body;
-    const actor = 'system:runner';
     const reason =
       'ORBOT restarted while the task ran (an update or a crash); it goes again from its branch.';
     const action = t.autoStart
@@ -214,6 +229,12 @@ export class TaskRunner implements OnApplicationBootstrap {
         actor,
       );
     });
+    return {
+      taskId: task.entityId,
+      number: t.number,
+      unitId: t.unitId,
+      botCallsign: bot?.body.callsign ?? null,
+    };
   }
 
   running(): { taskId: string; runId: string; unitId: string; botId: string; startedAt: number }[] {

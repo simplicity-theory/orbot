@@ -57,6 +57,13 @@ export class OverseerController {
     private readonly holds: HoldPolicyService,
   ) {}
 
+  /** Restart the queues: stranded tasks queued again, every unit dispatched. The Commander's alone. */
+  @Post('queues/restart')
+  @HttpCode(200)
+  restartQueues(@Actor() actor: string) {
+    return this.overseer.restartQueues(actor);
+  }
+
   @Authority({ level: 'unit', units: unitOf('unit', 'body') })
   @Post('missions')
   async createMission(

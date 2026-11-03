@@ -113,6 +113,8 @@ export const ChatAction = z.discriminatedUnion('kind', [
     operationId: Id,
     note: z.string().max(500).default(''),
   }),
+  /** Through HQ: queue again every task shown working with no run behind it, and dispatch every unit. */
+  z.object({ kind: z.literal('restart-queues'), unitId: Id.nullable() }),
   /** Approve (or reject) a production deploy waiting on the Commander. */
   z.object({ kind: z.literal('approve-deploy'), unitId: Id, taskId: Id, approve: z.boolean() }),
   /** Decide what a bot asked permission for under its unit's rules of engagement. */

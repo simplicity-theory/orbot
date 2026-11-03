@@ -59,6 +59,15 @@ export class TaskPage {
   protected readonly view = httpResource<TaskDetailView>(() => apiUrl.task(this.taskId()));
   protected readonly full = fullDate;
   protected readonly missionStatus = missionStatus;
+  /** When the record last heard from the task: the newest entry on it. */
+  protected readonly lastActivity = computed(() => {
+    const v = this.view.value();
+    if (!v) return null;
+    return v.events.reduce<string | null>(
+      (m, e) => (m && m > e.createdAt ? m : e.createdAt),
+      v.task.updatedAt,
+    );
+  });
   /** Statuses whose reason is worth a line in a list. */
   protected readonly stopped = (s: string) => ['blocked', 'failed', 'stood-down'].includes(s);
 

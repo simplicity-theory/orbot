@@ -58,6 +58,7 @@ const COMMANDER_ONLY: ChatAction['kind'][] = [
   'set-main-repository',
   'cancel-operation',
   'restart-operation',
+  'restart-queues',
   'main-effort',
 ];
 
@@ -188,7 +189,8 @@ export class ChatService {
       action.kind === 'release-resource' ||
       action.kind === 'set-main-repository' ||
       action.kind === 'cancel-operation' ||
-      action.kind === 'restart-operation'
+      action.kind === 'restart-operation' ||
+      action.kind === 'restart-queues'
         ? HQ
         : null;
     const result = await this.actions.run(action, { actor, reason: opts.reason });
@@ -726,6 +728,7 @@ export class ChatService {
             : (await this.record.requireActive('bot', a.targetId!)).body.callsign;
       return a.kind === 'stand-down' ? `Stand down ${who}` : `Resume work: ${who}`;
     }
+    if (a.kind === 'restart-queues') return 'Restart the queues';
     const unit = await this.record.requireActive('unit', a.unitId);
     const u = unit.body.name;
     switch (a.kind) {
