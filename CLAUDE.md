@@ -47,7 +47,7 @@ Tests use the `orbot_test` / `orbot_secrets_test` databases and reset them; the 
   - `runtime/claude-code.runtime.ts` — `ClaudeCodeRuntime` (`claude-code`: Claude Agent SDK on the Commander's own Claude plan via the `claude` login; only ORBOT's tools over in-process MCP, allow-listed env with no API key). Registered when `ORBOT_CLAUDE_CODE=on` or `ORBOT_RUNTIME=claude-code`; tests use a scripted fake SDK.
   - Phase 5 command services in `overseer/`:
     - `StandDownService`: halt orders on a bot, a unit or everything; running work pauses with a handover.
-    - `BudgetService`: hard caps per unit, operation and task, with a warning first.
+    - `BudgetService`: caps per unit, operation and task, with a warning first; held only while the `computeLimits` setting is on (off by default: caps are advisory, spend is still recorded; `GET /api/compute` sums it per task, unit and operation as the baseline, D114).
     - `EscalationService`: stalls, timeouts and repeated failures go Overseer → HQ → Commander.
     - `DeconflictionService`: who touches what, worked out from git; HQ notices overlaps.
     - `DisputeService`: HQ rules under standing orders; the Commander's ruling is final.

@@ -86,6 +86,7 @@ export const apiUrl = {
   supply: () => `${API}/supply`,
   server: (id: string) => `${API}/supply/servers/${id}`,
   settings: () => `${API}/settings`,
+  compute: () => `${API}/compute`,
   standDown: () => `${API}/stand-down`,
   mainEffort: () => `${API}/main-effort`,
   dailyBrief: () => `${API}/daily-brief`,
@@ -396,6 +397,7 @@ export class Api {
       repeatedFailures: number;
       failingBotRuns: number;
     };
+    computeLimits?: 'off' | 'on';
     reason: string;
     expectedVersion: number;
   }) {

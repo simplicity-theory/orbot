@@ -47,6 +47,12 @@ describe('Budget caps', () => {
 
   beforeAll(async () => {
     t = await startTestApp();
+    // Caps hold work only once compute limits are on (off by default, D114).
+    const st = (await t.agent.get('/api/settings').expect(200)).body;
+    await t.agent
+      .put('/api/settings')
+      .send({ computeLimits: 'on', reason: 'Test', expectedVersion: st.version })
+      .expect(200);
     repoId = (
       await t.agent
         .post('/api/supply/repositories')

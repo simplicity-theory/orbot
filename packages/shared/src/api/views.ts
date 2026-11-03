@@ -78,6 +78,28 @@ export interface BudgetView {
   /** Share (0–1) at which ORBOT warns. */
   warnAt: number;
   state: 'uncapped' | 'ok' | 'warning' | 'capped';
+  /** False while compute limits are off (settings): the cap is advisory and nothing is held. */
+  enforced: boolean;
+}
+
+/** Compute spent so far, by task, unit and operation: the baseline for setting limits (D114). */
+export interface ComputeUsageView {
+  limits: 'off' | 'on';
+  total: number;
+  units: { id: string; name: string; spent: number; cap: number | null }[];
+  operations: { id: string; name: string; phase: string; spent: number; cap: number | null }[];
+  /** The costliest tasks, most expensive first. */
+  tasks: {
+    id: string;
+    number: number;
+    title: string;
+    unitId: string;
+    unitName: string;
+    botId: string | null;
+    status: string;
+    spent: number;
+    limit: number | null;
+  }[];
 }
 
 export interface AttentionItem {
@@ -312,10 +334,21 @@ export interface StandDownView {
 }
 
 /** Work out a budget's state from its cap, spend and warning share. */
-export function budgetView(cap: number | null, spent: number, warnAt: number): BudgetView {
+export function budgetView(
+  cap: number | null,
+  spent: number,
+  warnAt: number,
+  enforced = true,
+): BudgetView {
   const state =
-    cap === null ? 'uncapped' : spent >= cap ? 'capped' : spent >= cap * warnAt ? 'warning' : 'ok';
-  return { cap, spent, warnAt, state };
+    cap === null || !enforced
+      ? 'uncapped'
+      : spent >= cap
+        ? 'capped'
+        : spent >= cap * warnAt
+          ? 'warning'
+          : 'ok';
+  return { cap, spent, warnAt, state, enforced };
 }
 
 /** A dispute with the names of the units involved. */

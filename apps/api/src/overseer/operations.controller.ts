@@ -179,6 +179,13 @@ export class OperationsController {
     return this.views.operation(id);
   }
 
+  /** Compute spent so far by unit, operation and task: the baseline for deciding limits (D114). */
+  @Authority({ level: 'read' })
+  @Get('compute')
+  usage() {
+    return this.budgets.usage();
+  }
+
   /** Set a unit's compute budget cap (0 = none); work held at the old cap resumes. */
   @Put('units/:id/budget')
   async unitBudget(

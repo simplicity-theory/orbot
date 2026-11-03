@@ -278,9 +278,10 @@ export class SandTableService {
       unitEstimate.set(unit.entityId, (unitEstimate.get(unit.entityId) ?? 0) + units_);
     }
 
-    // Budgets: will the money last?
+    // Budgets: will the money last? Only once compute limits are on (off: caps are advisory).
     const warnAt = s?.budgetWarnAt ?? 0.8;
-    for (const [unitId, need] of unitEstimate) {
+    const limitsOn = s?.computeLimits === 'on';
+    for (const [unitId, need] of limitsOn ? unitEstimate : []) {
       const unit = units.find((u) => u.entityId === unitId)!;
       const cap = unit.body.computeBudget ?? 0;
       if (!cap || !need) continue;
@@ -308,7 +309,7 @@ export class SandTableService {
       }
     }
     const total = perMission.reduce((n, p) => n + p.units, 0);
-    if (op.body.budgetUnits !== null && total) {
+    if (limitsOn && op.body.budgetUnits !== null && total) {
       const left = op.body.budgetUnits - (await this.record.costOf({ operationId }));
       if (total > left) {
         add({

@@ -3,7 +3,7 @@ import { Can } from '../../ui/can';
 import { httpResource } from '@angular/common/http';
 import { Component, computed, effect, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import type { AlertKind, RecordEvent } from '@orbot/shared';
+import type { AlertKind, ComputeUsageView, RecordEvent } from '@orbot/shared';
 import { FormsModule } from '@angular/forms';
 import { Api, apiUrl, type SettingsView } from '../../core/api';
 import { toUserError } from '../../core/api-error';
@@ -69,6 +69,21 @@ import { ThemeService } from '../../core/theme';
             </fieldset>
             <label for="phrase">Confirmation phrase</label>
             <input id="phrase" name="phrase" class="input" [(ngModel)]="phrase" required />
+            <label for="compute-limits">Compute limits</label>
+            <select
+              id="compute-limits"
+              name="computeLimits"
+              class="input"
+              [(ngModel)]="computeLimits"
+            >
+              <option value="off">Off: caps are advisory, spend is recorded (default)</option>
+              <option value="on">On: work is held at a cap, with a warning first</option>
+            </select>
+            <p class="hint">
+              Until compute use is measured well enough to limit, every cap is a note and nothing is
+              ever held. Spend is recorded per task, unit and operation either way: see
+              <a href="#compute-h">Compute used</a> for the baseline.
+            </p>
             <label for="warn-at">Budget warning at (% of a cap)</label>
             <input
               id="warn-at"
@@ -225,6 +240,96 @@ import { ThemeService } from '../../core/theme';
         }
       </section>
 
+      <section class="panel" aria-labelledby="compute-h">
+        <h2 id="compute-h" class="panel__title">Compute used</h2>
+        @if (usage.value(); as u) {
+          <p class="hint">
+            {{ u.total }} units spent so far, limits {{ u.limits }}. The baseline for deciding what
+            to limit, and what a task of each kind costs as models change.
+          </p>
+          <div class="usage">
+            <table class="table" aria-label="Compute by unit">
+              <thead>
+                <tr>
+                  <th>Unit</th>
+                  <th class="num">Spent</th>
+                  <th class="num">Cap</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (x of u.units; track x.id) {
+                  <tr>
+                    <td>
+                      <a [routerLink]="['/units', x.id]">{{ x.name }}</a>
+                    </td>
+                    <td class="num">{{ x.spent }}</td>
+                    <td class="num">{{ x.cap ?? '—' }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+            @if (u.operations.length) {
+              <table class="table" aria-label="Compute by operation">
+                <thead>
+                  <tr>
+                    <th>Operation</th>
+                    <th class="num">Spent</th>
+                    <th class="num">Cap</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (x of u.operations; track x.id) {
+                    <tr>
+                      <td>
+                        <a [routerLink]="['/operations', x.id]">{{ x.name }}</a>
+                        <span class="meta">{{ x.phase }}</span>
+                      </td>
+                      <td class="num">{{ x.spent }}</td>
+                      <td class="num">{{ x.cap ?? '—' }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            }
+          </div>
+          @if (u.tasks.length) {
+            <table class="table" aria-label="Costliest tasks">
+              <thead>
+                <tr>
+                  <th>Task</th>
+                  <th>Unit</th>
+                  <th>Status</th>
+                  <th class="num">Spent</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (x of u.tasks; track x.id) {
+                  <tr>
+                    <td>
+                      <a
+                        [routerLink]="
+                          x.botId
+                            ? ['/units', x.unitId, 'bots', x.botId, 'tasks', x.id]
+                            : ['/units', x.unitId, 'tasks', x.id]
+                        "
+                        ><span class="mono">#{{ x.number }}</span> {{ x.title }}</a
+                      >
+                    </td>
+                    <td>{{ x.unitName }}</td>
+                    <td>{{ x.status }}</td>
+                    <td class="num">{{ x.spent }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          } @else {
+            <p class="meta">No task has recorded a cost yet.</p>
+          }
+        } @else {
+          <p class="meta">Loading…</p>
+        }
+      </section>
+
       <section class="panel" aria-labelledby="system-h">
         <h2 id="system-h" class="panel__title">System</h2>
         <dl class="dl">
@@ -264,6 +369,16 @@ import { ThemeService } from '../../core/theme';
     </div>
   `,
   styles: `
+    .usage {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(var(--card-min-width), 1fr));
+      gap: var(--space-4);
+      margin-bottom: var(--space-4);
+    }
+    .num {
+      text-align: right;
+    }
+
     .runtime-all {
       display: flex;
       flex-wrap: wrap;
@@ -347,10 +462,12 @@ export class SettingsPage {
   private readonly api = inject(Api);
   private readonly toasts = inject(Toasts);
   protected readonly settings = httpResource<SettingsView>(() => apiUrl.settings());
+  protected readonly usage = httpResource<ComputeUsageView>(() => apiUrl.compute());
   protected readonly chosen = signal<string[]>([]);
   protected readonly busy = signal(false);
   protected phrase = '';
   protected warnAt = 80;
+  protected computeLimits: 'off' | 'on' = 'off';
   protected stallMinutes = 10;
   protected timeoutMinutes = 60;
   protected repeatedFailures = 2;
@@ -394,6 +511,7 @@ export class SettingsPage {
       this.chosen.set(st.irreversibleActions);
       this.phrase = st.confirmationPhrase;
       this.warnAt = Math.round((st.budgetWarnAt ?? 0.8) * 100);
+      this.computeLimits = st.computeLimits ?? 'off';
       this.mainEffortYield = st.mainEffortYield ?? true;
       this.briefEnabled = st.dailyBrief?.enabled ?? true;
       this.briefAt = st.dailyBrief?.at ?? '07:00';
@@ -469,6 +587,7 @@ export class SettingsPage {
         irreversibleActions: this.chosen(),
         confirmationPhrase: this.phrase.trim(),
         budgetWarnAt: Math.min(100, Math.max(10, this.warnAt)) / 100,
+        computeLimits: this.computeLimits,
         escalation: {
           stallSeconds: Math.max(1, Math.round(this.stallMinutes)) * 60,
           timeoutSeconds: Math.max(1, Math.round(this.timeoutMinutes)) * 60,

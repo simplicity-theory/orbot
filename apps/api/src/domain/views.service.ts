@@ -76,6 +76,7 @@ export class ViewsService {
     const settings = (await this.record.getActive('settings', SETTINGS_ID))?.body;
     const allHalted = !!settings?.halt;
     const warnAt = settings?.budgetWarnAt ?? 0.8;
+    const enforced = settings?.computeLimits === 'on';
     const spentBy = await this.record.costBy('unit');
     const open = await this.escalations.openChains();
     const referred = await this.record.listActive('dispute', {
@@ -84,7 +85,12 @@ export class ViewsService {
     const out: OrbatUnit[] = units
       .sort((a, b) => a.body.order - b.body.order)
       .map((u) => {
-        const budget = unitBudget(u.body.computeBudget, spentBy.get(u.entityId) ?? 0, warnAt);
+        const budget = unitBudget(
+          u.body.computeBudget,
+          spentBy.get(u.entityId) ?? 0,
+          warnAt,
+          enforced,
+        );
         const ub = bots.filter((b) => b.body.unitId === u.entityId).map(toView);
         const ut = tasks.filter((t) => t.body.unitId === u.entityId).map(toView);
         const um = missions.filter((m) => m.body.unitId === u.entityId).map(toView);
@@ -214,6 +220,7 @@ export class ViewsService {
         u.body.computeBudget,
         await this.record.costOf({ unitId: id }),
         settings?.budgetWarnAt ?? 0.8,
+        settings?.computeLimits === 'on',
       ),
       status: unitStatus(bv, tv, awaiting, !!u.body.halt || !!settings?.halt),
       overseer: bv.find((b) => b.id === u.body.overseerBotId) ?? null,
@@ -240,6 +247,7 @@ export class ViewsService {
           u.body.computeBudget,
           await this.record.costOf({ unitId: id }),
           settings?.budgetWarnAt ?? 0.8,
+          settings?.computeLimits === 'on',
         ),
         await this.record.listActive('dispute', {
           bodyContains: { status: 'referred', unitId: id },
@@ -388,10 +396,12 @@ export class ViewsService {
         [],
       ),
     ]);
+    const st = (await this.record.getActive('settings', SETTINGS_ID))?.body;
     const budget = budgetView(
       op.body.budgetUnits,
       await this.record.costOf({ operationId: id }),
-      (await this.record.getActive('settings', SETTINGS_ID))?.body.budgetWarnAt ?? 0.8,
+      st?.budgetWarnAt ?? 0.8,
+      st?.computeLimits === 'on',
     );
     needsYou.push(...budgetAttention(`Operation ${op.body.name}`, `/operations/${id}`, id, budget));
     // A rehearsal that found blockers, while the plan can still be put right.
@@ -563,8 +573,13 @@ function byCallsign(a: BotView, b: BotView) {
 }
 
 /** A unit's budget: `computeBudget` 0 means no cap has been set. */
-function unitBudget(computeBudget: number, spent: number, warnAt: number): BudgetView {
-  return budgetView(computeBudget > 0 ? computeBudget : null, spent, warnAt);
+function unitBudget(
+  computeBudget: number,
+  spent: number,
+  warnAt: number,
+  enforced: boolean,
+): BudgetView {
+  return budgetView(computeBudget > 0 ? computeBudget : null, spent, warnAt, enforced);
 }
 
 function budgetAttention(

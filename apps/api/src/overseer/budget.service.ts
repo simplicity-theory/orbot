@@ -1,5 +1,11 @@
 import { BadRequestException, Injectable, type OnModuleInit } from '@nestjs/common';
-import { budgetView, type BudgetView, type PolicyRule, type PolicyRequest } from '@orbot/shared';
+import {
+  budgetView,
+  type BudgetView,
+  type ComputeUsageView,
+  type PolicyRule,
+  type PolicyRequest,
+} from '@orbot/shared';
 import { TaskRunner } from '../execution/task-runner.js';
 import { PolicyService } from '../policy/policy.service.js';
 import { RecordService } from '../record/record.service.js';
@@ -42,6 +48,8 @@ export class BudgetService implements OnModuleInit {
       evaluate: async (req) => {
         if (req.action !== 'task.start' && req.action !== 'task.continue') return null;
         if (!req.taskId) return null;
+        // Limits off (the default): spend is recorded, nothing is held or warned about.
+        if ((await this.settings.get()).computeLimits !== 'on') return null;
         const lines = await this.lines(req.taskId);
         if (req.action === 'task.continue') await this.warn(lines, req);
         const over = lines.find((l) => l.spent >= l.cap);
@@ -140,9 +148,64 @@ export class BudgetService implements OnModuleInit {
 
   async unitBudget(unitId: string): Promise<BudgetView> {
     const unit = await this.record.requireActive('unit', unitId);
-    const { budgetWarnAt } = await this.settings.get();
+    const { budgetWarnAt, computeLimits } = await this.settings.get();
     const cap = unit.body.computeBudget > 0 ? unit.body.computeBudget : null;
-    return budgetView(cap, await this.record.costOf({ unitId }), budgetWarnAt);
+    return budgetView(
+      cap,
+      await this.record.costOf({ unitId }),
+      budgetWarnAt,
+      computeLimits === 'on',
+    );
+  }
+
+  /** What has been spent so far, by unit, operation and task: the baseline for limits (D114). */
+  async usage(): Promise<ComputeUsageView> {
+    const [{ computeLimits }, units, ops, tasks, byUnit, byOp, byTask] = await Promise.all([
+      this.settings.get(),
+      this.record.listActive('unit'),
+      this.record.listActive('operation'),
+      this.record.listActive('task'),
+      this.record.costBy('unit'),
+      this.record.costBy('operation'),
+      this.record.costBy('task'),
+    ]);
+    const unitName = new Map(units.map((u) => [u.entityId, u.body.name]));
+    return {
+      limits: computeLimits,
+      total: [...byUnit.values()].reduce((a, b) => a + b, 0),
+      units: units
+        .map((u) => ({
+          id: u.entityId,
+          name: u.body.name,
+          spent: byUnit.get(u.entityId) ?? 0,
+          cap: u.body.computeBudget > 0 ? u.body.computeBudget : null,
+        }))
+        .sort((a, b) => b.spent - a.spent),
+      operations: ops
+        .map((o) => ({
+          id: o.entityId,
+          name: o.body.name,
+          phase: o.body.phase,
+          spent: byOp.get(o.entityId) ?? 0,
+          cap: o.body.budgetUnits,
+        }))
+        .sort((a, b) => b.spent - a.spent),
+      tasks: tasks
+        .map((t) => ({
+          id: t.entityId,
+          number: t.body.number,
+          title: t.body.title,
+          unitId: t.body.unitId,
+          unitName: unitName.get(t.body.unitId) ?? '',
+          botId: t.body.botId,
+          status: t.body.status,
+          spent: byTask.get(t.entityId) ?? 0,
+          limit: t.body.budget.limitUnits,
+        }))
+        .filter((t) => t.spent > 0)
+        .sort((a, b) => b.spent - a.spent)
+        .slice(0, 25),
+    };
   }
 
   /** Set a unit's cap (0 = none). Work held at the old cap is released. */

@@ -789,6 +789,12 @@ export const SettingsBody = z.object({
   confirmationPhrase: z.string().min(1),
   /** Share of a compute budget (0–1) at which ORBOT warns before the hard cap. */
   budgetWarnAt: z.number().min(0.1).max(1).default(0.8),
+  /**
+   * Whether compute budget caps hold work. Off (the default): every cap is advisory, nothing is
+   * ever held or warned about, and spend is still recorded per task, unit and operation as the
+   * baseline for deciding limits later (D114).
+   */
+  computeLimits: z.enum(['off', 'on']).default('off'),
   escalation: EscalationSettings.default(DEFAULT_ESCALATION),
   /** "Everything, stand down": a stand-down order on every unit (Phase 5). */
   halt: Halt.nullable().default(null),
@@ -808,6 +814,7 @@ export const DEFAULT_SETTINGS: SettingsBody = {
   irreversibleActions: ['grant-deploy-rights'],
   confirmationPhrase: 'confirm',
   budgetWarnAt: 0.8,
+  computeLimits: 'off',
   escalation: DEFAULT_ESCALATION,
   halt: null,
   mainEffort: null,
