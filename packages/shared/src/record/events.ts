@@ -337,7 +337,7 @@ export const RecordEventBodies = {
       z.object({
         pendingId: z.string(),
         summary: z.string(),
-        reason: z.enum(['musing', 'irreversible']),
+        reason: z.enum(['musing', 'offer', 'irreversible']),
         phrase: z.string().nullable(),
       }),
     ),
@@ -361,7 +361,7 @@ export const RecordEventBodies = {
     channel: z.string(),
     action: ChatAction,
     summary: z.string(),
-    reason: z.enum(['musing', 'irreversible']),
+    reason: z.enum(['musing', 'offer', 'irreversible']),
     phrase: z.string().nullable(),
   }),
   'pending.resolved': z.object({

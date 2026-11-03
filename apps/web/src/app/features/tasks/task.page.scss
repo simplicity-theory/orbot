@@ -41,6 +41,10 @@
   &__next {
     margin-top: var(--space-2) !important;
   }
+  &__points {
+    margin: var(--space-2) 0 0 !important;
+    font-size: var(--font-size-lg);
+  }
   &__sub {
     margin: var(--space-4) 0 var(--space-1);
     font-size: var(--font-size-sm);

@@ -82,6 +82,19 @@ export interface BudgetView {
   enforced: boolean;
 }
 
+/** A task's branch landed on its repository's default branch. */
+export interface LandedView {
+  taskId: string;
+  number: number;
+  repository: string;
+  /** The default branch landed on, and the task branch it came from. */
+  branch: string;
+  from: string;
+  commit: string;
+  /** True when the default branch already had everything. */
+  unchanged: boolean;
+}
+
 /** "Restart the queues": the tasks queued again, and how many units were told to dispatch. */
 export interface QueuesRestartView {
   requeued: {

@@ -29,6 +29,11 @@
             <orb-icon name="link" /> Open pull request
           </button>
         }
+        @if (canLand()) {
+          <button type="button" class="btn" [disabled]="landing()" (click)="land()">
+            <orb-icon name="git-branch" /> {{ landing() ? 'Landing…' : 'Land on main' }}
+          </button>
+        }
         @if (canStart()) {
           <button type="button" class="btn btn--primary" [disabled]="starting()" (click)="start()">
             {{
@@ -53,7 +58,16 @@
           {{ why }}
         </h2>
         <div class="decision__what" role="status">
-          <p class="decision__reason">{{ t.statusReason ?? 'No reason given.' }}</p>
+          @if (reasonItems(); as items) {
+            <p class="decision__reason">{{ items.lead }}</p>
+            <ol class="decision__list decision__points">
+              @for (i of items.points; track $index) {
+                <li>{{ i }}</li>
+              }
+            </ol>
+          } @else {
+            <p class="decision__reason">{{ t.statusReason ?? 'No reason given.' }}</p>
+          }
           @if (next(); as n) {
             <p class="decision__next"><strong>What to do:</strong> {{ n }}</p>
           }

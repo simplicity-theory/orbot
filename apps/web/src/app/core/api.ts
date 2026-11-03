@@ -6,6 +6,7 @@ import type {
   AppProgressView,
   OperationDetailView,
   QueuesRestartView,
+  LandedView,
   ConnectServerRequest,
   InstallAppRequest,
   UpdateEnvironmentRequest,
@@ -445,6 +446,11 @@ export class Api {
     return firstValueFrom(
       this.http.post<OperationDetailView>(`${API}/operations/${operationId}/cancel`, { note }),
     );
+  }
+
+  /** Land a task's branch on its repository's default branch. */
+  landTask(taskId: string) {
+    return firstValueFrom(this.http.post<LandedView>(`${API}/tasks/${taskId}/land`, {}));
   }
 
   /** Restart the queues: stranded tasks queued again, every unit dispatched. */

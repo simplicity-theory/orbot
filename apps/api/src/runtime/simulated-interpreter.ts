@@ -92,6 +92,9 @@ const MAIN_REPO_MOVE =
 /** "Cancel Operation Ledger: wrong approach". */
 const CANCEL_OPERATION =
   /^(?:please\s+)?(?:cancel|call off|abort|scrub)\s+(?:the\s+)?(?:operation|op)\b\s*([^:]*?)(?:\s*(?::|—|\bbecause\b)\s*(.+))?$/i;
+/** "Land #119 on main", "Merge task 119 into main". */
+const LAND_TASK =
+  /^(?:please\s+)?(?:land|merge)\s+(?:task\s+)?#?(\d+)(?:['’]s\s+(?:work|branch))?\s+(?:on|onto|into|to)\s+(?:main|master|the\s+default\s+branch)\b/i;
 /** "Restart the queues", "Kick the queues", "Unstick the dispatch". */
 const RESTART_QUEUES =
   /^(?:please\s+)?(?:restart|kick|unstick|nudge|re-?run|re-?dispatch)\s+(?:the\s+)?(?:queues?|dispatch(?:er)?|dispatching)\b/i;
@@ -258,6 +261,19 @@ export class SimulatedInterpreter {
           kinds.add('order');
           for (const { u, t } of waiting)
             out.actions.push({ kind: 'approve-deploy', unitId: u.id, taskId: t.id, approve });
+        }
+        continue;
+      }
+      const land = LAND_TASK.exec(sentence);
+      if (land) {
+        const number = Number(land[1]);
+        const hit = input.units
+          .flatMap((u) => u.tasks.map((t) => ({ u, t })))
+          .find((x) => x.t.number === number);
+        if (!hit) out.unclear.push(`${raw} — there is no task #${number}.`);
+        else {
+          kinds.add('order');
+          out.actions.push({ kind: 'land-task', unitId: hit.u.id, taskId: hit.t.id });
         }
         continue;
       }

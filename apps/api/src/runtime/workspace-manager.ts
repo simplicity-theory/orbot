@@ -116,6 +116,39 @@ export class WorkspaceManager {
     });
   }
 
+  /**
+   * Land a branch on the repository's default branch: a merge, fast-forward when it is one. The
+   * clone has the default branch checked out, so the merge happens there (D117).
+   */
+  async land(supply: SupplyBody, branch: string): Promise<{ before: string; commit: string }> {
+    const repo = this.repo(supply);
+    return this.locked(repo.localPath, async () => {
+      const before = await git(repo.localPath, ['rev-parse', repo.defaultBranch]);
+      const checkedOut = await git(repo.localPath, ['rev-parse', '--abbrev-ref', 'HEAD']);
+      let dir = repo.localPath;
+      if (checkedOut !== repo.defaultBranch) {
+        dir = join(
+          this.config.workspacesDir,
+          'integration',
+          repo.defaultBranch.replace(/[^a-z0-9-]/gi, '_'),
+        );
+        if (!existsSync(dir)) {
+          await mkdir(join(this.config.workspacesDir, 'integration'), { recursive: true });
+          await git(repo.localPath, ['worktree', 'add', '--quiet', dir, repo.defaultBranch]);
+        }
+      }
+      await git(dir, [
+        'merge',
+        '--quiet',
+        '--no-edit',
+        '-m',
+        `Land ${branch} on ${repo.defaultBranch}`,
+        branch,
+      ]);
+      return { before, commit: await git(dir, ['rev-parse', 'HEAD']) };
+    });
+  }
+
   /** Merge a task's branch into the integration branch. Returns the new integration head. */
   async integrate(
     supply: SupplyBody,

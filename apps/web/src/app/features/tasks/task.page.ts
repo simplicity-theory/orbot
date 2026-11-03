@@ -59,6 +59,18 @@ export class TaskPage {
   protected readonly view = httpResource<TaskDetailView>(() => apiUrl.task(this.taskId()));
   protected readonly full = fullDate;
   protected readonly missionStatus = missionStatus;
+  /** A reason written as "(1) … (2) … (3) …" reads as a list: the lead sentence, then the points. */
+  protected readonly reasonItems = computed(() => {
+    const r = this.view.value()?.task.statusReason;
+    if (!r || !/\(1\)/.test(r)) return null;
+    const parts = r.split(/\s*\(\d+\)\s*/);
+    const lead = parts[0]!.trim();
+    const points = parts
+      .slice(1)
+      .map((p) => p.trim())
+      .filter(Boolean);
+    return points.length > 1 ? { lead, points } : null;
+  });
   /** When the record last heard from the task: the newest entry on it. */
   protected readonly lastActivity = computed(() => {
     const v = this.view.value();
@@ -155,6 +167,39 @@ export class TaskPage {
         .filter(Boolean),
     };
   });
+  /** A task with committed work that is not running: its branch can be landed on the default branch. */
+  protected readonly canLand = computed(() => {
+    const t = this.view.value()?.task;
+    return (
+      !!t &&
+      !!t.workspace &&
+      ['done', 'blocked', 'failed', 'stood-down'].includes(t.status) &&
+      this.auth.can(t.unitId)
+    );
+  });
+  protected readonly landing = signal(false);
+
+  protected async land(): Promise<void> {
+    const t = this.view.value()?.task;
+    if (!t) return;
+    this.landing.set(true);
+    try {
+      const r = await this.api.landTask(t.id);
+      this.view.reload();
+      this.toasts.show({
+        tone: r.unchanged ? 'info' : 'success',
+        message: r.unchanged
+          ? `${r.branch} already had everything from task #${r.number}.`
+          : `Task #${r.number} landed on ${r.branch}.`,
+        detail: `${r.repository} is at ${r.commit.slice(0, 10)}.`,
+      });
+    } catch (err) {
+      const e = toUserError(err);
+      this.toasts.show({ tone: 'danger', message: e.message, detail: e.action });
+    } finally {
+      this.landing.set(false);
+    }
+  }
   protected readonly canStart = computed(() => {
     const t = this.view.value()?.task;
     return (

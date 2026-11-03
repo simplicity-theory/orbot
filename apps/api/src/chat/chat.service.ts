@@ -25,6 +25,7 @@ import { Overseers } from '../overseer/overseers.js';
 import { RecordService } from '../record/record.service.js';
 import { RuntimeRegistry } from '../runtime/runtime.registry.js';
 import { SettingsService } from '../settings/settings.service.js';
+import { headline, type PendingReason } from './headline.js';
 import { ActionsService } from './actions.service.js';
 
 const HQ = 'hq';
@@ -59,6 +60,7 @@ const COMMANDER_ONLY: ChatAction['kind'][] = [
   'cancel-operation',
   'restart-operation',
   'restart-queues',
+  'land-task',
   'main-effort',
 ];
 
@@ -148,9 +150,12 @@ export class ChatService {
         );
       }
     }
+    // Proposals after a question (or beside an answer) are offers, not suspected orders.
+    const proposed: PendingReason =
+      interpretation.kinds.includes('question') || interpretation.answer ? 'offer' : 'musing';
     for (const action of interpretation.musings) {
       if (!(await allowed(action))) continue;
-      pending.push(await this.hold(action, message, channel, 'musing', null, overseerActor));
+      pending.push(await this.hold(action, message, channel, proposed, null, overseerActor));
     }
 
     const readback = (await this.record.event(
@@ -159,7 +164,7 @@ export class ChatService {
         channel,
         replyTo: message.id,
         kinds: interpretation.kinds,
-        text: this.headline(interpretation, items, pending, refused.length > 0),
+        text: headline(interpretation, items.length, pending, refused.length > 0),
         answer: interpretation.answer,
         items,
         pending,
@@ -243,7 +248,7 @@ export class ChatService {
     action: ChatAction,
     message: RecordEvent<'chat.message'>,
     channel: string,
-    reason: 'musing' | 'irreversible',
+    reason: PendingReason,
     phrase: string | null,
     overseerActor: string,
   ) {
@@ -759,21 +764,5 @@ export class ChatService {
       default:
         return `${a.kind} for ${u}`;
     }
-  }
-
-  private headline(
-    i: Interpretation,
-    items: ReadbackItem[],
-    pending: Readback['pending'],
-    refused = false,
-  ): string {
-    if (items.length) return 'Wilco.';
-    if (refused && !pending.length) return 'Not done: that order is outside your command.';
-    if (pending.some((p) => p.reason === 'irreversible'))
-      return 'That cannot be undone. Confirm and I will act.';
-    if (pending.length) return 'Did you mean that as an order?';
-    if (i.missing.length) return 'I cannot do that yet: it is not in the Supply Depot.';
-    if (i.answer) return i.answer;
-    return 'Say again? I did not catch an order or a question.';
   }
 }

@@ -184,6 +184,18 @@ export class ActionsService {
         affects: [],
       };
     }
+    if (action.kind === 'land-task') {
+      const r = await this.hq.landTask(action.taskId, ctx.actor);
+      const task = await this.record.requireActive('task', action.taskId);
+      return {
+        summary: r.unchanged
+          ? `${r.branch} already had everything from task #${r.number}; nothing to land.`
+          : `Task #${r.number} landed on ${r.branch}: ${r.repository} is at ${r.commit.slice(0, 10)}.`,
+        links: [{ label: `Task #${r.number}`, link: taskLink(task.body, action.taskId) }],
+        inverse: null,
+        affects: [],
+      };
+    }
     if (action.kind === 'restart-queues') {
       const r = await this.overseer.restartQueues(ctx.actor);
       return {

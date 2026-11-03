@@ -113,6 +113,8 @@ export const ChatAction = z.discriminatedUnion('kind', [
     operationId: Id,
     note: z.string().max(500).default(''),
   }),
+  /** Land a task's branch on its repository's default branch (the Commander's, never a bot's). */
+  z.object({ kind: z.literal('land-task'), unitId: Id, taskId: Id }),
   /** Through HQ: queue again every task shown working with no run behind it, and dispatch every unit. */
   z.object({ kind: z.literal('restart-queues'), unitId: Id.nullable() }),
   /** Approve (or reject) a production deploy waiting on the Commander. */

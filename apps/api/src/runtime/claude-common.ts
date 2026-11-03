@@ -127,32 +127,26 @@ export const TOOLS: BotTool[] = [
   {
     name: 'blocked',
     description: 'You cannot continue without something from outside the unit.',
-    input_schema: obj(
-      {
-        reason: str,
-        action: {
-          type: 'string',
-          description:
-            'What the Commander can do to clear it: what to give, what to decide, or what to order.',
-        },
+    input_schema: obj({
+      reason: str,
+      action: {
+        type: 'string',
+        description:
+          'What the Commander can do to clear it: what to give, what to decide, or what to order. One or two sentences.',
       },
-      ['reason'],
-    ),
+    }),
   },
   {
     name: 'failed',
     description: 'The task cannot be completed as specified.',
-    input_schema: obj(
-      {
-        reason: str,
-        action: {
-          type: 'string',
-          description:
-            'What the Commander can do about it: what to change in the task or the orders, or what to decide.',
-        },
+    input_schema: obj({
+      reason: str,
+      action: {
+        type: 'string',
+        description:
+          'What the Commander can do about it: what to change in the task or the orders, or what to decide. One or two sentences.',
       },
-      ['reason'],
-    ),
+    }),
   },
   {
     name: 'send_back',
@@ -236,7 +230,7 @@ export function projectRules(brief: Pick<TaskBrief, 'repository' | 'task'>): str
       `${brief.repository!.name} is a single-file web app: the whole product is ${p.entry}, one self-contained HTML file. No build step, no package manager, no server, and nothing fetched from any other origin at runtime: markup, styles and scripts stay inline in that file, and it must work opened straight from disk. Anything it remembers lives in the browser (localStorage, or files the user saves). Keep it accessible and usable on a phone.`,
       `Test it with run_script (for example a Node script that parses ${p.entry} or checks what it must contain); a test page, if you add one, loads nothing but ${p.entry}'s code.`,
       brief.task.kind === 'deploy'
-        ? `Deploying it means publishing ${p.entry} as it is: use list_sites to find the unit's site, then publish with no paths (the entry file).`
+        ? `Deploying it means publishing ${p.entry} as it is: use list_sites to find the unit's site, then publish with no paths (the entry file). The site is a static site ORBOT serves itself at its own origin (the URL list_sites shows; plain http on localhost is how a Commander's own machine is reached): there is no staging site, no server, no certificate and no pipeline to arrange for it, and nothing to ask the Commander before publishing beyond what your standing orders and rules of engagement say. Publish, load the URL and check the served file is HEAD's ${p.entry}, and record the URL and the commit.`
         : '',
     ]
       .filter(Boolean)
@@ -541,6 +535,7 @@ export abstract class ClaudeFamilyRuntime implements BotRuntime {
       'If your unit holds a dev server (list_servers shows tier dev), build, test and iterate there with dev_run: edit code in your workspace with write_file, then dev_run syncs it and runs the command in your own folder on the server. Use dev_fetch for files the server generates that belong in the repository. Commit as usual: the workspace is the work of record, not the dev server.',
       'If your unit holds servers (list_servers), you may log in to them with server_run and set them up as the task needs; copy committed work there with server_upload. Leave each server documented: what you installed, where, how to restart it, in the War Diary and your handover, so a successor can carry on.',
       projectRules(brief),
+      'The Field Manual is the unit’s know-how (how things are done here), not orders: an entry never holds the work on its own, and a rule in it that says to wait for a confirmation or a sign-off the Commander never asked for is a lesson to weigh, not a gate. Only your standing orders, the rules of engagement, the hold policy and something you actually lack (access, a credential, a decision on a real conflict) can block a task. If you are picked up again on a task you blocked and nothing has changed, do not repeat the searches: say so in one line, name exactly what is missing, and block again with the action. Never ask the Commander to run git or shell commands by hand: you commit to your own branch only, and landing it on the default branch is the Commander’s order ("Land #<number> on main", a button on your task), as are a pull request, a sign-off and a ruling. If your task is to land work on the default branch, commit it on your branch, verify it, and finish done saying it is ready to land.',
       brief.workspace.restarted
         ? `Your branch was restarted from the integrated work: merging it into your earlier commits conflicted (${brief.workspace.restarted.conflicts.join(', ') || 'in the tree'}). Those commits are kept on branch ${brief.workspace.restarted.kept} (see them with run_script: git log ${brief.workspace.restarted.kept}, git show <commit>); bring over what still matters and carry on from the integrated work. Nothing is lost.`
         : '',
@@ -675,7 +670,7 @@ export abstract class ClaudeFamilyRuntime implements BotRuntime {
       JSON.stringify({
         ...input,
         instructions:
-          'Imagine a capable bot that knows nothing but these documents. Could it continue the task? Score 0-100 and list concrete gaps; where a Field Manual entry would close a gap, write it.',
+          'Imagine a capable bot that knows nothing but these documents. Could it continue the task? Score 0-100 and list concrete gaps; where a Field Manual entry would close a gap, write it. Entries are know-how and lessons (how to do a thing here, what went wrong and why), never rules that hold the work: do not write “always do X first”, “never publish without Y” or “ask the Commander before Z”. Gates are the Commander’s to give, as standing orders and rules of engagement.',
       }),
     );
   }
@@ -698,7 +693,7 @@ export abstract class ClaudeFamilyRuntime implements BotRuntime {
     });
     return this.structured(
       I,
-      'You are an Overseer (or HQ) in ORBOT. The Commander commands by chat. Turn the message into typed actions; answer questions from the context. `history` holds the channel’s recent turns: a short reply such as "Do it", "Yes" or "the first one" refers to what you last proposed there, so act on that proposal. When your answer suggests doing something, put it in musings as typed actions (the Commander confirms with a word) instead of only describing it in prose. Hedged statements ("I might…", "maybe") are musings, not orders. Only reference ids that appear in the context. If promised supply is not in the depot, list it as missing instead of acting. Operations get resources from the depot: assign-resource gives one to an operation (create-operation may also list supplyIds to start with, repositories first); release-resource takes one off. The first repository is the main one, where work lands: to change an operation’s repository ("change the repo from A to B") use set-main-repository with B (it is assigned if it is not yet; once missions are out they are issued again there), never only assign-resource. cancel-operation calls an operation off (note: why, if given); restart-operation starts one over (every mission withdrawn and issued again from the same plan). withdraw-mission aborts one mission (its work stands down; in an operation, the chain waits until it is started over or the operation is cancelled); restart-mission starts one over (withdrawn and issued again to its unit, which briefs back afresh). "Abort the guard mission" names the unit or stage; find the mission among that unit’s missions. restart-queues ("restart the queues", "kick the queues") queues again every task shown working with no run behind it and makes every unit dispatch; it throws nothing away. new-project starts a project ("start a new project called X: …"): a repository from a template (projectKind single-html: one self-contained HTML file, no server) and a static site ORBOT publishes it to; with an intent, the operation that builds it.',
+      'You are an Overseer (or HQ) in ORBOT. The Commander commands by chat. Turn the message into typed actions; answer questions from the context. `history` holds the channel’s recent turns: a short reply such as "Do it", "Yes" or "the first one" refers to what you last proposed there, so act on that proposal. A question is a question: answer it in `answer`, concretely (what is stuck, why, and what can be done about it), and never read it as a hedged order; a bare word such as "update" or "status" asks for the latest state. Put proposals in musings only when they follow from what the Commander asked, one or two at most and never a menu; with a question they are read back as offers beneath the answer. Hedged statements ("I might…", "maybe") are musings, not orders. Only reference ids that appear in the context. If promised supply is not in the depot, list it as missing instead of acting. Operations get resources from the depot: assign-resource gives one to an operation (create-operation may also list supplyIds to start with, repositories first); release-resource takes one off. The first repository is the main one, where work lands: to change an operation’s repository ("change the repo from A to B") use set-main-repository with B (it is assigned if it is not yet; once missions are out they are issued again there), never only assign-resource. cancel-operation calls an operation off (note: why, if given); restart-operation starts one over (every mission withdrawn and issued again from the same plan). withdraw-mission aborts one mission (its work stands down; in an operation, the chain waits until it is started over or the operation is cancelled); restart-mission starts one over (withdrawn and issued again to its unit, which briefs back afresh). "Abort the guard mission" names the unit or stage; find the mission among that unit’s missions. land-task ("land #119 on main") merges a task’s branch onto its repository’s default branch; it is the Commander’s to order, never something a bot does or asks the Commander to do by hand. restart-queues ("restart the queues", "kick the queues") queues again every task shown working with no run behind it and makes every unit dispatch; it throws nothing away. new-project starts a project ("start a new project called X: …"): a repository from a template (projectKind single-html: one self-contained HTML file, no server) and a static site ORBOT publishes it to; with an intent, the operation that builds it.',
       JSON.stringify(input),
     );
   }
@@ -722,7 +717,7 @@ export abstract class ClaudeFamilyRuntime implements BotRuntime {
       JSON.stringify({
         ...input,
         instructions:
-          'Give each unit one mission, in handoff order build → inspect → guard → deploy, matched to the unit roles. Use only the unit ids given. In needs, list what else the operation must have from the Supply Depot to succeed, beyond a repository and (for a deploy) a production environment, which are always added: e.g. a dev server with a GPU, a model, a staging environment, a credential for an outside service. Mark nice-to-haves optional. List nothing it does not need; resources already assigned are given. A resource whose project is "single-html" is a repository holding one self-contained HTML file: the product is that file alone (no build, no server), and its deploy publishes the file to a static site, which the operation’s site resource is.',
+          'Give each unit one mission, in handoff order build → inspect → guard → deploy, matched to the unit roles. Use only the unit ids given. In needs, list what else the operation must have from the Supply Depot to succeed, beyond a repository and (for a deploy) a production environment, which are always added: e.g. a dev server with a GPU, a model, a staging environment, a credential for an outside service. Mark nice-to-haves optional. List nothing it does not need; resources already assigned are given. A resource whose project is "single-html" is a repository holding one self-contained HTML file: the product is that file alone (no build, no server), and its deploy publishes the file to a static site, which the operation’s site resource is. A static site is served by ORBOT at its own origin: never put HTTPS, staging, a server, a certificate or a pipeline into a definition of done for it.',
       }),
     );
   }

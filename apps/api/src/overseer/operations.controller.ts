@@ -179,6 +179,13 @@ export class OperationsController {
     return this.views.operation(id);
   }
 
+  /** Land a task's branch on its repository's default branch. The Commander's alone. */
+  @Post('tasks/:id/land')
+  @HttpCode(200)
+  land(@Param('id', Uuid) id: string, @Actor() actor: string) {
+    return this.hq.landTask(id, actor);
+  }
+
   /** Compute spent so far by unit, operation and task: the baseline for deciding limits (D114). */
   @Authority({ level: 'read' })
   @Get('compute')

@@ -462,6 +462,78 @@ export class HqService implements OnApplicationBootstrap, OnModuleDestroy {
     return stood;
   }
 
+  /**
+   * Land a task's branch on its repository's default branch: the Commander's order, never a
+   * bot's (a bot commits to its own branch only). Recorded as an integration (D117).
+   */
+  async landTask(taskId: string, actor: string) {
+    const task = await this.record.requireActive('task', taskId);
+    const ws = task.body.workspace;
+    if (!ws) {
+      throw new BadRequestException({
+        message: `Task #${task.body.number} has no branch yet.`,
+        action: 'Start the task first; there is nothing to land until it has committed work.',
+      });
+    }
+    if (task.body.status === 'working') {
+      throw new ConflictException({
+        message: `Task #${task.body.number} is still working.`,
+        action: 'Wait until it is done (or blocked), then land it.',
+      });
+    }
+    const repo = await this.record.requireActive('supply', ws.repoSupplyId);
+    const spec = repo.body.spec;
+    if (spec.kind !== 'repository') throw new BadRequestException('Not a repository.');
+    let landed: { before: string; commit: string };
+    try {
+      landed = await this.workspaces.land(repo.body, ws.branch);
+    } catch (err) {
+      throw new ConflictException({
+        message: `Could not land ${ws.branch} on ${spec.defaultBranch}: ${(err as Error).message}`,
+        action: `The branches conflict. Order the unit to bring ${spec.defaultBranch} into its work first, or resolve it by hand in the repository.`,
+      });
+    }
+    const mission = task.body.missionId
+      ? await this.record.getActive('mission', task.body.missionId)
+      : null;
+    const refs = {
+      operationId: mission?.body.operationId ?? null,
+      unitId: task.body.unitId,
+      taskId,
+      missionId: task.body.missionId,
+    };
+    const unchanged = landed.before === landed.commit;
+    await this.record.transaction(async (w) => {
+      await w.event(
+        'integration',
+        { branch: spec.defaultBranch, commit: landed.commit, from: ws.branch },
+        refs,
+        actor,
+      );
+      await w.event(
+        'sitrep',
+        {
+          level: 'unit',
+          text: unchanged
+            ? `${spec.defaultBranch} already had everything on ${ws.branch} (task #${task.body.number}); nothing to land.`
+            : `Task #${task.body.number} landed on ${spec.defaultBranch}: ${repo.body.name} is at ${landed.commit.slice(0, 10)}.`,
+          status: null,
+        },
+        refs,
+        actor,
+      );
+    });
+    return {
+      taskId,
+      number: task.body.number,
+      repository: repo.body.name,
+      branch: spec.defaultBranch,
+      from: ws.branch,
+      commit: landed.commit,
+      unchanged,
+    };
+  }
+
   // ---------- Abort a mission, start it over, start an operation over (D113) ----------
 
   /**

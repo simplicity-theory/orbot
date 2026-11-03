@@ -74,6 +74,9 @@ let seq = 0;
               You said something that sounds like it might be an order:
               <strong>{{ p.summary }}</strong
               >.
+            } @else if (p.reason === 'offer') {
+              I could: <strong>{{ p.summary }}</strong
+              >.
             } @else {
               <strong>{{ p.summary }}.</strong> This cannot be undone.
             }
@@ -86,7 +89,7 @@ let seq = 0;
                   : 'You said no — nothing changed.'
               }}
             </p>
-          } @else if (p.reason === 'musing') {
+          } @else if (p.reason === 'musing' || p.reason === 'offer') {
             <div class="actions">
               <button
                 type="button"
@@ -94,10 +97,10 @@ let seq = 0;
                 [disabled]="busy()"
                 (click)="confirm(p.pendingId)"
               >
-                Yes, do it
+                {{ p.reason === 'offer' ? 'Do it' : 'Yes, do it' }}
               </button>
               <button type="button" class="btn" [disabled]="busy()" (click)="decline(p.pendingId)">
-                No
+                {{ p.reason === 'offer' ? 'Not now' : 'No' }}
               </button>
             </div>
           } @else {
