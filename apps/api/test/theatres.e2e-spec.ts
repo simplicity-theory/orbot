@@ -6,13 +6,16 @@ import type {
   TheatreDetailView,
   TheatreSummary,
 } from '@orbot/shared';
+import { git } from '../src/common/git.js';
 import { makeRepo, makeUnitWithBot, settled, waitFor } from './fixtures.js';
 import { startTestApp, type TestApp } from './helpers.js';
 
 /**
  * A theatre is a project: it holds the repository and the site once, and every operation
- * launched in it starts with both (D121). Opened from the web and in chat; closed only once its
- * operations are over.
+ * launched in it starts with both (D121). A fully automatic theatre (the default) pre-approves
+ * plans, trims a single-file project to its build, and at the end HQ lands the work on the
+ * default branch and publishes the site (D122). Opened from the web and in chat; closed only
+ * once its operations are over.
  */
 describe('Theatres', () => {
   let t: TestApp;
@@ -21,6 +24,8 @@ describe('Theatres', () => {
     (await t.agent.get(`/api/operations/${id}`).expect(200)).body;
   const theatre = async (id: string): Promise<TheatreDetailView> =>
     (await t.agent.get(`/api/theatres/${id}`).expect(200)).body;
+  const theatres = async (): Promise<TheatreSummary[]> =>
+    (await t.agent.get('/api/theatres').expect(200)).body;
 
   beforeAll(async () => {
     t = await startTestApp();
@@ -42,7 +47,7 @@ describe('Theatres', () => {
         })
         .expect(201)
     ).body;
-    expect(r.theatre).toMatchObject({ name: 'Ledger', status: 'open' });
+    expect(r.theatre).toMatchObject({ name: 'Ledger', status: 'open', autonomy: 'full' });
     expect(r.repository?.spec).toMatchObject({
       kind: 'repository',
       project: { kind: 'single-html' },
@@ -61,14 +66,64 @@ describe('Theatres', () => {
     expect(v.theatre).toEqual({ id: r.theatre.id, name: 'Ledger' });
     expect(v.resources.mainRepositoryId).toBe(r.repository!.id);
 
-    const list: TheatreSummary[] = (await t.agent.get('/api/theatres').expect(200)).body;
+    const list = await theatres();
     expect(list.map((x) => x.theatre.name)).toEqual(['Ledger']);
     expect(list[0]!.site).toMatchObject({ name: 'Ledger site', url: `/api/sites/${r.site!.id}/` });
     expect(list[0]!.operations.map((o) => o.name)).toEqual(['Ledger']);
   });
 
-  it('a second intent in the theatre starts with what the theatre holds; nothing is assigned twice', async () => {
-    const [th] = (await t.agent.get('/api/theatres').expect(200)).body as TheatreSummary[];
+  it('fully automatic: build only, pre-approved; at the end HQ lands on main and publishes the site', async () => {
+    const [th] = await theatres();
+    const opId = th!.operations[0]!.id;
+    const v = await waitFor(async () => {
+      const x = await op(opId);
+      return x.operation.deployment ? x : null;
+    }, 30_000);
+    expect(v.operation.autonomous).toBe(true);
+    expect(v.missions.map((m) => m.mission.stage)).toEqual(['build']);
+    expect(v.missions[0]!.mission.preApproved).toBe(true);
+    const d = v.operation.deployment!;
+    expect(d.environment).toBe('Ledger site');
+    expect(d.taskId).toBeNull();
+    expect(d.url).toContain(`/api/sites/${th!.site!.id}/`);
+    const texts = v.timeline.map((e) => (e.body as { text?: string }).text ?? '');
+    expect(texts).toContainEqual(
+      expect.stringMatching(/^Automatic single-file project: build only/),
+    );
+    expect(texts).toContainEqual(
+      expect.stringMatching(/^Operation Ledger landed on main: Ledger is at/),
+    );
+    expect(texts).toContainEqual(
+      expect.stringMatching(/^Published to Ledger site: .*\/api\/sites\//),
+    );
+    // The code is on main, and the site serves the file.
+    const repo = th!.repository!;
+    const local = repo.spec.kind === 'repository' ? repo.spec.localPath : '';
+    expect(await git(local, ['rev-parse', 'main'])).toBe(
+      await git(local, ['rev-parse', v.operation.integrationBranch!]),
+    );
+    const page = await t.agent.get(`/api/sites/${th!.site!.id}/`).expect(200);
+    expect(page.text).toContain('<title>Ledger</title>');
+    const again = await theatres();
+    expect(again[0]!.site?.published).toBe(true);
+  });
+
+  it('in chat: an intent with no theatre named goes to the only open theatre', async () => {
+    const r: ChatSendResult = (
+      await t.agent.post('/api/chat/hq').send({ text: 'Add a dark mode toggle.' }).expect(201)
+    ).body;
+    await settled(t.app);
+    expect(r.readback.body.items[0]!.summary).toMatch(
+      /^Operation Dark Mode Toggle launched in Theatre Ledger/,
+    );
+    const [th] = await theatres();
+    expect(th!.operations.map((o) => o.name)).toEqual(
+      expect.arrayContaining(['Dark Mode Toggle', 'Ledger']),
+    );
+  });
+
+  it('a second intent in the theatre starts with what the theatre holds', async () => {
+    const [th] = await theatres();
     const launched = (
       await t.agent
         .post(`/api/theatres/${th!.theatre.id}/operations`)
@@ -78,7 +133,9 @@ describe('Theatres', () => {
     expect(launched.theatreId).toBe(th!.theatre.id);
     expect(launched.supplyIds).toEqual(th!.theatre.supplyIds);
     const d = await theatre(th!.theatre.id);
-    expect(d.operations.map((o) => o.operation.name).sort()).toEqual(['Ledger', 'Recurring']);
+    expect(d.operations.map((o) => o.operation.name)).toEqual(
+      expect.arrayContaining(['Ledger', 'Recurring']),
+    );
   });
 
   it('holds an existing repository from the depot, and takes resources on and off', async () => {
@@ -118,7 +175,7 @@ describe('Theatres', () => {
     expect(released.resources.map((s) => s.name)).toEqual(['billing']);
   });
 
-  it('in chat: "Open a theatre called X: …" opens it and launches the first operation', async () => {
+  it('in chat: "Open a theatre called X: …" opens it and launches the first operation; several open, an intent must name one', async () => {
     const r: ChatSendResult = (
       await t.agent
         .post('/api/chat/hq')
@@ -128,32 +185,59 @@ describe('Theatres', () => {
     await settled(t.app);
     expect(r.readback.body.text).toBe('Wilco.');
     expect(r.readback.body.items[0]!.summary).toMatch(
-      /^Theatre Pocket Notes opened on Pocket Notes, publishing to Pocket Notes site\. Operation Pocket Notes launched in it/,
+      /^Theatre Pocket Notes opened \(fully automatic\) on Pocket Notes, publishing to Pocket Notes site\. Operation Pocket Notes launched in it/,
     );
-    const list: TheatreSummary[] = (await t.agent.get('/api/theatres').expect(200)).body;
-    expect(list.map((x) => x.theatre.name).sort()).toEqual(['Billing', 'Ledger', 'Pocket Notes']);
+    expect((await theatres()).map((x) => x.theatre.name).sort()).toEqual([
+      'Billing',
+      'Ledger',
+      'Pocket Notes',
+    ]);
+    const named: ChatSendResult = (
+      await t.agent
+        .post('/api/chat/hq')
+        .send({ text: 'Add tags to notes in theatre Pocket Notes.' })
+        .expect(201)
+    ).body;
+    await settled(t.app);
+    expect(named.readback.body.items[0]!.summary).toMatch(
+      /^Operation Tags Notes launched in Theatre Pocket Notes/,
+    );
   });
 
-  it('closes only once its operations are over', async () => {
-    const list: TheatreSummary[] = (await t.agent.get('/api/theatres').expect(200)).body;
-    const ledger = list.find((x) => x.theatre.name === 'Ledger')!;
+  it('a gated theatre waits for the Commander; it closes only once its operations are over', async () => {
+    const r: NewTheatreView = (
+      await t.agent
+        .post('/api/theatres')
+        .send({
+          name: 'Gate',
+          repository: { kind: 'template', template: 'single-html' },
+          site: true,
+          autonomy: 'approve',
+          intent: 'Build it carefully.',
+        })
+        .expect(201)
+    ).body;
+    expect(r.operation?.autonomous).toBe(false);
+    const waiting = await waitFor(async () => {
+      const x = await op(r.operation!.id);
+      return x.operation.phase === 'backbrief' && x.missions[0]?.backbrief ? x : null;
+    });
+    expect(waiting.missions[0]!.backbrief?.status).toBe('awaiting-approval');
     const refused = await t.agent
-      .post(`/api/theatres/${ledger.theatre.id}/close`)
+      .post(`/api/theatres/${r.theatre.id}/close`)
       .send({ note: 'Done' })
       .expect(409);
-    expect(refused.body.error.message).toMatch(/still has 2 operation\(s\) under way/);
-    for (const o of ledger.operations) {
-      await t.agent.post(`/api/operations/${o.id}/cancel`).send({ note: 'Test' }).expect(200);
-    }
+    expect(refused.body.error.message).toMatch(/still has 1 operation\(s\) under way/);
+    await t.agent
+      .post(`/api/operations/${r.operation!.id}/cancel`)
+      .send({ note: 'Test' })
+      .expect(200);
     const closed: TheatreDetailView = (
-      await t.agent
-        .post(`/api/theatres/${ledger.theatre.id}/close`)
-        .send({ note: 'Done' })
-        .expect(200)
+      await t.agent.post(`/api/theatres/${r.theatre.id}/close`).send({ note: 'Done' }).expect(200)
     ).body;
     expect(closed.theatre).toMatchObject({ status: 'closed', closed: { note: 'Done' } });
     await t.agent
-      .post(`/api/theatres/${ledger.theatre.id}/operations`)
+      .post(`/api/theatres/${r.theatre.id}/operations`)
       .send({ intent: 'More.' })
       .expect(400);
   });

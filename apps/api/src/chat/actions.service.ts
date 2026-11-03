@@ -132,12 +132,13 @@ export class ActionsService {
           supplyIds: [],
           intent: action.intent,
           budgetUnits: null,
+          autonomy: 'full',
         },
         ctx,
       );
       return {
         summary:
-          `Theatre ${t.theatre.body.name} opened${t.repository ? ` on ${t.repository.body.name}` : ''}${t.site ? `, publishing to ${t.site.body.name}` : ''}.` +
+          `Theatre ${t.theatre.body.name} opened (fully automatic)${t.repository ? ` on ${t.repository.body.name}` : ''}${t.site ? `, publishing to ${t.site.body.name}` : ''}.` +
           (t.operation
             ? ` Operation ${t.operation.body.name} launched in it; HQ is holding the O Group.`
             : ' State your intent in it when you are ready.'),
@@ -157,9 +158,22 @@ export class ActionsService {
       };
     }
     if (action.kind === 'create-operation') {
-      const theatre = action.theatreId
+      let theatre = action.theatreId
         ? await this.record.requireActive('theatre', action.theatreId)
         : null;
+      if (!theatre) {
+        // An intent with no theatre named goes to the only open one.
+        const open = (await this.record.listActive('theatre')).filter(
+          (t) => t.body.status === 'open',
+        );
+        if (open.length === 1) theatre = open[0]!;
+        else if (open.length > 1) {
+          throw new BadRequestException({
+            message: `Several theatres are open: ${open.map((t) => t.body.name).join(', ')}.`,
+            action: 'Say which one: “… in theatre <name>”.',
+          });
+        }
+      }
       const op = await this.hq.createOperation(
         action.intent,
         action.name,
@@ -167,12 +181,12 @@ export class ActionsService {
         null,
         false,
         [...(theatre?.body.supplyIds ?? []), ...action.supplyIds],
-        { theatreId: theatre?.entityId ?? null, holdPolicy: theatre?.body.holdPolicy ?? null },
+        theatre ? TheatresService.launchOptions(theatre) : {},
       );
       const names = (await this.hq.resourcesOf(op)).map((r) => r.body.name);
       return {
         summary:
-          `Operation ${op.body.name} launched: HQ is holding the O Group and will issue missions to the units.` +
+          `Operation ${op.body.name} launched${theatre ? ` in Theatre ${theatre.body.name}` : ''}: HQ is holding the O Group and will issue missions to the units.` +
           (names.length
             ? ` Resources: ${names.join(', ')}.`
             : ' It has no resources yet: it waits at the O Group until it has a repository.'),

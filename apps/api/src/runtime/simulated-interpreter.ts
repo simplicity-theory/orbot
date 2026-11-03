@@ -422,13 +422,30 @@ export class SimulatedInterpreter {
               for (const what of found.missing) out.missing.push({ what, kind: 'supply' });
             }
           }
+          let theatreId: string | null = null;
+          const inTheatre =
+            /[\s,]+in\s+(?:the\s+)?theatre\s+["“]?([A-Za-z0-9][A-Za-z0-9 ._-]*?)["”]?\s*$/i.exec(
+              text,
+            );
+          if (inTheatre) {
+            const wanted = inTheatre[1]!.trim().toLowerCase();
+            const th = (input.theatres ?? []).find(
+              (t) => t.status === 'open' && t.name.toLowerCase() === wanted,
+            );
+            if (!th) {
+              out.unclear.push(`${raw} — there is no open theatre called ${inTheatre[1]!.trim()}.`);
+              continue;
+            }
+            theatreId = th.id;
+            text = text.slice(0, inTheatre.index);
+          }
           const intent = sentenceCase(text);
           const action: ChatAction = {
             kind: 'create-operation',
             unitId: null,
             intent: `${intent}.`,
             name: operationName(intent),
-            theatreId: null,
+            theatreId,
             supplyIds,
           };
           if (hedged) {

@@ -407,6 +407,8 @@ export interface InterpretInput {
     supplyIds?: string[];
     holdPolicy?: HoldPolicy | null;
   }[];
+  /** Open theatres (projects): an intent with none named goes to the only open one. */
+  theatres?: { id: string; name: string; status: string }[];
   /** Whether "everything, stand down" is in force. */
   allHalted: boolean;
   /** The operation that is the main effort, if any. */

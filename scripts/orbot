@@ -11,6 +11,7 @@
 #   orbot backup [dir]  both databases and the workspaces (scripts/backup.sh)
 #   orbot restore DIR   replace everything with a backup (scripts/restore.sh; asks twice)
 #   orbot down          stop everything (data stays in the volumes)
+#   orbot reset         throw away the record, secrets and workspaces, then start fresh (asks)
 #   orbot passphrase    print the Commander passphrase from .env
 set -euo pipefail
 
@@ -208,6 +209,17 @@ cmd_down() {
   "${compose[@]}" "${profiles[@]}" down
   echo "✔ Stopped. The record, secrets and workspaces stay in the Docker volumes."
 }
+cmd_reset() {
+  load_env
+  say "This throws away this ORBOT's record, secrets store and every workspace, then starts it fresh (the force is seeded again)."
+  local answer
+  read -r -p "Type RESET to go ahead: " answer
+  [[ "$answer" == "RESET" ]] || die "Not reset."
+  mapfile -t profiles < <(profile_args)
+  "${compose[@]}" "${profiles[@]}" down -v --remove-orphans
+  echo "✔ Volumes removed."
+  cmd_up
+}
 cmd_passphrase() { load_env; echo "$ORBOT_COMMANDER_PASSPHRASE"; }
 
 usage() { sed -n '2,15p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
@@ -221,6 +233,7 @@ case "${1:-}" in
   backup) shift; cmd_backup "$@" ;;
   restore) shift; cmd_restore "$@" ;;
   down) cmd_down ;;
+  reset) cmd_reset ;;
   passphrase) cmd_passphrase ;;
   -h|--help|help|"") usage ;;
   *) die "Unknown command: $1 (try: orbot help)" ;;

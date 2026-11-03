@@ -75,6 +75,11 @@ type RepoChoice = 'template' | 'existing' | 'none';
         ><input type="checkbox" name="site" [(ngModel)]="site" /> Give it a site ORBOT publishes
         itself (a static site, no server)</label
       >
+      <label class="check"
+        ><input type="checkbox" name="auto" [(ngModel)]="automatic" /> Fully automatic: HQ approves
+        each plan for you, nothing holds on a finding, and finished work lands on the repository and
+        is published to the site</label
+      >
       <label for="nt-intent">First intent <span class="hint">(optional)</span></label>
       <textarea
         id="nt-intent"
@@ -130,6 +135,7 @@ export class NewTheatreDialog {
   protected repo: RepoChoice = 'template';
   protected existingId = '';
   protected site = true;
+  protected automatic = true;
   protected intent = '';
   protected readonly busy = signal(false);
   protected readonly error = signal<UserFacingError | null>(null);
@@ -152,6 +158,7 @@ export class NewTheatreDialog {
               ? { kind: 'existing', supplyId: this.existingId }
               : null,
         site: this.site,
+        autonomy: this.automatic ? 'full' : 'approve',
         intent: this.intent.trim() || null,
       });
       this.ref.close();

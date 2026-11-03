@@ -27,9 +27,8 @@ test('open a single-HTML theatre: operation launched with its repository and sit
   const assigned = resources.getByRole('list', { name: 'Assigned resources' });
   await expect(assigned).toContainText('Pocket Ledger');
   await expect(assigned).toContainText('Pocket Ledger site');
-  await expect(resources).toContainText(
-    'A production environment to deploy to · Pocket Ledger site',
-  );
+  // Fully automatic: no deploy mission, so no deploy need; HQ publishes the site itself.
+  await expect(resources).not.toContainText('A production environment to deploy to');
   await expect(resources).not.toContainText('Waiting at the O Group');
   await expect(page.locator('.page-header__eyebrow')).toContainText('Pocket Ledger');
   await expectAccessible(page, 'operation of a new project');
@@ -47,6 +46,8 @@ test('open a single-HTML theatre: operation launched with its repository and sit
   await expect(held).toContainText('Pocket Ledger site');
   await expect(held).toContainText('main');
   await expect(page.getByRole('link', { name: 'Operation Pocket Ledger' })).toBeVisible();
+  // Fully automatic: once the build is done HQ lands it and publishes the site.
+  await expect(page.getByRole('link', { name: 'Open the app' })).toBeVisible({ timeout: 45_000 });
   await expectAccessible(page, 'theatre page');
   await page.goto('/theatres');
   await expect(page.getByRole('link', { name: 'Theatre Pocket Ledger' })).toBeVisible();
@@ -60,7 +61,7 @@ test('open a single-HTML theatre: operation launched with its repository and sit
   const site = page.getByRole('listitem').filter({ hasText: 'Pocket Ledger site' }).first();
   await expect(site).toContainText('static site');
   await expect(site).toContainText('production');
-  await expect(site).toContainText('nothing published yet');
+  await expect(site).toContainText('Published at');
   await expectAccessible(page, 'depot with a static site');
 
   // Starting a repository from a template on its own, in the depot.

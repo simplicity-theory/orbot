@@ -105,6 +105,8 @@ export class TheatresService {
         supplyIds,
         repoSupplyId: repository?.entityId ?? null,
         holdPolicy: null,
+        autonomy: input.autonomy,
+        publish: input.autonomy === 'full' ? 'auto' : 'approved',
         closed: null,
       },
       { ...ctx, reason: `Theatre ${input.name} opened` },
@@ -140,8 +142,20 @@ export class TheatresService {
       input.budgetUnits ?? null,
       input.reconFirst ?? false,
       [...theatre.body.supplyIds, ...(input.supplyIds ?? [])],
-      { theatreId, holdPolicy: theatre.body.holdPolicy },
+      TheatresService.launchOptions(theatre),
     );
+  }
+
+  /** How an operation runs in this theatre: fully automatic, or waiting on the Commander. */
+  static launchOptions(theatre: RecordVersion<TheatreBody>) {
+    const full = theatre.body.autonomy === 'full';
+    return {
+      theatreId: theatre.entityId,
+      autonomous: full,
+      holdPolicy: full
+        ? (theatre.body.holdPolicy ?? { holdFrom: 'never' as const, fixUpTo: 'large' as const })
+        : theatre.body.holdPolicy,
+    };
   }
 
   /** Give the theatre a depot item (every operation launched from now on starts with it). */

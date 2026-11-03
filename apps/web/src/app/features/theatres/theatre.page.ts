@@ -108,17 +108,29 @@ export class CloseTheatreDialog {
               <p class="meta">Closed{{ c.note ? ': ' + c.note : '' }}</p>
             }
           </div>
+          <div class="header-actions">
+            @if (v.site?.published) {
+              <a class="btn btn--primary" [href]="v.site!.url" target="_blank" rel="noopener">
+                <orb-icon name="link" /> Open the app
+              </a>
+            }
+          </div>
           @if (v.theatre.status === 'open') {
             <div class="header-actions" *orbCan="null">
               <button type="button" class="btn" (click)="closeTheatre()">
                 <orb-icon name="x" /> Close theatre…
               </button>
-              <button type="button" class="btn btn--primary" (click)="stateIntent()">
-                State intent
-              </button>
+              <button type="button" class="btn" (click)="stateIntent()">State intent</button>
             </div>
           }
         </header>
+        @if (v.theatre.autonomy === 'full') {
+          <p class="meta">
+            Fully automatic: plans are approved for you, nothing holds on a finding, and finished
+            work lands on {{ v.repository?.name ?? 'the repository'
+            }}{{ v.site ? ' and is published to ' + v.site.name : '' }}.
+          </p>
+        }
 
         <section class="panel" aria-labelledby="th-res-h">
           <h2 id="th-res-h" class="panel__title">What the theatre holds</h2>

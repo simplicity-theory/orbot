@@ -55,6 +55,13 @@ import { NewTheatreDialog } from './new-theatre.dialog';
               @if (t.theatre.description) {
                 <p class="meta">{{ t.theatre.description }}</p>
               }
+              @if (t.site?.published) {
+                <p>
+                  <a class="btn btn--primary" [href]="t.site!.url" target="_blank" rel="noopener">
+                    <orb-icon name="link" /> Open the app
+                  </a>
+                </p>
+              }
               <p class="where">
                 <orb-icon class="sm" name="git-branch" />
                 {{ t.repository?.name ?? 'No repository yet' }}

@@ -31,6 +31,7 @@ import { RecordBus } from '../record/record-bus.js';
 import { RecordService, type RecordWriter } from '../record/record.service.js';
 import { RuntimeRegistry } from '../runtime/runtime.registry.js';
 import { WorkspaceManager } from '../runtime/workspace-manager.js';
+import { SitesService } from '../servers/sites.service.js';
 import { SupplyService } from '../supply/supply.service.js';
 import { OverseerService } from './overseer.service.js';
 import { ReconService } from './recon.service.js';
@@ -82,6 +83,7 @@ export class HqService implements OnApplicationBootstrap, OnModuleDestroy {
     private readonly background: Background,
     private readonly runtimes: RuntimeRegistry,
     private readonly workspaces: WorkspaceManager,
+    private readonly sites: SitesService,
     private readonly supply: SupplyService,
     private readonly overseer: OverseerService,
     private readonly recon: ReconService,
@@ -155,7 +157,7 @@ export class HqService implements OnApplicationBootstrap, OnModuleDestroy {
     budgetUnits: number | null = null,
     reconFirst = false,
     supplyIds: string[] = [],
-    opts: { theatreId?: string | null; holdPolicy?: HoldPolicy | null } = {},
+    opts: { theatreId?: string | null; holdPolicy?: HoldPolicy | null; autonomous?: boolean } = {},
   ): Promise<RecordVersion<OperationBody>> {
     const opName = name ?? intent.split(/\s+/).slice(0, 3).join(' ');
     const resources: RecordVersion<SupplyBody>[] = [];
@@ -168,6 +170,7 @@ export class HqService implements OnApplicationBootstrap, OnModuleDestroy {
           intent,
           phase: 'intent',
           theatreId: opts.theatreId ?? null,
+          autonomous: opts.autonomous ?? false,
           holdPolicy: opts.holdPolicy ?? null,
           supplyIds: resources.map((r) => r.entityId),
           budgetUnits,
@@ -891,10 +894,18 @@ export class HqService implements OnApplicationBootstrap, OnModuleDestroy {
         );
         return;
       }
+      const missions = this.straightPath(op, plan.missions, resources);
+      if (missions.length !== plan.missions.length) {
+        await this.hqSitrep(
+          null,
+          opId,
+          `Automatic single-file project: ${missions.map((m) => m.stage).join(' → ')} only. HQ lands the work and publishes it when they are done.`,
+        );
+      }
       op = await this.record.revise(
         'operation',
         opId,
-        (o) => ({ ...o, plan: plan.missions, needs: needsFor(o.needs, plan) }),
+        (o) => ({ ...o, plan: missions, needs: needsFor(o.needs, { ...plan, missions }) }),
         { actor: HQ_ACTOR, reason: 'O Group plan: missions and what they need' },
       );
       if (await this.waitingForResources(op)) return;
@@ -953,6 +964,8 @@ export class HqService implements OnApplicationBootstrap, OnModuleDestroy {
             status: 'planning',
             stage: m.stage,
             dependsOnMissionId: upstream,
+            // An automatic theatre: the Commander's standing order is the approval.
+            preApproved: op.body.autonomous,
           },
           { actor: HQ_ACTOR, reason: `O Group for Operation ${op.body.name}` },
         );
@@ -1257,13 +1270,88 @@ export class HqService implements OnApplicationBootstrap, OnModuleDestroy {
       !['sitreps', 'after-action', 'closed'].includes(op.body.phase)
     ) {
       await this.phase(op.entityId, 'sitreps', 'Every mission done');
+      if (op.body.autonomous) await this.landAndPublish(op.entityId);
+      const done = await this.record.requireActive('operation', op.entityId);
       await this.hqSitrep(
         null,
         op.entityId,
-        `All missions complete${op.body.deployment ? `; deployed to ${op.body.deployment.environment} at ${op.body.deployment.commit.slice(0, 10)}` : ''}. Holding the After Action review.`,
+        `All missions complete${done.body.deployment ? `; deployed to ${done.body.deployment.environment} at ${done.body.deployment.commit.slice(0, 10)}` : ''}. Holding the After Action review.`,
       );
       await this.afterAction(op.entityId);
     }
+  }
+
+  /**
+   * An automatic theatre's operation is over: the integrated work lands on the default branch
+   * (the code is in the repository), and if the theatre publishes automatically, the default
+   * branch goes to the site, so the Commander opens the app from a link (D122).
+   */
+  private async landAndPublish(opId: string): Promise<void> {
+    const op = await this.record.requireActive('operation', opId);
+    const refs = { operationId: opId };
+    const repo = op.body.repoSupplyId
+      ? await this.record.getActive('supply', op.body.repoSupplyId)
+      : null;
+    if (!repo || repo.body.spec.kind !== 'repository' || !op.body.integrationBranch) return;
+    let commit: string;
+    try {
+      const landed = await this.workspaces.land(repo.body, op.body.integrationBranch);
+      commit = landed.commit;
+      await this.record.event(
+        'integration',
+        { branch: repo.body.spec.defaultBranch, commit, from: op.body.integrationBranch },
+        refs,
+        HQ_ACTOR,
+      );
+      await this.hqSitrep(
+        null,
+        opId,
+        landed.before === commit
+          ? `${repo.body.spec.defaultBranch} already had everything from Operation ${op.body.name}.`
+          : `Operation ${op.body.name} landed on ${repo.body.spec.defaultBranch}: ${repo.body.name} is at ${commit.slice(0, 10)}.`,
+      );
+    } catch (err) {
+      await this.hqSitrep(
+        null,
+        opId,
+        `Could not land Operation ${op.body.name} on ${repo.body.spec.defaultBranch}: ${(err as Error).message} The work stays on ${op.body.integrationBranch}; land it by hand from a task's page.`,
+      );
+      return;
+    }
+    const theatre = op.body.theatreId
+      ? await this.record.getActive('theatre', op.body.theatreId)
+      : null;
+    if (theatre?.body.publish !== 'auto') return;
+    const site = (await this.resourcesOf(op)).find((s) => SitesService.isSite(s));
+    if (!site || !SitesService.isSite(site)) return;
+    try {
+      const r = await this.sites.publishRef(site, repo.body, commit, refs, HQ_ACTOR);
+      await this.hqSitrep(null, opId, `Published to ${site.body.name}: ${r.url}`);
+    } catch (err) {
+      await this.hqSitrep(
+        null,
+        opId,
+        `Could not publish Operation ${op.body.name} to ${site.body.name}: ${(err as Error).message}`,
+      );
+    }
+  }
+
+  /**
+   * An automatic single-file project needs no guard or deploy mission: build and inspect, then
+   * HQ lands and publishes. Anything else keeps the full chain.
+   */
+  private straightPath<T extends { stage: string }>(
+    op: RecordVersion<OperationBody>,
+    missions: T[],
+    resources: RecordVersion<SupplyBody>[],
+  ): T[] {
+    if (!op.body.autonomous) return missions;
+    const repo = resources.find((r) => r.body.spec.kind === 'repository');
+    const single =
+      repo?.body.spec.kind === 'repository' && repo.body.spec.project?.kind === 'single-html';
+    if (!single) return missions;
+    const kept = missions.filter((m) => m.stage === 'build' || m.stage === 'inspect');
+    return kept.length ? kept : missions.slice(0, 1);
   }
 
   private async deployed(e: RecordEvent<'deployment'>) {
@@ -1276,7 +1364,7 @@ export class HqService implements OnApplicationBootstrap, OnModuleDestroy {
           environment: e.body.environment,
           ref: e.body.ref,
           commit: e.body.commit,
-          taskId: e.taskId!,
+          taskId: e.taskId ?? null,
           at: e.createdAt,
           url: e.body.url ?? null,
         },

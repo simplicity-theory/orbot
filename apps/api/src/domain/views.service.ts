@@ -403,9 +403,15 @@ export class ViewsService {
     return {
       theatre: toView(t),
       repository: repo ? toView(repo) : null,
-      site: site
-        ? { id: site.entityId, name: site.body.name, url: `/api/sites/${site.entityId}/` }
-        : null,
+      site:
+        site && site.body.spec.kind === 'environment'
+          ? {
+              id: site.entityId,
+              name: site.body.name,
+              url: `/api/sites/${site.entityId}/`,
+              published: !!site.body.spec.site?.last,
+            }
+          : null,
       resources: toViews(resources),
     };
   }

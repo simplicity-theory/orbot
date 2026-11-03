@@ -204,6 +204,63 @@ export class SitesService implements OnModuleInit {
     };
   }
 
+  /**
+   * Publish a repository's `ref` (its entry file) to a site: HQ's doing at the end of an
+   * automatic theatre's operation, so no task and no policy check (the theatre's setting is
+   * the Commander's order) (D122).
+   */
+  async publishRef(
+    site: Site,
+    repo: SupplyBody,
+    ref: string,
+    refs: RecordEventRefs,
+    actor: string,
+  ): Promise<{ commit: string; url: string }> {
+    if (repo.spec.kind !== 'repository') throw new Error('Not a repository.');
+    const ws = repo.spec.localPath;
+    const commit = await git(ws, ['rev-parse', ref]);
+    const entry = site.body.spec.site.entry;
+    const files = (await git(ws, ['ls-tree', '-r', '--name-only', commit, '--', entry]))
+      .split('\n')
+      .filter(Boolean);
+    if (!files.includes(entry)) {
+      throw new Error(
+        `${repo.name} has no ${entry} at ${commit.slice(0, 10)}: nothing to publish.`,
+      );
+    }
+    const dir = site.body.spec.site.dir;
+    const stamp = `${new Date().toISOString().replace(/[:.]/g, '-')}-${commit.slice(0, 10)}`;
+    const target = join(dir, 'versions', stamp);
+    await mkdir(target, { recursive: true });
+    await this.extract(ws, commit, [entry], target);
+    const tmp = join(dir, `.current-${stamp}`);
+    await symlink(join('versions', stamp), tmp);
+    await rename(tmp, join(dir, 'current'));
+    const url = this.url(site.entityId);
+    const at = new Date().toISOString();
+    await this.record.transaction(async (w) => {
+      await w.revise(
+        'supply',
+        site.entityId,
+        (b) => ({
+          ...b,
+          spec:
+            b.spec.kind === 'environment' && b.spec.site
+              ? { ...b.spec, site: { ...b.spec.site, last: { commit, at, taskId: null } } }
+              : b.spec,
+        }),
+        { actor, reason: `Published ${commit.slice(0, 10)}` },
+      );
+      await w.event(
+        'deployment',
+        { environment: site.body.name, ref: `deploy/${slug(site.body.name)}`, commit, url },
+        refs,
+        actor,
+      );
+    });
+    return { commit, url };
+  }
+
   /** `git archive` of the wanted paths at `commit`, unpacked into `target`. */
   private async extract(ws: string, commit: string, paths: string[], target: string) {
     const { stdout: archive } = await run(

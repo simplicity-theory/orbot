@@ -41,8 +41,8 @@ export type TheatreView = Versioned<TheatreBody>;
 export interface TheatreSummary {
   theatre: TheatreView;
   repository: SupplyView | null;
-  /** Its static site, with where ORBOT serves it. */
-  site: { id: string; name: string; url: string } | null;
+  /** Its static site, with where ORBOT serves it and whether anything is published yet. */
+  site: { id: string; name: string; url: string; published: boolean } | null;
   resources: SupplyView[];
   operations: { id: string; name: string; phase: string; needsYou: number }[];
   needsYou: number;

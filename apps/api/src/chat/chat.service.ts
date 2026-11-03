@@ -629,6 +629,11 @@ export class ChatService {
         connected: s.body.connected,
         tier: s.body.spec.kind === 'environment' ? (s.body.spec.details['tier'] ?? null) : null,
       })),
+      theatres: (await this.record.listActive('theatre')).map((t) => ({
+        id: t.entityId,
+        name: t.body.name,
+        status: t.body.status,
+      })),
       operations: (await this.record.listActive('operation')).map((o) => ({
         id: o.entityId,
         name: o.body.name,

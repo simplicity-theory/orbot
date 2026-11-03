@@ -154,7 +154,8 @@ export const Deployment = z.object({
   environment: z.string(),
   ref: z.string(),
   commit: z.string(),
-  taskId: Id,
+  /** The deploy task, or null when HQ published it itself (an automatic theatre). */
+  taskId: Id.nullable(),
   at: z.iso.datetime({ offset: true }),
   /** Where the deployed work can be opened, when ORBOT knows (a static site it published). */
   url: z.string().nullable().default(null),
@@ -222,6 +223,14 @@ export const TheatreBody = z.object({
   repoSupplyId: Id.nullable().default(null),
   /** Default hold policy for the theatre's operations; null = each unit's own. */
   holdPolicy: HoldPolicy.nullable().default(null),
+  /**
+   * full: HQ approves each unit's plan on the Commander's behalf, nothing holds on a finding,
+   * and a finished operation lands on the default branch and is published (D122).
+   * approve: every plan and deploy waits for the Commander.
+   */
+  autonomy: z.enum(['full', 'approve']).default('full'),
+  /** auto: HQ publishes the default branch to the theatre's site when an operation finishes. */
+  publish: z.enum(['auto', 'approved']).default('auto'),
   closed: z
     .object({ by: z.string(), note: z.string(), at: z.iso.datetime({ offset: true }) })
     .nullable()
@@ -235,6 +244,8 @@ export const OperationBody = z.object({
   phase: OperationPhase,
   /** The theatre (project) the operation runs in, if any. */
   theatreId: Id.nullable().default(null),
+  /** From a fully automatic theatre: plans pre-approved, nothing holds, HQ lands and publishes at the end. */
+  autonomous: z.boolean().default(false),
   /**
    * Resources assigned to the operation (depot items), in the order they were assigned. The
    * first repository is where the work is handed off and deployed from.

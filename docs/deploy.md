@@ -107,6 +107,7 @@ waits for you to start it again. Nothing a bot had committed is lost.
 | `orbot backup [dir]`     | `record.dump`, `secrets.dump`, `workspaces.tar.gz` into `backups/<date>/`.                                              |
 | `orbot restore DIR`      | Replaces both databases and the workspaces with a backup. Asks twice: it is the one operation that throws records away. |
 | `orbot down`             | Stops everything. The record, secrets and workspaces stay in the Docker volumes.                                        |
+| `orbot reset`            | Throws away the record, secrets and workspaces and starts fresh (asks for RESET). The force is seeded again.            |
 | `orbot passphrase`       | Prints the Commander passphrase from `.env`.                                                                            |
 
 Schedule `orbot backup` from cron (daily is reasonable) and copy `backups/` off the machine,

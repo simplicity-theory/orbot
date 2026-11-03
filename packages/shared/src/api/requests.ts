@@ -268,6 +268,8 @@ export const CreateTheatreRequest = z.object({
   /** With an intent, the first operation is launched in it. */
   intent: z.string().trim().max(1000).nullable().default(null),
   budgetUnits: z.number().positive().nullable().default(null),
+  /** full (default): plans approved for you, nothing holds, finished work lands and is published. */
+  autonomy: z.enum(['full', 'approve']).default('full'),
 });
 export type CreateTheatreRequest = z.input<typeof CreateTheatreRequest>;
 
