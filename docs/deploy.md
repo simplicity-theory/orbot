@@ -93,6 +93,10 @@ orbot update
 If nothing new was pulled but the running build is older than the checkout, `orbot update`
 rebuilds anyway.
 
+A task that was running when the API restarted is queued again at boot, with the reason on
+it, and goes on from its branch: an Overseer-issued task starts by itself, a task you started
+waits for you to start it again. Nothing a bot had committed is lost.
+
 ## Every day
 
 | Command                  | What it does                                                                                                            |

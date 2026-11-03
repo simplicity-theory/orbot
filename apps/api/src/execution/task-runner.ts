@@ -1,6 +1,12 @@
 import { OFFICER_SECRET_PREFIX } from '../officers/officers.service.js';
 import { randomUUID } from 'node:crypto';
-import { BadRequestException, ConflictException, Inject, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Inject,
+  Injectable,
+  type OnApplicationBootstrap,
+} from '@nestjs/common';
 import {
   actorRef,
   renderHandoverMarkdown,
@@ -9,6 +15,7 @@ import {
   type FragoNote,
   type LiveOrders,
   type Principal,
+  type RecordEvent,
   type RecordEventRefs,
   type RecordVersion,
   type RunContext,
@@ -99,7 +106,7 @@ export function nextStep(
  * Every event the runtime yields becomes at least one entry in the record.
  */
 @Injectable()
-export class TaskRunner {
+export class TaskRunner implements OnApplicationBootstrap {
   private readonly active = new Map<string, ActiveRun>();
 
   constructor(
@@ -125,6 +132,90 @@ export class TaskRunner {
   }
 
   /** Every run in progress, for the escalation sweep. */
+  /**
+   * Runs live in this process: after a restart (an update, a crash) every task the record still
+   * shows working has no run behind it, and nothing would ever notice. Each goes back to the
+   * front of its bot's queue with the reason, its last run is closed on the record and the bot
+   * is freed, so the Overseer starts it again from its branch (D115).
+   */
+  async onApplicationBootstrap(): Promise<void> {
+    const working = await this.record.listActive('task', { bodyContains: { status: 'working' } });
+    for (const task of working) {
+      try {
+        await this.recover(task);
+      } catch (err) {
+        this.logger.error(
+          `Could not recover task #${task.body.number} after the restart: ${this.message(err)}`,
+          'TaskRunner',
+        );
+      }
+    }
+  }
+
+  private async recover(task: RecordVersion<TaskBody>): Promise<void> {
+    const t = task.body;
+    const actor = 'system:runner';
+    const reason =
+      'ORBOT restarted while the task ran (an update or a crash); it goes again from its branch.';
+    const action = t.autoStart
+      ? 'Nothing to do: the Overseer starts it again as soon as its bot is free.'
+      : 'Start the task again; the bot carries on from its branch and handover.';
+    const bot = t.botId ? await this.record.getActive('bot', t.botId) : null;
+    const mission = t.missionId ? await this.record.getActive('mission', t.missionId) : null;
+    const refs: RecordEventRefs = {
+      unitId: t.unitId,
+      botId: t.botId,
+      taskId: task.entityId,
+      missionId: t.missionId,
+      operationId: mission?.body.operationId ?? null,
+    };
+    const starts = await this.record.listEvents({
+      taskId: task.entityId,
+      kinds: ['run.started'],
+      limit: 1000,
+    });
+    const last = starts.at(-1) as RecordEvent<'run.started'> | undefined;
+    await this.record.transaction(async (w) => {
+      await this.setStatus(
+        w,
+        task.entityId,
+        'queued',
+        reason,
+        refs,
+        actor,
+        reason,
+        undefined,
+        action,
+      );
+      if (last) {
+        await w.event('run.finished', { runId: last.body.runId, outcome: 'stopped' }, refs, actor);
+      }
+      if (bot) {
+        await w.revise(
+          'bot',
+          bot.entityId,
+          (b) => ({
+            ...b,
+            status: b.currentTaskId === task.entityId && b.status === 'working' ? 'idle' : b.status,
+            currentTaskId: b.currentTaskId === task.entityId ? null : b.currentTaskId,
+            queue: [task.entityId, ...b.queue.filter((q) => q !== task.entityId)],
+          }),
+          { actor, reason },
+        );
+      }
+      await w.event(
+        'sitrep',
+        {
+          level: 'unit',
+          text: `Task #${t.number} was running when ORBOT restarted; queued again${bot ? ` for ${bot.body.callsign}` : ''}, to go on from its branch.`,
+          status: 'queued',
+        },
+        refs,
+        actor,
+      );
+    });
+  }
+
   running(): { taskId: string; runId: string; unitId: string; botId: string; startedAt: number }[] {
     return [...this.active.entries()].map(([taskId, r]) => ({
       taskId,
