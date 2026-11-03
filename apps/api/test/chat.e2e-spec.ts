@@ -1,5 +1,5 @@
 import type { ChatSendResult, ChatView, OrdersLogEntryView, UnitDetailView } from '@orbot/shared';
-import { makeRepo, makeUnitWithBot, settled } from './fixtures.js';
+import { makeRepo, makeUnitWithBot, settled, waitFor } from './fixtures.js';
 import { startTestApp, type TestApp } from './helpers.js';
 
 describe('command by chat', () => {
@@ -92,6 +92,37 @@ describe('command by chat', () => {
     expect(['queued', 'working', 'done']).toContain(
       (await t.agent.get(`/api/tasks/${task.id}`).expect(200)).body.task.status,
     );
+  });
+
+  it('"Resume #N: …" on a blocked task restarts it with the note as a frago', async () => {
+    const task = (
+      await t.agent
+        .post('/api/tasks')
+        .send({
+          unitId: eng,
+          botId,
+          title: 'Wire the client',
+          repoSupplyId: repoId,
+          scenario: 'blocked-on-dependency',
+        })
+        .expect(201)
+    ).body;
+    await t.agent.post(`/api/tasks/${task.id}/run`).expect(202);
+    await waitFor(async () =>
+      (await t.agent.get(`/api/tasks/${task.id}`).expect(200)).body.task.status === 'blocked'
+        ? true
+        : null,
+    );
+    const r = await say(eng, `Resume #${task.number}: the upstream client is in now.`);
+    expect(r.readback.body.items[0]!.summary).toMatch(/^Resumed #\d+ Wire the client/);
+    const d = await waitFor(async () => {
+      const x = (await t.agent.get(`/api/tasks/${task.id}`).expect(200)).body;
+      return x.events.filter((e: { kind: string }) => e.kind === 'run.started').length >= 2
+        ? x
+        : null;
+    });
+    expect(d.task.description).toContain('Frago: Resume #');
+    expect(d.task.description).toContain('the upstream client is in now');
   });
 
   it('musing is not ordering: nothing changes until the Commander says so', async () => {

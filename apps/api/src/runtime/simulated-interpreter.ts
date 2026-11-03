@@ -1031,8 +1031,9 @@ export class SimulatedInterpreter {
     }
     // Fragos: change work in progress.
     if (RESUME.test(sentence)) {
-      const ids = this.matchTasks(sentence, unit, ['stood-down']);
-      if (!ids.length) return { unclear: `${sentence} — no stood-down work matches that.` };
+      const ids = this.matchTasks(sentence, unit, ['stood-down', 'blocked', 'failed']);
+      if (!ids.length)
+        return { unclear: `${sentence} — no stood-down, blocked or failed work matches that.` };
       return {
         kind: 'frago',
         action: {
@@ -1085,6 +1086,10 @@ export class SimulatedInterpreter {
         .replace(new RegExp(`\\b${unit.name}\\b`, 'i'), ' '),
     );
     const live = unit.tasks.filter((t) => states.includes(t.status));
+    // "#102" names a task outright.
+    const numbers = [...sentence.matchAll(/#(\d+)\b/g)].map((m) => Number(m[1]));
+    const byNumber = live.filter((t) => numbers.includes(t.number)).map((t) => t.id);
+    if (byNumber.length) return byNumber;
     const direct = live.filter((t) => overlap(about, t.title) >= 0.5).map((t) => t.id);
     if (direct.length) return direct;
     const missions = unit.missions.filter((m) => overlap(about, m.goal) >= 0.5).map((m) => m.id);

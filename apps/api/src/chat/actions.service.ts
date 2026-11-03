@@ -661,6 +661,21 @@ export class ActionsService {
   }
 
   private async resume(taskId: string, task: TaskBody, note: string, ctx: WriteContext) {
+    if (task.status === 'blocked' || task.status === 'failed') {
+      // Held or failed: the Commander's note goes with the task as a frago, and it starts again now.
+      await this.record.revise(
+        'task',
+        taskId,
+        (t) => ({
+          ...t,
+          description: note ? `${t.description}\n\nFrago: ${note}`.trim() : t.description,
+          statusAction: null,
+        }),
+        ctx,
+      );
+      await this.runner.resume(taskId, ctx.actor);
+      return;
+    }
     if (task.status !== 'stood-down') return;
     await this.record.transaction(async (w) => {
       await w.revise(
