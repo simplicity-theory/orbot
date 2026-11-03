@@ -8,9 +8,6 @@
       <div>
         <p class="page-header__eyebrow">Task #{{ t.number }} · {{ v.unit.name }}</p>
         <h1>{{ t.title }}</h1>
-        @if (t.description) {
-          <p class="page-header__lede">{{ t.description }}</p>
-        }
       </div>
       <div class="header-actions">
         @if (efforts.isTask(t)) {
@@ -42,40 +39,96 @@
       </div>
     </header>
 
-    @if ((t.statusReason || t.statusAction) && (t.status === 'blocked' || t.status === 'failed')) {
-      <div class="panel reason" role="status" [attr.data-status]="t.status">
-        <orb-icon [name]="t.status === 'failed' ? 'triangle-alert' : 'octagon-pause'" />
-        <div>
-          <p class="reason__what">{{ t.statusReason }}</p>
+    @if (held(); as why) {
+      <!-- What stopped the task comes first: the decision to make, then how to make it. -->
+      <section class="panel decision" [attr.data-status]="t.status" aria-labelledby="decision-h">
+        <h2 id="decision-h" class="panel__title">
+          <orb-icon [name]="t.status === 'failed' ? 'triangle-alert' : 'octagon-pause'" />
+          {{ why }}
+        </h2>
+        <div class="decision__what" role="status">
+          <p class="decision__reason">{{ t.statusReason ?? 'No reason given.' }}</p>
           @if (t.statusAction) {
-            <p class="reason__next"><strong>What to do:</strong> {{ t.statusAction }}</p>
+            <p class="decision__next"><strong>What to do:</strong> {{ t.statusAction }}</p>
           }
         </div>
-      </div>
-    }
-
-    @if (t.permission; as p) {
-      @if (p.status === 'pending' && t.status === 'awaiting-approval') {
-        <section class="panel" aria-labelledby="permission-h">
-          <h2 id="permission-h" class="panel__title">
-            {{ v.bot?.callsign ?? 'The bot' }} asks permission
-            <span class="meta">(<orb-term key="roe">rules of engagement</orb-term>)</span>
-          </h2>
-          <orb-permission-decision
+        @if (t.permission; as p) {
+          @if (p.status === 'pending' && t.status === 'awaiting-approval') {
+            <p class="meta">
+              {{ v.bot?.callsign ?? 'The bot' }} asks under its
+              <orb-term key="roe">rules of engagement</orb-term>.
+            </p>
+            <orb-permission-decision
+              [taskId]="t.id"
+              [permission]="p"
+              [unitId]="v.unit.id"
+              [label]="'permission on task #' + t.number"
+              (decided)="view.reload()"
+            />
+          }
+        }
+        @if (t.kind === 'deploy' && t.approval?.status === 'pending' && auth.can(t.unitId)) {
+          <orb-deploy-approval
             [taskId]="t.id"
-            [permission]="p"
             [unitId]="v.unit.id"
-            [label]="'permission on task #' + t.number"
-            (decided)="view.reload()"
+            [label]="'production deploy #' + t.number"
           />
-        </section>
-      } @else if (p.status !== 'pending') {
+        }
+        @if (note(); as n) {
+          @if (n.openProblems.length) {
+            <h3 class="decision__sub">Open problems the bot reports</h3>
+            <ul class="decision__list">
+              @for (p of n.openProblems; track $index) {
+                <li>{{ p }}</li>
+              }
+            </ul>
+          }
+          @if (n.nextSteps.length) {
+            <h3 class="decision__sub">What the bot would do next</h3>
+            <ul class="decision__list">
+              @for (s of n.nextSteps; track $index) {
+                <li>{{ s }}</li>
+              }
+            </ul>
+          }
+        }
+        <p class="decision__links">
+          <a [routerLink]="['/chat', v.unit.id]"
+            ><orb-icon class="sm" name="radio" /> Give {{ v.unit.name }} an order</a
+          >
+          <a [routerLink]="['/units', v.unit.id]" [queryParams]="{ section: 'rules' }"
+            ><orb-icon class="sm" name="shield" /> Hold policy and orders</a
+          >
+          @if (v.handover) {
+            <a href="#handover-h"><orb-icon class="sm" name="file-text" /> Full handover</a>
+          }
+        </p>
+      </section>
+    } @else if (t.permission; as p) {
+      @if (p.status !== 'pending') {
         <p class="panel reason" role="status">
           <orb-icon name="stamp" />
           Permission {{ p.status === 'approved' ? 'given' : 'refused' }}: {{ p.action
           }}{{ p.note ? ' — ' + p.note : '' }}
         </p>
       }
+    }
+
+    @if (orders(); as o) {
+      <details class="panel orders" [open]="!held()">
+        <summary class="panel__title">Orders for this task</summary>
+        @if (o.intro) {
+          <p class="prose">{{ o.intro }}</p>
+        }
+        @if (o.doneWhen.length) {
+          <h3 class="decision__sub">Done when</h3>
+          <ul class="decision__list">
+            @for (d of o.doneWhen; track $index) {
+              <li>{{ d }}</li>
+            }
+          </ul>
+        }
+      </details>
     }
 
     <section class="panel">

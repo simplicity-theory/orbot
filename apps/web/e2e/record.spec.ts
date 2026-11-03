@@ -43,10 +43,18 @@ test.describe('one bot, one task, on the record', () => {
   test('a blocked bot is one click from the ORBAT, with the reason', async ({ page }) => {
     await page.goto('/');
     await page.getByRole('link', { name: /E-2 blocked on/ }).click();
-    const held = page.getByRole('status').filter({ hasText: 'Upstream API client' });
+    // The decision comes first: why it is held, what to do, the bot's open problems, the controls.
+    const decision = page.getByRole('region', { name: 'Held for your decision' });
+    await expect(decision).toBeVisible();
+    const held = decision.getByRole('status').filter({ hasText: 'Upstream API client' });
     await expect(held).toBeVisible();
     await expect(held).toContainText('What to do: Resume the task once the upstream client');
+    await expect(decision).toContainText('Open problems the bot reports');
+    await expect(decision.getByRole('link', { name: /Give Engineers an order/ })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Resume task' })).toBeVisible();
+    // The orders are there, folded away under the decision.
+    const orders = page.locator('details.orders');
+    await expect(orders).not.toHaveAttribute('open', '');
   });
 
   test('archive: search, history with who/when/why, diff, and as-of', async ({ page }) => {

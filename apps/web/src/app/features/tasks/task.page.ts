@@ -4,7 +4,12 @@ import { TaskChanges } from '../code/task-changes';
 import { Component, computed, effect, inject, input, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { marked } from 'marked';
-import type { ConnectionSupply, ConnectionView, TaskDetailView } from '@orbot/shared';
+import {
+  parseHandoverMarkdown,
+  type ConnectionSupply,
+  type ConnectionView,
+  type TaskDetailView,
+} from '@orbot/shared';
 import { Api, apiUrl } from '../../core/api';
 import { toUserError } from '../../core/api-error';
 import { Breadcrumbs, ORBAT_CRUMB } from '../../core/breadcrumbs';
@@ -20,6 +25,7 @@ import { StatusBadge } from '../../ui/status-badge';
 import { Term } from '../../ui/term';
 import { Toasts } from '../../ui/toast';
 import { PermissionDecision } from '../../ui/permission-decision';
+import { DeployApproval } from '../../ui/deploy-approval';
 import { RecordTimeline } from './record-timeline';
 
 @Component({
@@ -36,6 +42,7 @@ import { RecordTimeline } from './record-timeline';
     RecordTimeline,
     RelativeTimePipe,
     PermissionDecision,
+    DeployApproval,
   ],
   templateUrl: './task.page.html',
   styleUrl: './task.page.scss',
@@ -86,6 +93,42 @@ export class TaskPage {
       this.opening.set(false);
     }
   }
+  /** Why the task waits on someone, as the heading of the decision panel; null when it does not. */
+  protected readonly held = computed(() => {
+    const t = this.view.value()?.task;
+    if (!t) return null;
+    switch (t.status) {
+      case 'blocked':
+        return 'Held for your decision';
+      case 'failed':
+        return 'Failed: needs your decision';
+      case 'awaiting-approval':
+        return t.permission?.status === 'pending'
+          ? 'Asks your permission'
+          : 'Waiting for your approval';
+      default:
+        return null;
+    }
+  });
+  /** The bot's handover, parsed, for the open problems and next steps it reports. */
+  protected readonly note = computed(() => {
+    const h = this.view.value()?.handover;
+    return h ? parseHandoverMarkdown(h.markdown) : null;
+  });
+  /** The task's description, with an operation's "Done when" criteria as a list. */
+  protected readonly orders = computed(() => {
+    const d = this.view.value()?.task.description?.trim();
+    if (!d) return null;
+    const m = /^([\s\S]*?)\s*Done when:\s*([\s\S]+)$/.exec(d);
+    if (!m) return { intro: d, doneWhen: [] as string[] };
+    return {
+      intro: m[1]!.trim(),
+      doneWhen: m[2]!
+        .split(/;\s+/)
+        .map((s) => s.trim().replace(/\.$/, ''))
+        .filter(Boolean),
+    };
+  });
   protected readonly canStart = computed(() => {
     const t = this.view.value()?.task;
     return (
