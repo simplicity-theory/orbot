@@ -152,7 +152,7 @@ describe('New project: a single HTML file, published by ORBOT', () => {
 
   it('the deploy published index.html to the site: on the record with its URL, kept by version', async () => {
     const d = op.operation.deployment!;
-    const url = `${t.config.webOrigin}/api/sites/${project.site.id}/`;
+    const url = `/api/sites/${project.site.id}/`;
     expect(d).toMatchObject({ environment: 'Ledger site', ref: 'deploy/ledger-site', url });
     const event = op.timeline.find((e) => e.kind === 'deployment')!;
     expect(event.body).toMatchObject({ environment: 'Ledger site', commit: d.commit, url });

@@ -310,7 +310,47 @@ export class SimulatedOverseer {
         });
       }
     }
+    // Findings recorded and left: "Finding (low) recorded, not fixed: …" sitreps.
+    const openFindings: AfterActionReview['openFindings'] = of('sitrep').flatMap((s) => {
+      const m = /recorded, not fixed:\s*(.+?)\.?$/i.exec(s.text);
+      if (!m) return [];
+      const unit = input.units.find((u) => u.name === s.unit);
+      return [{ unitId: unit?.id ?? null, text: m[1]!.trim() }];
+    });
+    // What came up before in the theatre is recommended (D130): the same lesson, the same finding.
+    const seen = (pick: 'lessons' | 'openFindings', text: string) =>
+      input.earlier.filter((e) => e[pick].some((x) => x.toLowerCase() === text.toLowerCase()));
+    const recommendations: AfterActionReview['recommendations'] = [
+      ...lessons.flatMap((l) => {
+        const before = seen('lessons', l.text);
+        return before.length
+          ? [
+              {
+                kind: 'rule' as const,
+                unitId: l.unitId,
+                text: l.text,
+                why: `Drawn again after Operation ${before.map((b) => b.operation).join(', ')}.`,
+              },
+            ]
+          : [];
+      }),
+      ...openFindings.flatMap((f) => {
+        const before = seen('openFindings', f.text);
+        return before.length
+          ? [
+              {
+                kind: 'fix' as const,
+                unitId: f.unitId,
+                text: `Fix ${f.text}`,
+                why: `Left open again after Operation ${before.map((b) => b.operation).join(', ')}.`,
+              },
+            ]
+          : [];
+      }),
+    ];
     return {
+      openFindings,
+      recommendations,
       summary: `Operation ${input.operation.name}: ${deployed ? 'deployed to production' : 'not deployed'} after ${handoffs.length} handoff(s), ${sendbacks.length} send-back(s) and ${blocks.length} block(s).`,
       wentWell: [
         ...(deployed ? ['The change reached production with your approval.'] : []),

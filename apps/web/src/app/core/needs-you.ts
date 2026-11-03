@@ -15,6 +15,8 @@ export class NeedsYou {
       (a) => !this.backbriefs().some((b) => b.id === a.entityId),
     ),
   );
+  /** What HQ recommends (D130): shown in the inbox, never counted as waiting on the Commander. */
+  readonly recommendations = computed(() => this.inbox.value()?.recommendations ?? []);
   readonly count = computed(() => this.inbox.value()?.attention.length ?? 0);
   readonly approvals = computed(() => this.backbriefs().length);
 
@@ -22,7 +24,7 @@ export class NeedsYou {
     reloadOnLive(
       (n) =>
         (n.type === 'version' &&
-          ['task', 'bot', 'mission', 'backbrief', 'unit', 'operation'].includes(
+          ['task', 'bot', 'mission', 'backbrief', 'unit', 'operation', 'recommendation'].includes(
             n.version.entityType,
           )) ||
         (n.type === 'event' &&

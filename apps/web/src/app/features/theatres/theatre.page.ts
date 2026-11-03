@@ -264,6 +264,15 @@ export class CloseTheatreDialog {
                 <p class="meta">
                   <orb-term key="intent">Intent</orb-term>: {{ o.operation.intent }}
                 </p>
+                @if (o.operation.openedAt) {
+                  <p
+                    class="meta"
+                    [attr.aria-label]="'Time and spend of Operation ' + o.operation.name"
+                  >
+                    {{ elapsed(o.operation.openedAt, o.operation.closedAt) }}
+                    {{ o.operation.closedAt ? '' : 'so far' }} · {{ o.budget.spent }} compute units
+                  </p>
+                }
                 <orb-phase-stepper [phase]="o.operation.phase" [compact]="true" />
                 @if (o.missions.length) {
                   <orb-mission-chain [missions]="o.missions" />
@@ -385,6 +394,15 @@ export class TheatrePage {
   protected toAssign = '';
 
   protected readonly name = computed(() => this.view.value()?.theatre.name ?? '');
+
+  /** "54 min", "1 h 10 min": how long an operation took (or has taken). */
+  protected elapsed(openedAt: string, closedAt: string | null): string {
+    const ms = (closedAt ? Date.parse(closedAt) : Date.now()) - Date.parse(openedAt);
+    const min = Math.max(0, Math.round(ms / 60_000));
+    if (min < 1) return 'under a minute';
+    if (min < 60) return `${min} min`;
+    return `${Math.floor(min / 60)} h ${min % 60} min`;
+  }
 
   constructor() {
     const crumbs = inject(Breadcrumbs);

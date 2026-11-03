@@ -9,6 +9,7 @@ import type {
   NewTheatreView,
   CampaignSummary,
   CreateCampaignRequest,
+  RecommendationView,
   GitHubTheatreRequest,
   TheatreIntentRequest,
   CreateTheatreRequest,
@@ -92,6 +93,7 @@ export const apiUrl = {
   theatre: (id: string) => `${API}/theatres/${id}`,
   campaigns: () => `${API}/campaigns`,
   campaign: (id: string) => `${API}/campaigns/${id}`,
+  recommendation: (id: string) => `${API}/recommendations/${id}`,
   operations: () => `${API}/operations`,
   operation: (id: string) => `${API}/operations/${id}`,
   chat: (channel: string) => `${API}/chat/${channel}`,
@@ -494,6 +496,19 @@ export class Api {
   resumeCampaign(campaignId: string, skip: boolean) {
     return firstValueFrom(
       this.http.post<CampaignSummary>(`${apiUrl.campaign(campaignId)}/resume`, { skip }),
+    );
+  }
+
+  /** Take up one of HQ's recommendations: a rule becomes a standing order, a fix an operation. */
+  adoptRecommendation(id: string) {
+    return firstValueFrom(
+      this.http.post<RecommendationView>(`${apiUrl.recommendation(id)}/adopt`, {}),
+    );
+  }
+
+  dismissRecommendation(id: string, note = '') {
+    return firstValueFrom(
+      this.http.post<RecommendationView>(`${apiUrl.recommendation(id)}/dismiss`, { note }),
     );
   }
 

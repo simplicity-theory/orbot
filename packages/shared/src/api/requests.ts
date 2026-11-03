@@ -325,6 +325,9 @@ export type GitHubTheatreRequest = z.input<typeof GitHubTheatreRequest>;
 
 /** Abort a mission, start a mission over, start an operation over: why (optional). */
 export const CourseNoteRequest = CancelOperationRequest;
+/** Taking up or dismissing an HQ recommendation (D130). */
+export const RecommendationDecisionRequest = z.object({ note: z.string().max(500).default('') });
+export type RecommendationDecisionRequest = z.input<typeof RecommendationDecisionRequest>;
 export type CourseNoteRequest = z.input<typeof CourseNoteRequest>;
 
 export const DeployDecisionRequest = z.object({

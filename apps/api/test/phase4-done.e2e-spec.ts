@@ -237,7 +237,7 @@ describe('Phase 4: intent to deployment across the whole force', () => {
       expect.stringMatching(/^Before handing over, check: Login tests/),
     );
     expect(op.timeline.map((e) => (e.body as { text?: string }).text ?? '')).toContainEqual(
-      expect.stringMatching(/^After Action review written; \d+ lesson\(s\) recorded\./),
+      expect.stringMatching(/^After Action review written; \d+ lesson\(s\) recorded/),
     );
   });
 

@@ -91,7 +91,7 @@ export class BudgetMeter {
   protected readonly text = computed(() => {
     const b = this.budget();
     if (b.cap === null) return `${b.spent} units used · no cap`;
-    if (!b.enforced) return `${b.spent} of ${b.cap} units · limits off`;
+    if (!b.enforced) return `${b.spent} units used · cap ${b.cap} not enforced`;
     const tail =
       b.state === 'capped' ? ' · at cap, work held' : b.state === 'warning' ? ' · near cap' : '';
     return `${b.spent} of ${b.cap} units${tail}`;

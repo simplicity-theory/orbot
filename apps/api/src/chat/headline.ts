@@ -12,7 +12,8 @@ export function headline(
   pending: { reason: PendingReason }[],
   refused = false,
 ): string {
-  if (items) return 'Wilco.';
+  // An order carried out: the answer, if the Overseer gave one, says what it did; else Wilco.
+  if (items) return i.answer || 'Wilco.';
   if (refused && !pending.length) return 'Not done: that order is outside your command.';
   if (pending.some((p) => p.reason === 'irreversible'))
     return 'That cannot be undone. Confirm and I will act.';

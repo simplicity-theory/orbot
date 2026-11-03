@@ -71,6 +71,21 @@ export const RecordEventBodies = {
   'after-action': z.object({
     documentId: z.string(),
     lessons: z.array(z.object({ unitId: z.string().nullable(), text: z.string() })),
+    /** Defects found and left (waived, recorded, not fixed). */
+    openFindings: z
+      .array(z.object({ unitId: z.string().nullable(), text: z.string() }))
+      .default([]),
+    /** What came up before in the theatre: HQ recommends it to the Commander (D130). */
+    recommendations: z
+      .array(
+        z.object({
+          kind: z.enum(['rule', 'fix']),
+          unitId: z.string().nullable(),
+          text: z.string(),
+          why: z.string(),
+        }),
+      )
+      .default([]),
   }),
   /**
    * Stuck work going up the chain. One chain (same `chainId`) has a step per level:

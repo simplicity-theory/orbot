@@ -14,6 +14,7 @@ import { TheatresService } from '../overseer/theatres.service.js';
 import { MainEffortService } from '../overseer/main-effort.service.js';
 import { ConnectionsService, slug } from '../connections/connections.service.js';
 import { CampaignsService } from '../overseer/campaigns.service.js';
+import { RecommendationsService, fixOperationName } from '../overseer/recommendations.service.js';
 import { ReconService } from '../overseer/recon.service.js';
 import { SandTableService } from '../overseer/sand-table.service.js';
 import { StandDownService } from '../overseer/stand-down.service.js';
@@ -57,6 +58,7 @@ export class ActionsService {
     private readonly sandTables: SandTableService,
     private readonly connections: ConnectionsService,
     private readonly campaigns: CampaignsService,
+    private readonly recommendations: RecommendationsService,
     private readonly projects: ProjectsService,
     private readonly holds: HoldPolicyService,
   ) {}
@@ -207,6 +209,38 @@ export class ActionsService {
             ? [{ label: `Operation ${step.name}`, link: `/operations/${step.operationId}` }]
             : []),
         ],
+        inverse: null,
+        affects: [],
+      };
+    }
+    if (action.kind === 'adopt-recommendation') {
+      const r = await this.recommendations.adopt(action.recommendationId, ctx.actor);
+      const opId = r.body.closed?.operationId ?? null;
+      const unitName = r.body.unitId
+        ? (await this.record.requireActive('unit', r.body.unitId)).body.name
+        : 'every unit';
+      return {
+        summary:
+          r.body.kind === 'rule'
+            ? `Rule taken up as a standing order for ${unitName}: ${r.body.text}`
+            : `Fix taken up: Operation ${fixOperationName(r.body.text)} launched in its theatre: ${r.body.text}`,
+        links: [
+          ...(opId
+            ? [{ label: `Operation ${fixOperationName(r.body.text)}`, link: `/operations/${opId}` }]
+            : []),
+          ...(r.body.kind === 'rule' && r.body.unitId
+            ? [{ label: unitName, link: `/units/${r.body.unitId}` }]
+            : []),
+        ],
+        inverse: null,
+        affects: [],
+      };
+    }
+    if (action.kind === 'dismiss-recommendation') {
+      const r = await this.recommendations.dismiss(action.recommendationId, action.note, ctx.actor);
+      return {
+        summary: `Recommendation dismissed${action.note ? `: ${action.note}` : ''}. It stays on the record: ${r.body.text}`,
+        links: [],
         inverse: null,
         affects: [],
       };

@@ -85,6 +85,7 @@ export class BriefingService {
         holdPolicy: await this.holds.effectiveFor(task, unit),
       },
       autonomous: await this.autonomous(task),
+      preparing: await this.preparing(task),
       workspace,
       repository: await this.repository(task),
       permissions: await this.permissions(task.entityId),
@@ -125,6 +126,13 @@ export class BriefingService {
   }
 
   /** Rulings on disputes this task raised; the Commander's (final) ruling wins over HQ's. */
+  /** A check task whose mission still waits for the handoff prepares first (D129). */
+  private async preparing(task: RecordVersion<TaskBody>): Promise<boolean> {
+    if (task.body.kind !== 'check' || !task.body.missionId) return false;
+    const mission = await this.record.getActive('mission', task.body.missionId);
+    return mission?.body.status === 'waiting';
+  }
+
   private async rulings(taskId: string): Promise<TaskBrief['rulings']> {
     const disputes = await this.record.listActive('dispute', { bodyContains: { taskId } });
     const out: TaskBrief['rulings'] = [];

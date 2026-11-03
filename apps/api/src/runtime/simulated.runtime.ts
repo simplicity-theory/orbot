@@ -3,6 +3,7 @@ import { dirname, relative, resolve } from 'node:path';
 import {
   decideFinding,
   parseHandoverMarkdown,
+  READY_FOR_HANDOFF,
   type BackbriefDraft,
   type BackbriefInput,
   type BotEvent,
@@ -109,6 +110,42 @@ export class SimulatedRuntime implements BotRuntime {
       const s = Array.isArray(t) ? t[Math.floor(rand() * t.length)]! : t;
       return s.replace(/\{(\w+)\}/g, (m, k: string) => state.vars[k] ?? m);
     };
+
+    // The unit before has not handed off yet: write the test plan and harness on the current
+    // base, commit, and hold for the handoff (D129). The scenario runs once it comes.
+    if (brief.preparing) {
+      yield {
+        type: 'step',
+        action: 'prepare',
+        detail: `The work for “${brief.task.title}” is not handed over yet: preparing the test plan and harness.`,
+        outcome: 'understood',
+      };
+      yield* writeInWorkspace(
+        brief,
+        `tests/test-plan-${brief.task.number}.md`,
+        `# Test plan for task #${brief.task.number}: ${brief.task.title}\n\nWritten by ${brief.bot.callsign} (${brief.unit.name}) before the handoff.\n`,
+      );
+      yield* commit(
+        brief,
+        `Task #${brief.task.number}: test plan and harness (before the handoff)`,
+      );
+      yield {
+        type: 'handover',
+        note: {
+          state: `Test plan and harness committed on ${brief.workspace.branch}; waiting for the handoff.`,
+          nextSteps: ['Merge the integration branch once it is handed off, then run the checks.'],
+          triedAndFailed: [],
+          openProblems: [],
+          flagsForSuccessor: [],
+        },
+      };
+      yield {
+        type: 'blocked',
+        reason: `${READY_FOR_HANDOFF}: test plan and harness committed on ${brief.workspace.branch}.`,
+        action: 'Nothing to do: it starts again when the unit before it hands off.',
+      };
+      return;
+    }
 
     // The branch is the only thing a bot inherits physically. What was done, and
     // how this unit works, must come from the brief: the unit's documents.
@@ -220,6 +257,10 @@ export class SimulatedRuntime implements BotRuntime {
             type: 'diary',
             category: 'note',
             text: `${label} Recorded, not holding: ${why}, and the hold policy does not hold on ${step.severity}.`,
+          };
+          yield {
+            type: 'sitrep',
+            text: `Finding (${step.severity}) recorded, not fixed: ${text(step.text).replace(/[.]$/, '')}.`,
           };
           return false;
         }

@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import {
   budgetView,
   describeNeeds,
+  waitingForHandoff,
   missingNeeds,
   needStatus,
   SETTINGS_ID,
@@ -12,7 +13,9 @@ import {
   type TheatreBody,
   type SupplyBody,
   type CampaignBody,
+  type RecommendationBody,
   type CampaignSummary,
+  type RecommendationView,
 } from '@orbot/shared';
 import type {
   ApprovalsView,
@@ -166,6 +169,7 @@ export class ViewsService {
       waiting.push({ ...campaignHold(c), unitName: 'HQ', unitId: null });
     }
     return {
+      recommendations: await this.recommendations(),
       backbriefs: orbat.units.flatMap((u) => u.backbriefs),
       attention: [
         ...waiting,
@@ -467,6 +471,39 @@ export class ViewsService {
         const t = theatres.find((x) => x.entityId === c.body.theatreId);
         return t ? [campaignSummary(c, t, ops)] : [];
       });
+  }
+
+  /** HQ's open recommendations (D130), newest first. */
+  async recommendations(): Promise<RecommendationView[]> {
+    const list = await this.record.listActive('recommendation', {
+      bodyContains: { status: 'open' },
+    });
+    const out: RecommendationView[] = [];
+    for (const r of list.sort((a, b) => b.createdAt.localeCompare(a.createdAt)))
+      out.push(await this.recommendationView(r));
+    return out;
+  }
+
+  async recommendation(id: string): Promise<RecommendationView> {
+    return this.recommendationView(await this.record.requireActive('recommendation', id));
+  }
+
+  private async recommendationView(
+    r: RecordVersion<RecommendationBody>,
+  ): Promise<RecommendationView> {
+    const theatre = await this.record.requireActive('theatre', r.body.theatreId);
+    const unit = r.body.unitId ? await this.record.getActive('unit', r.body.unitId) : null;
+    const operations: { id: string; name: string }[] = [];
+    for (const id of r.body.operationIds) {
+      const o = await this.record.getActive('operation', id);
+      if (o) operations.push({ id, name: o.body.name });
+    }
+    return {
+      recommendation: toView(r),
+      theatre: { id: theatre.entityId, name: theatre.body.name },
+      unitName: unit?.body.name ?? null,
+      operations,
+    };
   }
 
   async campaign(id: string): Promise<CampaignSummary> {
@@ -922,7 +959,7 @@ function attentionFor(
     });
   }
   // A blocked task no longer holds its bot (the bot moves on), so the item is the task's.
-  for (const t of tasks.filter((t) => t.status === 'blocked')) {
+  for (const t of tasks.filter((t) => t.status === 'blocked' && !waitingForHandoff(t))) {
     const b = bots.find((x) => x.id === t.botId);
     items.push({
       kind: 'blocked-bot',

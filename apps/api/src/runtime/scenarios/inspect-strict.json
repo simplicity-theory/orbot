@@ -27,6 +27,18 @@
       "outcome": "all green"
     },
     {
+      "do": "finding",
+      "severity": "low",
+      "fix": "none",
+      "text": "touch targets on the add button are below 24px."
+    },
+    {
+      "do": "write-file",
+      "path": "tests/inspection-{number}.md",
+      "content": "# Inspection of task #{number}\n\nRan the full suite on the integration branch: all green.\n"
+    },
+    { "do": "commit", "message": "Task #{number}: inspection results" },
+    {
       "do": "handover",
       "state": "Inspection passed on {branch}.",
       "nextSteps": [],

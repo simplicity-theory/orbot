@@ -1,7 +1,11 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import type { RecommendationView } from '@orbot/shared';
+import { Api } from '../../core/api';
+import { toUserError } from '../../core/api-error';
 import { Breadcrumbs, ORBAT_CRUMB } from '../../core/breadcrumbs';
 import { NeedsYou } from '../../core/needs-you';
+import { Toasts } from '../../ui/toast';
 import { Backbrief } from '../../ui/backbrief';
 import { Acknowledge } from '../../ui/acknowledge';
 import { UrlPipe } from '../../ui/url.pipe';
@@ -46,12 +50,59 @@ import { scrollToFragment } from './scroll-to-fragment';
         <orb-load-error [error]="err" (retry)="needsYou.reload()" />
       } @else if (!needsYou.inbox.hasValue()) {
         <orb-skeleton variant="block" [lines]="2" />
-      } @else if (needsYou.count() === 0) {
+      } @else if (needsYou.count() === 0 && !needsYou.recommendations().length) {
         <orb-empty-state icon="stamp" title="Nothing waiting on you">
           When a unit sends a plan for approval, a bot escalates something it may not decide alone,
           or work gets blocked, it appears here.
         </orb-empty-state>
       } @else {
+        @if (needsYou.recommendations().length) {
+          <section aria-labelledby="rec-h">
+            <h2 id="rec-h" class="panel__title">
+              <orb-term key="recommendation">HQ recommends</orb-term>
+              ({{ needsYou.recommendations().length }})
+            </h2>
+            <p class="meta lede">
+              What came up more than once in a theatre. Nothing waits for it: take it up or dismiss
+              it.
+            </p>
+            <ul class="list-reset panel items" aria-label="HQ recommends">
+              @for (r of needsYou.recommendations(); track r.recommendation.id) {
+                <li>
+                  <orb-icon
+                    class="sm"
+                    [name]="r.recommendation.kind === 'rule' ? 'book' : 'crosshair'"
+                  />
+                  <span class="meta">{{ r.unitName ?? 'HQ' }}</span>
+                  <span>
+                    <strong>{{ r.recommendation.kind === 'rule' ? 'Rule' : 'Fix' }}:</strong>
+                    {{ r.recommendation.text }}
+                  </span>
+                  <p class="detail">
+                    {{ r.recommendation.why }}
+                    <a [routerLink]="['/theatres', r.theatre.id]">Theatre {{ r.theatre.name }}</a>
+                    @for (o of r.operations; track o.id) {
+                      · <a [routerLink]="['/operations', o.id]">Operation {{ o.name }}</a>
+                    }
+                  </p>
+                  <div class="inline actions">
+                    <button
+                      type="button"
+                      class="btn btn--primary"
+                      [disabled]="busy()"
+                      (click)="adopt(r)"
+                    >
+                      {{ r.recommendation.kind === 'rule' ? 'Make it a rule' : 'Launch the fix' }}
+                    </button>
+                    <button type="button" class="btn" [disabled]="busy()" (click)="dismiss(r)">
+                      Dismiss
+                    </button>
+                  </div>
+                </li>
+              }
+            </ul>
+          </section>
+        }
         @if (needsYou.backbriefs().length) {
           <section aria-labelledby="bb-h">
             <h2 id="bb-h" class="panel__title">
@@ -163,12 +214,56 @@ import { scrollToFragment } from './scroll-to-fragment';
       font-size: var(--font-size-sm);
       color: var(--color-text-muted);
     }
+    .lede {
+      margin: 0 0 var(--space-3);
+    }
+    .detail a {
+      text-decoration: underline;
+    }
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-2);
+    }
   `,
 })
 export class ApprovalsPage {
   protected readonly needsYou = inject(NeedsYou);
+  protected readonly busy = signal(false);
+  private readonly api = inject(Api);
+  private readonly toasts = inject(Toasts);
   constructor() {
     inject(Breadcrumbs).set([ORBAT_CRUMB, { label: 'Approvals' }]);
     scrollToFragment();
+  }
+
+  protected async adopt(r: RecommendationView): Promise<void> {
+    await this.decide(r, async () => {
+      await this.api.adoptRecommendation(r.recommendation.id);
+      return r.recommendation.kind === 'rule'
+        ? `Now a standing order${r.unitName ? ` of ${r.unitName}` : ''}: ${r.recommendation.text}`
+        : `Operation launched in Theatre ${r.theatre.name}: ${r.recommendation.text}`;
+    });
+  }
+
+  protected async dismiss(r: RecommendationView): Promise<void> {
+    await this.decide(r, async () => {
+      await this.api.dismissRecommendation(r.recommendation.id);
+      return 'Dismissed; it stays on the record and is not raised again.';
+    });
+  }
+
+  private async decide(r: RecommendationView, fn: () => Promise<string>): Promise<void> {
+    this.busy.set(true);
+    try {
+      const message = await fn();
+      this.needsYou.reload();
+      this.toasts.show({ tone: 'success', message });
+    } catch (err) {
+      const e = toUserError(err);
+      this.toasts.show({ tone: 'danger', message: e.message, detail: e.action });
+    } finally {
+      this.busy.set(false);
+    }
   }
 }

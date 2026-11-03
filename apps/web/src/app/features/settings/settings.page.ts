@@ -253,7 +253,7 @@ import { ThemeService } from '../../core/theme';
                 <tr>
                   <th>Unit</th>
                   <th class="num">Spent</th>
-                  <th class="num">Cap</th>
+                  <th class="num">{{ u.limits === 'on' ? 'Cap' : 'Cap (not enforced)' }}</th>
                 </tr>
               </thead>
               <tbody>
@@ -274,7 +274,7 @@ import { ThemeService } from '../../core/theme';
                   <tr>
                     <th>Operation</th>
                     <th class="num">Spent</th>
-                    <th class="num">Cap</th>
+                    <th class="num">{{ u.limits === 'on' ? 'Cap' : 'Cap (not enforced)' }}</th>
                   </tr>
                 </thead>
                 <tbody>

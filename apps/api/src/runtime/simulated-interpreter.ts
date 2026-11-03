@@ -130,6 +130,11 @@ const RESUME_CAMPAIGN =
   /^(?:please\s+)?(?:resume|continue|carry on with|go on with|restart)\s+(?:the\s+)?campaign(?:\s+(.+?))?$/i;
 const SKIP_STEP =
   /^(?:please\s+)?skip\s+(?:the\s+|this\s+|that\s+)?(?:current\s+)?step(?:\s+(?:of|in)\s+(?:the\s+)?campaign(?:\s+(.+?))?)?$/i;
+/** "Make it a rule" / "Launch the fix" / "Take up HQ's recommendation about touch targets". */
+const ADOPT_RECOMMENDATION =
+  /^(?:please\s+)?(?:make\s+(?:it|that)\s+a\s+rule|launch\s+the\s+fix|order\s+the\s+fix|take\s+up|adopt|accept)(?:\s+(?:hq'?s\s+|the\s+)?recommendation)?(?:\s+(?:for|about|on)\s+(.+?))?$/i;
+const DISMISS_RECOMMENDATION =
+  /^(?:please\s+)?(?:dismiss|decline|drop|ignore)\s+(?:hq'?s\s+|the\s+)?recommendation(?:\s+(?:for|about|on)\s+(.+?))?(?:\s*(?::|—|\bbecause\b)\s*(.+))?$/i;
 /** "Put theatre Todo on GitHub as acme/todo using credential gh-token". */
 const GITHUB_THEATRE =
   /^(?:please\s+)?put\s+(?:the\s+)?(?:theatre\s+)?(.+?)\s+on\s+github(?:\s+as\s+([\w.-]+)\/([\w.-]+))?(?:\s+(?:with|using)\s+(?:the\s+|my\s+)?(?:credential|token)\s+([\w.-]+))?$/i;
@@ -339,6 +344,15 @@ export class SimulatedInterpreter {
       if (RESTART_QUEUES.test(sentence)) {
         kinds.add('order');
         out.actions.push({ kind: 'restart-queues', unitId: null });
+        continue;
+      }
+      const recommendation = this.recommendationCourse(sentence, input);
+      if (recommendation) {
+        if ('unclear' in recommendation) out.unclear.push(`${raw} — ${recommendation.unclear}`);
+        else {
+          kinds.add(hedged ? 'musing' : 'order');
+          (hedged ? out.musings : out.actions).push(recommendation);
+        }
         continue;
       }
       const campaignCourse = this.campaignCourse(sentence, input);
@@ -748,6 +762,48 @@ export class SimulatedInterpreter {
       };
     }
     return { kind: 'resume-campaign', unitId: null, campaignId: c.id, skip: !!skip };
+  }
+
+  /** Taking up or dismissing one of HQ's recommendations (D130). */
+  private recommendationCourse(
+    sentence: string,
+    input: InterpretInput,
+  ):
+    | Extract<ChatAction, { kind: 'adopt-recommendation' | 'dismiss-recommendation' }>
+    | { unclear: string }
+    | null {
+    const adopt = ADOPT_RECOMMENDATION.exec(sentence);
+    const dismiss = adopt ? null : DISMISS_RECOMMENDATION.exec(sentence);
+    if (!adopt && !dismiss) return null;
+    const phrase = ((adopt ?? dismiss)![1] ?? '')
+      .trim()
+      .replace(/[.!]+$/, '')
+      .toLowerCase();
+    const open = input.recommendations ?? [];
+    const wanted = /^(?:launch|order)\s+the\s+fix/i.test(sentence)
+      ? open.filter((r) => r.kind === 'fix')
+      : /make\s+(?:it|that)\s+a\s+rule/i.test(sentence)
+        ? open.filter((r) => r.kind === 'rule')
+        : open;
+    const hits = phrase ? wanted.filter((r) => r.text.toLowerCase().includes(phrase)) : wanted;
+    const r = hits.length === 1 ? hits[0]! : null;
+    if (!r) {
+      return {
+        unclear: !open.length
+          ? 'HQ has no open recommendation.'
+          : hits.length
+            ? `which recommendation? Open: ${hits.map((x) => x.text).join(' / ')}.`
+            : `no open recommendation matches “${phrase}”.`,
+      };
+    }
+    return adopt
+      ? { kind: 'adopt-recommendation', unitId: null, recommendationId: r.id }
+      : {
+          kind: 'dismiss-recommendation',
+          unitId: null,
+          recommendationId: r.id,
+          note: (dismiss![2] ?? '').replace(/[.!]+$/, '').trim(),
+        };
   }
 
   /** "Change the repo from demo-app to subframe" / "Make subframe the main repository of …". */

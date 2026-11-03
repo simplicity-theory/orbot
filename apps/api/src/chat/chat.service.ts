@@ -58,6 +58,8 @@ const COMMANDER_ONLY: ChatAction['kind'][] = [
   'create-campaign',
   'cancel-campaign',
   'resume-campaign',
+  'adopt-recommendation',
+  'dismiss-recommendation',
   'github-theatre',
   'assign-resource',
   'release-resource',
@@ -199,6 +201,8 @@ export class ChatService {
       action.kind === 'create-campaign' ||
       action.kind === 'cancel-campaign' ||
       action.kind === 'resume-campaign' ||
+      action.kind === 'adopt-recommendation' ||
+      action.kind === 'dismiss-recommendation' ||
       action.kind === 'github-theatre' ||
       action.kind === 'assign-resource' ||
       action.kind === 'release-resource' ||
@@ -651,6 +655,18 @@ export class ChatService {
           status: c.body.status,
           step: c.body.current + 1,
         })),
+      recommendations: await Promise.all(
+        (await this.record.listActive('recommendation', { bodyContains: { status: 'open' } })).map(
+          async (r) => ({
+            id: r.entityId,
+            kind: r.body.kind,
+            text: r.body.text,
+            unitName: r.body.unitId
+              ? ((await this.record.getActive('unit', r.body.unitId))?.body.name ?? null)
+              : null,
+          }),
+        ),
+      ),
       operations: (await this.record.listActive('operation')).map((o) => ({
         id: o.entityId,
         name: o.body.name,
@@ -717,6 +733,14 @@ export class ChatService {
       return a.skip
         ? `Skip step ${c.body.current + 1} of Campaign ${c.body.name}`
         : `Start step ${c.body.current + 1} of Campaign ${c.body.name} over`;
+    }
+    if (a.kind === 'adopt-recommendation' || a.kind === 'dismiss-recommendation') {
+      const r = await this.record.requireActive('recommendation', a.recommendationId);
+      return a.kind === 'adopt-recommendation'
+        ? r.body.kind === 'rule'
+          ? `Make it a rule: ${r.body.text}`
+          : `Launch the fix: ${r.body.text}`
+        : `Dismiss HQ's recommendation: ${r.body.text}`;
     }
     if (a.kind === 'github-theatre')
       return `Put the theatre on GitHub as ${a.owner}/${a.repo ?? '<its name>'} (token: ${a.credentialName})`;

@@ -579,6 +579,40 @@ describe('SimulatedInterpreter', () => {
       ).toMatch(/no campaign is under way/);
     });
 
+    it('takes up or dismisses one of HQ’s recommendations, by kind or by words', () => {
+      const recommendations = [
+        {
+          id: 'r1',
+          kind: 'rule' as const,
+          text: 'Before handing over, run the suite.',
+          unitName: 'Engineers',
+        },
+        { id: 'r2', kind: 'fix' as const, text: 'Fix touch targets below 24px', unitName: null },
+      ];
+      expect(i.interpret(input('Make it a rule.', { ...hq, recommendations })).actions).toEqual([
+        { kind: 'adopt-recommendation', unitId: null, recommendationId: 'r1' },
+      ]);
+      expect(i.interpret(input('Launch the fix', { ...hq, recommendations })).actions).toEqual([
+        { kind: 'adopt-recommendation', unitId: null, recommendationId: 'r2' },
+      ]);
+      expect(
+        i.interpret(
+          input('Dismiss the recommendation about touch targets: not now.', {
+            ...hq,
+            recommendations,
+          }),
+        ).actions,
+      ).toEqual([
+        { kind: 'dismiss-recommendation', unitId: null, recommendationId: 'r2', note: 'not now' },
+      ]);
+      expect(
+        i.interpret(input('Take up the recommendation.', { ...hq, recommendations })).unclear[0],
+      ).toMatch(/which recommendation/);
+      expect(
+        i.interpret(input('Make it a rule.', { ...hq, recommendations: [] })).unclear[0],
+      ).toMatch(/no open recommendation/);
+    });
+
     it('puts a theatre on GitHub with a stored token, never a pasted one', () => {
       expect(
         i.interpret(

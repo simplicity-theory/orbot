@@ -277,7 +277,8 @@ export async function seedDemoForce(
             : u.body.standingOrders,
         overseerBotId: overseerId,
         supplyIds: supplied,
-        computeBudget: 100,
+        // The demo force has a cap to show; a real force starts with none (caps are advisory, D131).
+        computeBudget: opts.demo ? 100 : 0,
       },
       SEED,
       unitId,

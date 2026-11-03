@@ -11,6 +11,7 @@ import type {
   OperationBody,
   TheatreBody,
   CampaignBody,
+  RecommendationBody,
   OperationPhase,
   SupplyBody,
   TaskBody,
@@ -248,6 +249,16 @@ export interface ApprovalsView {
   backbriefs: BackbriefView[];
   /** `unitId` is null for HQ's own items, such as an operation waiting for resources. */
   attention: (AttentionItem & { unitName: string; unitId: string | null })[];
+  /** What HQ recommends (D130): never a stop, one button to take up or dismiss. */
+  recommendations: RecommendationView[];
+}
+
+export interface RecommendationView {
+  recommendation: Versioned<RecommendationBody>;
+  theatre: { id: string; name: string };
+  unitName: string | null;
+  /** The operations whose reviews raised it. */
+  operations: { id: string; name: string }[];
 }
 
 export interface PaletteItem {

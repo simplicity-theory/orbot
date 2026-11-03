@@ -18,6 +18,7 @@ import {
   type ProjectShape,
   type ProposedTask,
   type RecordEvent,
+  READY_FOR_HANDOFF,
   SETTINGS_ID,
   type RecordVersion,
   type TaskStatus,
@@ -519,7 +520,9 @@ export class OverseerService implements OnApplicationBootstrap, OnModuleDestroy 
         if (!task || task.body.status !== 'queued' || !task.body.autoStart) continue;
         if (task.body.missionId) {
           const m = await this.record.getActive('mission', task.body.missionId);
-          if (m?.body.status === 'waiting') continue; // not handed off yet
+          // Not handed off yet: only a check task that has not run may start, to prepare (D129).
+          if (m?.body.status === 'waiting' && !(task.body.kind === 'check' && !task.body.workspace))
+            continue;
         }
         if (task.body.kind === 'deploy' && task.body.approval?.status === 'pending') {
           // Production deploys wait for the Commander.
@@ -584,6 +587,51 @@ export class OverseerService implements OnApplicationBootstrap, OnModuleDestroy 
     const cmd = await this.overseers.of(task.body.unitId);
     const bot = task.body.botId ? await this.record.getActive('bot', task.body.botId) : null;
     const who = bot ? bot.body.callsign : 'Unassigned';
+    // A check task that reports done before the handoff has only prepared (D129): it is held
+    // for the handoff, whatever the bot said, so its mission never completes before the work
+    // it is to check has arrived.
+    if (e.body.to === 'done' && task.body.kind === 'check' && task.body.missionId) {
+      const mission = await this.record.getActive('mission', task.body.missionId);
+      if (mission?.body.status === 'waiting') {
+        const reason = `${READY_FOR_HANDOFF}: reported done before the handoff; held for it.`;
+        await this.record.transaction(async (w) => {
+          await w.revise(
+            'task',
+            task.entityId,
+            (t) => ({
+              ...t,
+              status: 'blocked',
+              statusReason: reason,
+              statusAction: 'Nothing to do: it starts again when the unit before it hands off.',
+            }),
+            { actor: cmd.actor, reason: 'Held for the handoff' },
+          );
+          await w.event(
+            'task.status',
+            { from: 'done', to: 'blocked', reason },
+            {
+              unitId: task.body.unitId,
+              botId: task.body.botId,
+              taskId: task.entityId,
+              missionId: task.body.missionId,
+              operationId: mission.body.operationId,
+            },
+            cmd.actor,
+          );
+          await this.sitrep(
+            w,
+            task.body.unitId,
+            task.body.missionId,
+            task.entityId,
+            cmd.actor,
+            `${who} prepared task #${task.body.number} before the handoff; it is held until the work arrives.`,
+            'blocked',
+          );
+        });
+        await this.dispatch(task.body.unitId);
+        return;
+      }
+    }
     const text: Record<string, string> = {
       done: `${who} completed task #${task.body.number}: ${task.body.title}.`,
       failed: `${who} failed task #${task.body.number}: ${e.body.reason ?? 'no reason given'}. ${e.body.action ?? 'Needs a decision.'}`,

@@ -10,6 +10,7 @@ import { BotStatus, TaskStatus } from '../status/status.js';
 export const ENTITY_TYPES = [
   'theatre',
   'campaign',
+  'recommendation',
   'unit',
   'bot',
   'operation',
@@ -275,6 +276,41 @@ export const CampaignBody = z.object({
 });
 export type CampaignBody = z.infer<typeof CampaignBody>;
 
+export const RecommendationKind = z.enum(['rule', 'fix']);
+export type RecommendationKind = z.infer<typeof RecommendationKind>;
+export const RecommendationStatus = z.enum(['open', 'adopted', 'dismissed']);
+export type RecommendationStatus = z.infer<typeof RecommendationStatus>;
+
+/**
+ * Something HQ recommends to the Commander after an After Action review, because it came up
+ * more than once in the theatre (D130): a `rule` (the same lesson in two reviews; adopted, it
+ * becomes a standing order of the unit) or a `fix` (the same finding left open in two
+ * operations; adopted, an operation to fix it is launched). It is never a stop: the work goes on.
+ */
+export const RecommendationBody = z.object({
+  theatreId: Id,
+  kind: RecommendationKind,
+  /** The unit a rule is for (null = every unit). */
+  unitId: Id.nullable().default(null),
+  text: z.string().min(1),
+  /** Why HQ recommends it: where it came up. */
+  why: z.string().default(''),
+  /** The operations whose reviews raised it. */
+  operationIds: z.array(Id).min(1),
+  status: RecommendationStatus.default('open'),
+  closed: z
+    .object({
+      by: z.string(),
+      note: z.string(),
+      at: z.iso.datetime({ offset: true }),
+      /** The operation launched for a fix, when it was adopted. */
+      operationId: Id.nullable().default(null),
+    })
+    .nullable()
+    .default(null),
+});
+export type RecommendationBody = z.infer<typeof RecommendationBody>;
+
 export const OperationBody = z.object({
   name: z.string().min(1),
   intent: z.string().min(1),
@@ -319,6 +355,9 @@ export const OperationBody = z.object({
   /** The shared cross-unit record (a document) and the After Action review. */
   recordDocumentId: Id.nullable().default(null),
   afterActionDocumentId: Id.nullable().default(null),
+  /** When the intent was received and when the operation closed: its time, shown with its spend. */
+  openedAt: z.iso.datetime({ offset: true }).nullable().default(null),
+  closedAt: z.iso.datetime({ offset: true }).nullable().default(null),
   /** Hard cap on what the whole operation may spend, in compute units; null = no cap. */
   budgetUnits: z.number().nonnegative().nullable().default(null),
   /** HQ sends a unit to recon before planning; the plan takes the report into account. */
@@ -401,6 +440,16 @@ export type Workspace = z.infer<typeof Workspace>;
 /** `recon` is read-only: the bot surveys the code and files a report, changing nothing. */
 export const TaskKind = z.enum(['work', 'fix', 'check', 'deploy', 'recon']);
 export type TaskKind = z.infer<typeof TaskKind>;
+
+/**
+ * A check task starts while the unit before it is still building: it writes its test plan and
+ * harness, then holds with this reason (D129). The handoff queues it again; it never reaches
+ * the Commander.
+ */
+export const READY_FOR_HANDOFF = 'Ready for the handoff';
+export function waitingForHandoff(t: { status: TaskStatus; statusReason: string | null }) {
+  return t.status === 'blocked' && (t.statusReason ?? '').startsWith(READY_FOR_HANDOFF);
+}
 
 export const TaskApproval = z.object({
   kind: z.literal('production-deploy'),
@@ -934,6 +983,7 @@ export const ENTITY_BODY_SCHEMAS = {
   officer: OfficerBody,
   theatre: TheatreBody,
   campaign: CampaignBody,
+  recommendation: RecommendationBody,
 } as const satisfies Record<EntityType, z.ZodType>;
 
 export interface EntityBodyMap {
@@ -951,6 +1001,7 @@ export interface EntityBodyMap {
   officer: OfficerBody;
   theatre: TheatreBody;
   campaign: CampaignBody;
+  recommendation: RecommendationBody;
 }
 
 /** What a write may supply: defaulted fields are optional and filled in by the schema. */

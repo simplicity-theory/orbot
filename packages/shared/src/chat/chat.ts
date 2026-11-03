@@ -105,6 +105,19 @@ export const ChatAction = z.discriminatedUnion('kind', [
     campaignId: Id,
     note: z.string().max(500).default(''),
   }),
+  /** Through HQ: take up a recommendation: a rule becomes a standing order, a fix an operation (D130). */
+  z.object({
+    kind: z.literal('adopt-recommendation'),
+    unitId: Id.nullable(),
+    recommendationId: Id,
+  }),
+  /** Through HQ: dismiss a recommendation (it stays on the record). */
+  z.object({
+    kind: z.literal('dismiss-recommendation'),
+    unitId: Id.nullable(),
+    recommendationId: Id,
+    note: z.string().max(500).default(''),
+  }),
   /** Through HQ: a held campaign goes on: its step is started over (or skipped). */
   z.object({
     kind: z.literal('resume-campaign'),

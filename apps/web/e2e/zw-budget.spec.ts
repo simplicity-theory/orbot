@@ -9,7 +9,7 @@ test('set a unit’s compute budget cap and see it on the ORBAT', async ({ page 
   await card.getByRole('link', { name: 'Logistics' }).click();
 
   const panel = page.getByRole('region', { name: 'Compute budget' });
-  await expect(panel).toContainText('of 100 units');
+  await expect(panel).toContainText('cap 100 not enforced');
   await panel.getByRole('button', { name: 'Set budget…' }).click();
   const dialog = page.getByRole('dialog', { name: 'Compute budget for Logistics' });
   await expect(dialog).toContainText('warns at 80%');
@@ -19,7 +19,7 @@ test('set a unit’s compute budget cap and see it on the ORBAT', async ({ page 
   await expect(
     page.getByRole('status').filter({ hasText: 'Budget for Logistics set.' }),
   ).toBeVisible();
-  await expect(panel).toContainText('of 40 units');
+  await expect(panel).toContainText('cap 40 not enforced');
   await expect(panel.getByRole('meter', { name: 'Compute budget of Logistics' })).toHaveAttribute(
     'aria-valuemax',
     '40',
@@ -27,7 +27,9 @@ test('set a unit’s compute budget cap and see it on the ORBAT', async ({ page 
   await expectAccessible(page, 'unit budget');
 
   await page.goto('/');
-  await expect(page.getByRole('article', { name: 'Logistics' })).toContainText('of 40 units');
+  await expect(page.getByRole('article', { name: 'Logistics' })).toContainText(
+    'cap 40 not enforced',
+  );
 
   // Put it back for the specs that follow.
   await page
@@ -41,5 +43,7 @@ test('set a unit’s compute budget cap and see it on the ORBAT', async ({ page 
   await dialog.getByLabel('Cap (units)').fill('100');
   await dialog.getByLabel('Reason').fill('Freeze over');
   await dialog.getByRole('button', { name: 'Set budget' }).click();
-  await expect(page.getByRole('region', { name: 'Compute budget' })).toContainText('of 100 units');
+  await expect(page.getByRole('region', { name: 'Compute budget' })).toContainText(
+    'cap 100 not enforced',
+  );
 });

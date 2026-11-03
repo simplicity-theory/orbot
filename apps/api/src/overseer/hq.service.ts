@@ -12,6 +12,8 @@ import {
   describeNeeds,
   missingNeeds,
   resourceKindOf,
+  waitingForHandoff,
+  type AfterActionInput,
   type BotRuntime,
   type OperationBody,
   type OperationNeed,
@@ -195,6 +197,7 @@ export class HqService implements OnApplicationBootstrap, OnModuleDestroy {
           supplyIds: resources.map((r) => r.entityId),
           budgetUnits,
           reconFirst,
+          openedAt: new Date().toISOString(),
         },
         { actor, reason: 'Commander stated intent' },
       );
@@ -1085,14 +1088,18 @@ export class HqService implements OnApplicationBootstrap, OnModuleDestroy {
       ? await this.record.getActive('operation', mission.body.operationId)
       : null;
     if (!mission || !op) return;
-    if (to === 'done' && (task.body.kind === 'work' || task.body.kind === 'fix')) {
+    if (to === 'done' && ['work', 'fix', 'check'].includes(task.body.kind)) {
       await this.integrate(op, task);
     } else if (to === 'stood-down' && reason?.startsWith('Sent back:')) {
       await this.sendBack(op, mission.entityId, task, reason.replace(/^Sent back:\s*/, ''));
     }
   }
 
-  /** Merge a finished task's branch into the operation's integration branch. */
+  /**
+   * Merge a finished task's branch into the operation's integration branch. A check task's
+   * commits (its test plan, harness and results) are the unit's work too: they land with the
+   * operation, and the next inspection starts from them (D129).
+   */
   private async integrate(op: RecordVersion<OperationBody>, task: RecordVersion<TaskBody>) {
     if (!op.body.integrationBranch || !op.body.repoSupplyId || !task.body.workspace) return;
     // Into the integration branch of the repository the task worked in (each of the
@@ -1241,12 +1248,50 @@ export class HqService implements OnApplicationBootstrap, OnModuleDestroy {
         this.record.requireActive('unit', mission.body.unitId),
         this.record.requireActive('unit', next.body.unitId),
       ]);
-      const sentBack = (
-        await this.record.listActive('task', { bodyContains: { missionId: next.entityId } })
-      ).filter(
+      const nextTasks = await this.record.listActive('task', {
+        bodyContains: { missionId: next.entityId },
+      });
+      const sentBack = nextTasks.filter(
         (t) => t.body.status === 'stood-down' && t.body.statusReason?.startsWith('Sent back:'),
       );
+      // A check task that prepared during the build holds for this handoff (D129).
+      const prepared = nextTasks.filter((t) => waitingForHandoff(t.body));
+      const frago = `Frago: ${fromUnit.body.name} handed off${commit ? ` at ${commit.slice(0, 10)}` : ''}${op.body.integrationBranch ? ` on ${op.body.integrationBranch}` : ''}. Bring that branch into yours${op.body.integrationBranch ? ` (git merge ${op.body.integrationBranch})` : ''} and run your checks against it; your test plan and harness are already on your branch.`;
       await this.record.transaction(async (w) => {
+        for (const t of prepared) {
+          const reason = `Handoff from ${fromUnit.body.name}${commit ? ` at ${commit.slice(0, 10)}` : ''}`;
+          await w.revise(
+            'task',
+            t.entityId,
+            (b) => ({
+              ...b,
+              status: 'queued',
+              statusReason: reason,
+              statusAction: null,
+              description: `${b.description}\n\n${frago}`,
+            }),
+            { actor: HQ_ACTOR, reason: 'The handoff it prepared for' },
+          );
+          await w.event(
+            'task.status',
+            { from: 'blocked', to: 'queued', reason },
+            {
+              unitId: t.body.unitId,
+              botId: t.body.botId,
+              taskId: t.entityId,
+              missionId: next.entityId,
+              operationId: op.entityId,
+            },
+            HQ_ACTOR,
+          );
+          if (t.body.botId)
+            await w.revise(
+              'bot',
+              t.body.botId,
+              (b) => (b.queue.includes(t.entityId) ? b : { ...b, queue: [...b.queue, t.entityId] }),
+              { actor: HQ_ACTOR, reason: 'Check queued after the handoff' },
+            );
+        }
         await w.revise('mission', next.entityId, (m) => ({ ...m, status: 'working' }), {
           actor: HQ_ACTOR,
           reason: `Handed off by ${fromUnit.body.name}`,
@@ -1594,7 +1639,24 @@ Frago: ${note}`.trim(),
       operation: { name: op.body.name, intent: op.body.intent },
       units: units.map((u) => ({ id: u.entityId, name: u.body.name })),
       timeline,
+      earlier: await this.earlierReviews(op),
     });
+    // What the Commander has already taken up or dismissed is not recommended again.
+    if (review.recommendations.length && op.body.theatreId) {
+      const decided = (
+        await this.record.listActive('recommendation', {
+          bodyContains: { theatreId: op.body.theatreId },
+        })
+      ).filter((r) => r.body.status !== 'open');
+      review.recommendations = review.recommendations.filter(
+        (r) =>
+          !decided.some(
+            (d) =>
+              d.body.kind === r.kind &&
+              d.body.text.trim().toLowerCase() === r.text.trim().toLowerCase(),
+          ),
+      );
+    }
     const md = [
       `# After Action review — Operation ${op.body.name}`,
       '',
@@ -1613,6 +1675,25 @@ Frago: ${note}`.trim(),
         ? review.lessons.map((l) => `- ${l.unitId ? name(l.unitId) : 'All units'}: ${l.text}`)
         : ['- None']),
       '',
+      ...(review.openFindings.length
+        ? [
+            '## Left open',
+            ...review.openFindings.map(
+              (f) => `- ${f.unitId ? name(f.unitId) : 'All units'}: ${f.text}`,
+            ),
+            '',
+          ]
+        : []),
+      ...(review.recommendations.length
+        ? [
+            '## HQ recommends',
+            ...review.recommendations.map(
+              (r) =>
+                `- ${r.kind === 'rule' ? 'Rule' : 'Fix'}${r.unitId ? ` for ${name(r.unitId)}` : ''}: ${r.text} (${r.why})`,
+            ),
+            '',
+          ]
+        : []),
     ].join('\n');
     await this.record.transaction(async (w) => {
       const doc = await w.create(
@@ -1634,18 +1715,48 @@ Frago: ${note}`.trim(),
       });
       await w.event(
         'after-action',
-        { documentId: doc.entityId, lessons: review.lessons },
+        {
+          documentId: doc.entityId,
+          lessons: review.lessons,
+          openFindings: review.openFindings,
+          recommendations: review.recommendations,
+        },
         { operationId: opId },
         HQ_ACTOR,
       );
       await this.hqSitrep(
         w,
         opId,
-        `After Action review written; ${review.lessons.length} lesson(s) recorded. A lesson becomes an order only when you give it: on the unit's Rules tab, or in chat.`,
+        `After Action review written; ${review.lessons.length} lesson(s) recorded${review.openFindings.length ? `, ${review.openFindings.length} finding(s) left open` : ''}. A lesson becomes an order only when you give it: on the unit's Rules tab, or in chat.${review.recommendations.length ? ` ${review.recommendations.length} came up before: HQ recommends them under Needs you.` : ''}`,
       );
     });
     await this.phase(opId, 'closed', 'After Action review complete');
     await this.renderRecord(opId);
+  }
+
+  /** The reviews of the theatre's other operations: what they drew and what they left open. */
+  private async earlierReviews(
+    op: RecordVersion<OperationBody>,
+  ): Promise<AfterActionInput['earlier']> {
+    if (!op.body.theatreId) return [];
+    const ops = (
+      await this.record.listActive('operation', { bodyContains: { theatreId: op.body.theatreId } })
+    ).filter((o) => o.entityId !== op.entityId && o.body.afterActionDocumentId);
+    const out: AfterActionInput['earlier'] = [];
+    for (const o of ops) {
+      const [e] = await this.record.listEvents(
+        { operationId: o.entityId, kinds: ['after-action'], limit: 1 },
+        { latest: true },
+      );
+      if (!e) continue;
+      const b = (e as RecordEvent<'after-action'>).body;
+      out.push({
+        operation: o.body.name,
+        lessons: b.lessons.map((l) => l.text),
+        openFindings: (b.openFindings ?? []).map((f) => f.text),
+      });
+    }
+    return out;
   }
 
   // ---------- Helpers ----------
@@ -1655,7 +1766,16 @@ Frago: ${note}`.trim(),
     const from = op.body.phase;
     if (from === to || !canTransition(from, to)) return;
     await this.record.transaction(async (w) => {
-      await w.revise('operation', opId, (o) => ({ ...o, phase: to }), { actor: HQ_ACTOR, reason });
+      await w.revise(
+        'operation',
+        opId,
+        (o) => ({
+          ...o,
+          phase: to,
+          ...(to === 'closed' ? { closedAt: new Date().toISOString() } : {}),
+        }),
+        { actor: HQ_ACTOR, reason },
+      );
       await w.event('operation.phase', { from, to, reason }, { operationId: opId }, HQ_ACTOR);
     });
   }

@@ -96,4 +96,26 @@ test('put a theatre on GitHub, plan a campaign in it, watch the steps run in tur
   await expect
     .poll(() => execFileSync('git', ['-C', bare, 'rev-parse', 'main']).toString().trim())
     .not.toBe(pushed);
+
+  // The same finding was left open by both steps: HQ recommends the fix under Needs you, with
+  // one button and no stop (D130). Taken up, it is an operation in the theatre.
+  await page.goto('/approvals');
+  const recs = page.getByRole('list', { name: 'HQ recommends' });
+  await expect(recs).toContainText('Fix: Fix touch targets on the add button are below 24px');
+  await expect(recs).toContainText('Left open again after Operation Build the first version');
+  await expectAccessible(page, 'needs you with a recommendation');
+  await recs.getByRole('button', { name: 'Launch the fix' }).click();
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Operation launched in Theatre Campaign Trail' }),
+  ).toBeVisible();
+  await expect(recs).toHaveCount(0);
+  await page.goto('/theatres');
+  await page.getByRole('link', { name: 'Theatre Campaign Trail' }).click();
+  await expect(
+    page.getByRole('link', { name: 'Operation Fix: touch targets on the add button' }),
+  ).toBeVisible();
+  // Each operation shows its time and spend.
+  await expect(
+    page.getByLabel('Time and spend of Operation Build the first version'),
+  ).toContainText('compute units');
 });

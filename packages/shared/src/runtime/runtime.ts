@@ -106,6 +106,12 @@ export interface TaskBrief {
   permissions: BriefPermission[];
   /** In a fully automatic theatre: nothing waits for the Commander; HQ decides what the rules would escalate (D125). */
   autonomous: boolean;
+  /**
+   * The unit before this one has not handed off yet (D129): prepare what can be prepared
+   * (test plan, harness) on the current base, commit it, then hold with `blocked` whose reason
+   * starts with `READY_FOR_HANDOFF`. The handoff queues the task again with a Frago.
+   */
+  preparing: boolean;
   /** The last handover for this work (this task, or the one it continues). */
   lastHandover: BriefHandover | null;
   /** Field Manual entries relevant to the task, plus pinned ones. */
@@ -415,6 +421,8 @@ export interface InterpretInput {
   theatres?: { id: string; name: string; status: string }[];
   /** Campaigns under way or held, for "cancel the campaign", "carry on with the campaign". */
   campaigns?: { id: string; name: string; theatreId: string; status: string; step: number }[];
+  /** HQ's open recommendations (D130). */
+  recommendations?: { id: string; kind: 'rule' | 'fix'; text: string; unitName: string | null }[];
   /** Whether "everything, stand down" is in force. */
   allHalted: boolean;
   /** The operation that is the main effort, if any. */
@@ -453,14 +461,23 @@ export interface AfterActionInput {
   units: { id: string; name: string }[];
   /** What happened, in order: sitreps, handoffs, send-backs, blocks, the deployment. */
   timeline: { at: string; unit: string | null; kind: string; text: string }[];
+  /** Earlier reviews in the same theatre: their lessons and the findings they left open. */
+  earlier: { operation: string; lessons: string[]; openFindings: string[] }[];
 }
 
 export interface AfterActionReview {
   summary: string;
   wentWell: string[];
   toImprove: string[];
-  /** Lessons saved as standing orders (unitId null = every unit). */
+  /** Lessons recorded for the Commander (unitId null = every unit). */
   lessons: { unitId: string | null; text: string }[];
+  /** Defects found and left: waived, recorded, not fixed (unitId = who found it). */
+  openFindings: { unitId: string | null; text: string }[];
+  /**
+   * What HQ recommends because it came up before (D130): a rule (a lesson an earlier review
+   * also drew) or a fix (a finding an earlier operation also left open). Empty the first time.
+   */
+  recommendations: { kind: 'rule' | 'fix'; unitId: string | null; text: string; why: string }[];
 }
 
 export interface DisputeInput {

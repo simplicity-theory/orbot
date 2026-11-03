@@ -30,6 +30,64 @@ describe('SimulatedOverseer', () => {
     expect(d.proposedTasks.map((t) => t.botId)).toEqual(['2', '2', '2']);
   });
 
+  it('After Action: findings left open are listed; what came up before is recommended (D130)', () => {
+    const units = [
+      { id: 'e', name: 'Engineers' },
+      { id: 'i', name: 'Inspection' },
+    ];
+    const timeline = [
+      {
+        at: '1',
+        unit: 'Inspection',
+        kind: 'sendback',
+        text: 'Sent back by Inspection: tests are missing.',
+      },
+      {
+        at: '2',
+        unit: 'Inspection',
+        kind: 'sitrep',
+        text: 'Finding (low) recorded, not fixed: touch targets below 24px.',
+      },
+    ];
+    const first = o.afterAction({
+      operation: { name: 'A', intent: 'x' },
+      units,
+      timeline,
+      earlier: [],
+    });
+    expect(first.openFindings).toEqual([{ unitId: 'i', text: 'touch targets below 24px' }]);
+    expect(first.lessons).toEqual([
+      { unitId: 'i', text: 'Before handing over, check: tests are missing.' },
+    ]);
+    expect(first.recommendations).toEqual([]);
+    const second = o.afterAction({
+      operation: { name: 'B', intent: 'y' },
+      units,
+      timeline,
+      earlier: [
+        {
+          operation: 'A',
+          lessons: first.lessons.map((l) => l.text),
+          openFindings: first.openFindings.map((f) => f.text),
+        },
+      ],
+    });
+    expect(second.recommendations).toEqual([
+      {
+        kind: 'rule',
+        unitId: 'i',
+        text: 'Before handing over, check: tests are missing.',
+        why: 'Drawn again after Operation A.',
+      },
+      {
+        kind: 'fix',
+        unitId: 'i',
+        text: 'Fix touch targets below 24px',
+        why: 'Left open again after Operation A.',
+      },
+    ]);
+  });
+
   it('promotes new lessons, merges repeats and retires what is marked obsolete', () => {
     const actions = o.curate({
       unit: { id: 'u', name: 'E' },

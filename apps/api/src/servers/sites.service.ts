@@ -76,8 +76,9 @@ export class SitesService implements OnModuleInit {
   }
 
   /** Where a site is served. */
+  /** Where ORBOT serves the site: a path on ORBOT's own origin, so the link works wherever ORBOT is opened from (D131). */
   url(supplyId: string): string {
-    return `${this.config.webOrigin.replace(/\/$/, '')}/api/sites/${supplyId}/`;
+    return `/api/sites/${supplyId}/`;
   }
 
   static isSite(s: RecordVersion<SupplyBody> | null | undefined): s is Site {
