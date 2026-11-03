@@ -105,10 +105,12 @@ const CHAT_KINDS = new Set(['chat.message', 'chat.readback', 'orders.log', 'pend
             </p>
           }
           @if (sending(); as text) {
-            <article class="msg mine">
-              <p class="who">You</p>
-              <p class="text">{{ text }}</p>
-            </article>
+            @if (!echoed()) {
+              <article class="msg mine">
+                <p class="who">You</p>
+                <p class="text">{{ text }}</p>
+              </article>
+            }
             <p class="thinking meta" role="status">{{ v.label }} is reading your message…</p>
           }
         } @else {
@@ -220,6 +222,24 @@ export class ChatPanel {
   protected readonly view = httpResource<ChatView>(() => apiUrl.chat(this.channel()));
   protected readonly label = computed(() => this.view.value()?.label ?? 'Overseer');
   protected readonly sending = signal<string | null>(null);
+  /** When the message now being sent was sent; the record's copy of it is at least this new. */
+  private readonly sentAt = signal(0);
+  /**
+   * The message is on the record before the Overseer answers it, and the live reload shows it
+   * then; from that moment the optimistic bubble would be a second copy, so it steps aside.
+   */
+  protected readonly echoed = computed(() => {
+    const text = this.sending();
+    const v = this.view.value();
+    if (!text || !v) return false;
+    return v.items.some(
+      (e) =>
+        e.kind === 'chat.message' &&
+        e.actor === this.auth.actor() &&
+        (e.body as { text?: string }).text === text &&
+        Date.parse(e.createdAt) >= this.sentAt(),
+    );
+  });
   protected readonly full = fullDate;
   protected readonly inputId = `chat-input-${Math.random().toString(36).slice(2, 8)}`;
   protected draft = '';
@@ -268,6 +288,7 @@ export class ChatPanel {
   protected async send(): Promise<void> {
     const text = this.draft.trim();
     if (!text || this.sending()) return;
+    this.sentAt.set(Date.now() - 60_000); // a minute of slack for clock skew
     this.sending.set(text);
     this.draft = '';
     try {

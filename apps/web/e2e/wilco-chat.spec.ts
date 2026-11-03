@@ -158,3 +158,34 @@ test('the command palette opens chat with a unit, and HQ routes orders to the na
   await expect(reply).toContainText('via HQ');
   await expect(reply).toContainText('New mission for Logistics');
 });
+
+test('a message you send shows once, even while the Overseer is still reading it', async ({
+  page,
+}) => {
+  const drawer = await openGuardChat(page);
+  await expect(drawer.getByRole('log')).toHaveAttribute('aria-busy', 'false');
+  // Hold the reply: the message is on the record (and in the log, by the live feed) before the
+  // reply comes back, which is when a second copy used to show.
+  let release!: () => void;
+  const held = new Promise<void>((r) => (release = r));
+  await page.route('**/api/chat/*', async (route) => {
+    if (route.request().method() !== 'POST') return route.continue();
+    const response = await route.fetch();
+    await held;
+    await route.fulfill({ response });
+  });
+  const text = 'How is the Guard doing today?';
+  const box = drawer.getByRole('textbox', { name: /Message/ });
+  await box.fill(text);
+  await box.press('Enter');
+  const copies = drawer.locator('article.msg').filter({ hasText: text });
+  await expect(drawer.getByRole('status')).toContainText('is reading your message');
+  await expect(copies).toHaveCount(1);
+  await expect(drawer.getByRole('article', { name: 'You' }).filter({ hasText: text })).toHaveCount(
+    1,
+  );
+  await expect(copies).toHaveCount(1);
+  release();
+  await expect(drawer.getByRole('status')).toHaveCount(0);
+  await expect(copies).toHaveCount(1);
+});
