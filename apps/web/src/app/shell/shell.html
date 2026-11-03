@@ -97,6 +97,7 @@
         }
         @for (a of needsYou.items(); track a.entityId + a.kind) {
           <div class="inbox-item">
+            <span class="meta">{{ a.unitName }}</span>
             <a [routerLink]="a.link | url" (click)="inboxOpen.set(false)">{{ a.title }}</a>
             @if (a.detail) {
               <span class="meta">{{ a.detail }}</span>

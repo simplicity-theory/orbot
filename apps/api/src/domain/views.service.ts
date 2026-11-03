@@ -398,7 +398,7 @@ export class ViewsService {
             {
               kind: 'awaiting-approval' as const,
               label: `${r.unit.name} backbrief awaiting approval`,
-              title: `Backbrief · ${r.unit.name} · Operation ${op.body.name}`,
+              title: `Backbrief · Operation ${op.body.name}`,
               detail: `Approve the plan: ${brief(r.mission.goal)}`,
               link: `/operations/${id}`,
               entityId: r.backbrief.id,
@@ -632,11 +632,11 @@ export interface AttentionContext {
   operations: Map<string, string>;
 }
 
-/** "Deploy #111 · Logistics · Operation Main List". */
+/** "Deploy #111 · Operation Main List" (the unit is shown beside the item, never in it). */
 function taskHeading(t: TaskView, ctx: AttentionContext): string {
   const m = t.missionId ? ctx.missions.find((x) => x.id === t.missionId) : null;
   const op = m?.operationId ? ctx.operations.get(m.operationId) : null;
-  return `${KIND_WORD[t.kind] ?? 'Task'} #${t.number} · ${ctx.unitName}${op ? ` · Operation ${op}` : ''}`;
+  return `${KIND_WORD[t.kind] ?? 'Task'} #${t.number}${op ? ` · Operation ${op}` : ''}`;
 }
 
 function budgetAttention(
@@ -654,7 +654,7 @@ function budgetAttention(
     {
       kind: 'budget',
       label: detail,
-      title: `Budget · ${label}`,
+      title: 'Compute budget',
       detail,
       link,
       entityId,
@@ -703,7 +703,6 @@ function unitAttention(
           !(i.kind === 'blocked-bot' && [...disputed].some((t) => i.link.endsWith(`/tasks/${t}`))),
       ),
       open,
-      u.body.name,
     ),
     ...budgetAttention(u.body.name, `/units/${u.entityId}`, u.entityId, budget),
     ...referred.map((d): AttentionItem => {
@@ -711,7 +710,7 @@ function unitAttention(
       return {
         kind: 'dispute',
         label: `Dispute to rule on: ${u.body.name} v ${against} — ${d.body.claim}`,
-        title: `Dispute · ${u.body.name} v ${against}`,
+        title: `Dispute with ${against}`,
         detail: `Rule on it: ${brief(d.body.claim)}`,
         link: `/disputes#dispute-${d.entityId}`,
         entityId: d.entityId,
@@ -727,14 +726,13 @@ function unitAttention(
 function withEscalations(
   items: AttentionItem[],
   open: RecordEvent<'escalation'>[],
-  unitName: string,
 ): AttentionItem[] {
   const escalated = new Set(open.map((e) => e.taskId).filter(Boolean));
   return [
     ...open.map((e): AttentionItem => ({
       kind: 'escalation',
       label: `Escalated to you: ${e.body.text}`,
-      title: `Escalated · ${unitName}`,
+      title: `Escalation · ${e.body.cause.replace(/-/g, ' ')}`,
       detail: brief(e.body.text),
       link: e.taskId
         ? taskLink(e.unitId!, e.botId, e.taskId)
@@ -766,7 +764,7 @@ function attentionFor(
     items.push({
       kind: 'awaiting-approval',
       label: `Backbrief awaiting approval: ${bb.mission.goal}`,
-      title: `Backbrief · ${ctx.unitName}${op ? ` · Operation ${op}` : ''}`,
+      title: `Backbrief${op ? ` · Operation ${op}` : ''}`,
       detail: `Approve the plan: ${brief(bb.mission.goal)}`,
       link: `/approvals#backbrief-${bb.id}`,
       entityId: bb.id,
@@ -789,7 +787,7 @@ function attentionFor(
     items.push({
       kind: 'blocked-bot',
       label: `${b.callsign} is blocked`,
-      title: `${b.callsign} · ${ctx.unitName}`,
+      title: `Bot ${b.callsign}`,
       detail: 'Blocked with no task in hand',
       link: botLink(unitId, b.id),
       entityId: b.id,

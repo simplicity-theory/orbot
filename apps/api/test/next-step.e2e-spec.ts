@@ -69,7 +69,7 @@ describe('a held or failed task says what to do next', () => {
         kind: 'blocked-bot',
         entityId: id,
         next,
-        title: `Task #${d.task.number} · Engineers`,
+        title: `Task #${d.task.number}`,
         detail: 'Blocked: Upstream API client is not available yet.',
       }),
     );

@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Inject, Injectable } from '@nestjs/common';
 import type { SupplyBody, TaskBody, Workspace, WorkspaceRestart } from '@orbot/shared';
@@ -44,6 +44,7 @@ export class WorkspaceManager {
     const repo = this.repo(supply);
     const base = task.baseRef ?? repo.defaultBranch;
     return this.locked(repo.localPath, async () => {
+      await this.ensureDefaultBranchUnlocked(supply, repo);
       const tasksDir = join(this.config.workspacesDir, 'tasks');
       await mkdir(tasksDir, { recursive: true });
       const path = join(tasksDir, `task-${task.number}`);
@@ -106,10 +107,48 @@ export class WorkspaceManager {
     }
   }
 
+  /**
+   * A repository with no commits (a GitHub repository made empty, a bare `git init`) has no
+   * default branch to cut work from. ORBOT makes its first commit (a README) so work can start;
+   * it reaches the remote with the first push, like any other commit (D120). Returns true when
+   * the commit was made.
+   */
+  async ensureDefaultBranch(supply: SupplyBody): Promise<boolean> {
+    const repo = this.repo(supply);
+    return this.locked(repo.localPath, () => this.ensureDefaultBranchUnlocked(supply, repo));
+  }
+
+  private async ensureDefaultBranchUnlocked(supply: SupplyBody, repo: RepoSpec): Promise<boolean> {
+    const has = await git(repo.localPath, ['rev-parse', '--verify', '--quiet', repo.defaultBranch])
+      .then(() => true)
+      .catch(() => false);
+    if (has) return false;
+    const any = await git(repo.localPath, ['rev-list', '--all', '--count']).catch(() => '0');
+    if (Number(any) > 0) {
+      throw new Error(
+        `${supply.name} has commits but no branch called ${repo.defaultBranch}; set its default branch to the one it uses.`,
+      );
+    }
+    await git(repo.localPath, ['checkout', '--quiet', '-B', repo.defaultBranch]);
+    await writeFile(
+      join(repo.localPath, 'README.md'),
+      `# ${supply.name}\n\nStarted by ORBOT: the repository was empty, so this is its first commit.\n`,
+    );
+    await git(repo.localPath, ['add', 'README.md']);
+    await git(repo.localPath, [
+      'commit',
+      '--quiet',
+      '-m',
+      'First commit (the repository was empty)',
+    ]);
+    return true;
+  }
+
   /** Create an operation's integration branch from the default branch (idempotent). */
   async createBranch(supply: SupplyBody, name: string): Promise<string> {
     const repo = this.repo(supply);
     return this.locked(repo.localPath, async () => {
+      await this.ensureDefaultBranchUnlocked(supply, repo);
       const exists = (await git(repo.localPath, ['branch', '--list', name])).trim();
       if (!exists) await git(repo.localPath, ['branch', name, repo.defaultBranch]);
       return git(repo.localPath, ['rev-parse', name]);

@@ -682,10 +682,11 @@ export class HqService implements OnApplicationBootstrap, OnModuleDestroy {
     const op = await this.record.requireActive('operation', opId);
     this.assertOpen(op, 'Start over');
     if (!op.body.missionIds.length) {
-      throw new ConflictException({
-        message: `Operation ${op.body.name} has no missions out yet.`,
-        action: 'It is still being planned; there is nothing to start over.',
-      });
+      // Nothing out yet: plan again (after a repository was put right, say).
+      await this.hqSitrep(null, opId, `Operation ${op.body.name}: planning again at the O Group.`);
+      await this.phase(opId, 'o-group', 'Planning again');
+      this.enqueue(opId, 'o-group', () => this.oGroup(opId));
+      return this.record.requireActive('operation', opId);
     }
     const why = `Operation ${op.body.name} started over${note ? `: ${note}` : ''}`;
     const missions = await this.withdrawMissions(op, why, actor);
@@ -919,6 +920,20 @@ export class HqService implements OnApplicationBootstrap, OnModuleDestroy {
     const resources = await this.resourcesOf(op);
     const repo = resources.find((r) => r.body.spec.kind === 'repository') ?? null;
     const integrationBranch = repo ? `orbot/op-${opId.slice(0, 8)}` : null;
+    // The branch the work lands on is opened first: if the repository cannot take it (no
+    // commits, no such default branch), nothing is issued and HQ says what to fix (D120).
+    if (repo && integrationBranch) {
+      try {
+        await this.workspaces.createBranch(repo.body, integrationBranch);
+      } catch (err) {
+        await this.hqSitrep(
+          null,
+          opId,
+          `Operation ${op.body.name} stays at the O Group: the integration branch cannot be opened in ${repo.body.name}: ${(err as Error).message} Fix the repository (or make another the main one), then Start over.`,
+        );
+        return;
+      }
+    }
 
     await this.record.transaction(async (w) => {
       const ids: string[] = [];

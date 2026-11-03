@@ -96,7 +96,7 @@ import { SandTable } from './sand-table';
                 [name]="'Operation ' + v.operation.name"
               />
               @if (v.operation.phase !== 'after-action') {
-                @if (v.missions.length) {
+                @if (v.missions.length || v.operation.phase === 'o-group') {
                   <orb-restart-operation
                     [operationId]="v.operation.id"
                     [name]="v.operation.name"

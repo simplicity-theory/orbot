@@ -43,6 +43,7 @@ test.describe('one bot, one task, on the record', () => {
   test('a blocked bot is one click from the ORBAT, with the reason', async ({ page }) => {
     await page.goto('/');
     await page
+      .getByRole('region', { name: 'Needs you in Engineers' })
       .getByRole('listitem')
       .filter({ hasText: 'Upstream API client' })
       .getByRole('link')

@@ -40,7 +40,7 @@ test('a stalled task is escalated to me; I acknowledge it, then set the threshol
   expect((await api.post(`/api/tasks/${task.id}/run`)).status()).toBe(202);
 
   await page.goto('/approvals');
-  const item = page.getByRole('listitem').filter({ hasText: 'Escalated ·' });
+  const item = page.getByRole('listitem').filter({ hasText: 'Escalation · stall' });
   await expect(item).toContainText(`Task #${task.number} “Rebuild the artifact cache” stalled`, {
     timeout: 20_000,
   });

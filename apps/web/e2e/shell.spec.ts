@@ -12,8 +12,8 @@ test.describe('app shell', () => {
     }
     const engineers = page.getByRole('article', { name: 'Engineers' });
     const strip = engineers.getByRole('region', { name: 'Needs you in Engineers' });
-    await expect(strip).toContainText('E-2 blocked');
-    await expect(strip).toContainText('failed');
+    await expect(strip).toContainText('Blocked: Upstream API client');
+    await expect(strip).toContainText('Failed:');
     await expect(strip).toContainText('Harden session handling');
     await expect(page.getByRole('button', { name: /items need you/ })).toContainText('5');
   });

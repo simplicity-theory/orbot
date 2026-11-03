@@ -15,6 +15,7 @@ import type { z } from 'zod';
 import { APP_CONFIG, type AppConfig } from '../config/config.js';
 import { git, GitError } from '../common/git.js';
 import { RecordService, type WriteContext } from '../record/record.service.js';
+import { WorkspaceManager } from '../runtime/workspace-manager.js';
 import { SecretsService } from '../secrets/secrets.service.js';
 import { templateById } from './templates.js';
 
@@ -38,6 +39,7 @@ export class SupplyService {
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     private readonly record: RecordService,
     private readonly secrets: SecretsService,
+    private readonly workspaces: WorkspaceManager,
   ) {}
 
   list() {
@@ -104,7 +106,27 @@ export class SupplyService {
       connected: true,
       spec: { kind: 'repository', location, localPath, defaultBranch, project },
     };
-    return this.record.create('supply', body, ctx, id);
+    // An empty repository (no commits) gets its first commit, so work can start from it.
+    const first = await this.workspaces.ensureDefaultBranch(body).catch((err: Error) => {
+      throw new BadRequestException({
+        message: `${input.name}: ${err.message}`,
+        action: 'Give the repository a first commit on its default branch, then connect it again.',
+      });
+    });
+    const created = await this.record.create('supply', body, ctx, id);
+    if (first) {
+      await this.record.event(
+        'sitrep',
+        {
+          level: 'hq',
+          text: `${input.name} was empty: ORBOT made its first commit (README.md) on ${defaultBranch}. It reaches the remote with the first push.`,
+          status: null,
+        },
+        {},
+        ctx.actor,
+      );
+    }
+    return created;
   }
 
   /**
