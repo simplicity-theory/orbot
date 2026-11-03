@@ -21,9 +21,12 @@ Conventions, layout and the five principles are in `CLAUDE.md`; design decisions
 
 ## Run it for real
 
-`docs/deploy.md`: one server, Docker Compose, automatic HTTPS, backups and upgrades.
+`docs/deploy.md`: the checkout in `/var/www/orbot`, one `orbot` command to set up, start,
+update and back it up; Docker Compose underneath, automatic HTTPS with a domain.
 
 ```bash
-cp deploy/orbot/env.production.example .env   # fill it in
-docker compose -f docker-compose.prod.yml --profile tls up -d --build
+git clone <this repository> /var/www/orbot
+sudo ln -sf /var/www/orbot/scripts/orbot /usr/local/bin/orbot
+orbot setup --port 3001 --runtime claude-code   # or --origin https://orbot.example.com --runtime claude
+orbot up                                        # later: orbot update
 ```

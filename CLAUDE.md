@@ -15,21 +15,21 @@ If an implementation choice conflicts with a principle, the principle wins. Reco
 
 ## Commands
 
-| What                                                                           | Command                                                   |
-| ------------------------------------------------------------------------------ | --------------------------------------------------------- |
-| Everything for local dev (Postgres, migrate, seed, shared+API+web with watch)  | `npm run dev` → http://localhost:4200                     |
-| Start Postgres only                                                            | `npm run db:up`                                           |
-| Migrate / seed                                                                 | `npm run db:migrate` / `npm run db:seed`                  |
-| Unit tests (all workspaces)                                                    | `npm test`                                                |
-| API e2e (needs Postgres)                                                       | `npm run test:e2e`                                        |
-| UI tests (Playwright + axe; starts its own API on :3100 and web on :4300)      | `npm run test:ui`                                         |
-| Full CI                                                                        | `npm run ci`                                              |
-| Design-token guard                                                             | `node scripts/check-tokens.mjs`                           |
-| Production (Docker Compose, one origin, HTTPS via Caddy; see `docs/deploy.md`) | `docker compose -f docker-compose.prod.yml up -d --build` |
+| What                                                                                                  | Command                                     |
+| ----------------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| Everything for local dev (Postgres, migrate, seed, shared+API+web with watch)                         | `npm run dev` → http://localhost:4200       |
+| Start Postgres only                                                                                   | `npm run db:up`                             |
+| Migrate / seed                                                                                        | `npm run db:migrate` / `npm run db:seed`    |
+| Unit tests (all workspaces)                                                                           | `npm test`                                  |
+| API e2e (needs Postgres)                                                                              | `npm run test:e2e`                          |
+| UI tests (Playwright + axe; starts its own API on :3100 and web on :4300)                             | `npm run test:ui`                           |
+| Full CI                                                                                               | `npm run ci`                                |
+| Design-token guard                                                                                    | `node scripts/check-tokens.mjs`             |
+| Production (checkout in `/var/www/orbot`; `scripts/orbot` wraps Docker Compose; see `docs/deploy.md`) | `orbot setup` / `orbot up` / `orbot update` |
 
 The Commander passphrase is `ORBOT_COMMANDER_PASSPHRASE` in `.env` (generated on the first `npm run dev`).
 Tests use the `orbot_test` / `orbot_secrets_test` databases and reset them; the dev databases are never touched by tests.
-`docs/deploy.md` is how ORBOT is run as production software (image, compose, backups, upgrades); `ORBOT_SEED=force` seeds the units without the demo.
+`docs/deploy.md` is how ORBOT is run as production software (`scripts/orbot`: setup, up, update, status, backup, restore; the image, compose and Caddy underneath); `ORBOT_SEED=force` seeds the units without the demo.
 
 ## Layout
 

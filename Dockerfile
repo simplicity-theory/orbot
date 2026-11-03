@@ -29,7 +29,10 @@ RUN npm ci --omit=dev --no-audit --no-fund && npm cache clean --force
 
 # ---- 3. Runtime ----
 FROM node:24-bookworm-slim
-ENV NODE_ENV=production \
+# The commit the image was built from (scripts/orbot passes it); shown by /api/health.
+ARG ORBOT_COMMIT=
+ENV ORBOT_COMMIT=$ORBOT_COMMIT \
+    NODE_ENV=production \
     ORBOT_ROOT=/app \
     ORBOT_WEB_DIST=/app/apps/web/dist/web/browser \
     ORBOT_WORKSPACES_DIR=/app/workspaces \

@@ -1,0 +1,224 @@
+#!/usr/bin/env bash
+# ORBOT's operator CLI: set up, start, update, back up and watch a production ORBOT.
+# Lives in the checkout it operates on (/var/www/orbot by convention); link it into PATH:
+#   sudo ln -sf /var/www/orbot/scripts/orbot /usr/local/bin/orbot
+#
+#   orbot setup [--origin URL] [--port N] [--runtime simulated|claude|claude-code] [--claude-home DIR]
+#   orbot up            build the image and start (or restart) everything
+#   orbot update        back up, pull, rebuild, restart, wait for health
+#   orbot status        containers, health, the commit running and the commit checked out
+#   orbot logs [svc]    follow the API's logs (or db, caddy)
+#   orbot backup [dir]  both databases and the workspaces (scripts/backup.sh)
+#   orbot restore DIR   replace everything with a backup (scripts/restore.sh; asks twice)
+#   orbot down          stop everything (data stays in the volumes)
+#   orbot passphrase    print the Commander passphrase from .env
+set -euo pipefail
+
+root="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
+cd "$root"
+compose=(docker compose -f docker-compose.prod.yml)
+
+say() { printf '\n\033[1;36m▸ %s\033[0m\n' "$*"; }
+die() { printf '\033[1;31m✖ %s\033[0m\n' "$*" >&2; exit 1; }
+
+# .env as the compose file sees it (after setup).
+load_env() {
+  [[ -f .env ]] || die "No .env in $root. Run: orbot setup"
+  set -a
+  # shellcheck disable=SC1091
+  source .env
+  set +a
+  : "${ORBOT_API_PORT:=3000}" "${ORBOT_BIND:=127.0.0.1}" "${ORBOT_WEB_ORIGIN:=http://localhost:$ORBOT_API_PORT}"
+}
+
+# With the tls profile when ORBOT_DOMAIN is set, so Caddy is part of "everything".
+profile_args() {
+  if [[ -n "${ORBOT_DOMAIN:-}" ]]; then printf -- '--profile\ntls\n'; fi
+}
+
+health_url() {
+  local host="$ORBOT_BIND"
+  [[ "$host" == "0.0.0.0" || "$host" == "::" ]] && host="127.0.0.1"
+  echo "http://${host}:${ORBOT_API_PORT}/api/health"
+}
+
+wait_healthy() {
+  local url; url="$(health_url)"
+  say "Waiting for ORBOT to answer at $url…"
+  for _ in $(seq 1 120); do
+    if body="$(curl -fsS "$url" 2>/dev/null)"; then
+      echo "  $body"
+      return 0
+    fi
+    sleep 2
+  done
+  die "ORBOT did not become healthy in 4 minutes. See: orbot logs"
+}
+
+checked_out() { git -C "$root" rev-parse --short HEAD 2>/dev/null || echo "unknown"; }
+running_commit() {
+  curl -fsS "$(health_url)" 2>/dev/null | sed -n 's/.*"commit":"\([^"]*\)".*/\1/p'
+}
+
+cmd_setup() {
+  local origin="" port="" runtime="" claude_home=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --origin) origin="$2"; shift 2 ;;
+      --port) port="$2"; shift 2 ;;
+      --runtime) runtime="$2"; shift 2 ;;
+      --claude-home) claude_home="$2"; shift 2 ;;
+      *) die "Unknown option for setup: $1" ;;
+    esac
+  done
+  [[ -f .env ]] && die ".env already exists in $root; edit it, or move it away to set up again."
+  command -v openssl >/dev/null || die "openssl is needed to generate the secrets."
+  command -v docker >/dev/null || die "Docker is needed (with the compose plugin)."
+  docker compose version >/dev/null 2>&1 || die "The docker compose plugin is missing."
+
+  port="${port:-3000}"
+  origin="${origin:-http://localhost:$port}"
+  runtime="${runtime:-simulated}"
+  case "$runtime" in simulated|claude|claude-code) ;; *) die "--runtime must be simulated, claude or claude-code" ;; esac
+  claude_home="${claude_home:-$HOME/.claude}"
+  local domain=""
+  if [[ "$origin" == https://* ]]; then domain="${origin#https://}"; domain="${domain%%/*}"; fi
+  [[ "$origin" == http://localhost* || "$origin" == http://127.0.0.1* || "$origin" == https://* ]] \
+    || die "ORBOT_WEB_ORIGIN must be https://… or http://localhost[:port]: production refuses a plain-http origin anyone else could reach."
+
+  say "Writing .env with fresh secrets"
+  local secrets_key session passphrase pg_admin pg_owner pg_app pg_secrets
+  secrets_key="$(openssl rand -base64 32)"
+  session="$(openssl rand -base64 32)"
+  passphrase="$(openssl rand -base64 18)"
+  pg_admin="$(openssl rand -base64 24)"; pg_owner="$(openssl rand -base64 24)"
+  pg_app="$(openssl rand -base64 24)"; pg_secrets="$(openssl rand -base64 24)"
+  umask 077
+  sed \
+    -e "s|^ORBOT_WEB_ORIGIN=.*|ORBOT_WEB_ORIGIN=$origin|" \
+    -e "s|^ORBOT_DOMAIN=.*|ORBOT_DOMAIN=$domain|" \
+    -e "s|^ORBOT_API_PORT=.*|ORBOT_API_PORT=$port|" \
+    -e "s|^POSTGRES_ADMIN_PASSWORD=.*|POSTGRES_ADMIN_PASSWORD=$pg_admin|" \
+    -e "s|^ORBOT_DB_OWNER_PASSWORD=.*|ORBOT_DB_OWNER_PASSWORD=$pg_owner|" \
+    -e "s|^ORBOT_DB_APP_PASSWORD=.*|ORBOT_DB_APP_PASSWORD=$pg_app|" \
+    -e "s|^ORBOT_DB_SECRETS_PASSWORD=.*|ORBOT_DB_SECRETS_PASSWORD=$pg_secrets|" \
+    -e "s|^ORBOT_SECRETS_KEY=.*|ORBOT_SECRETS_KEY=$secrets_key|" \
+    -e "s|^ORBOT_SESSION_SECRET=.*|ORBOT_SESSION_SECRET=$session|" \
+    -e "s|^ORBOT_COMMANDER_PASSPHRASE=.*|ORBOT_COMMANDER_PASSPHRASE=$passphrase|" \
+    -e "s|^ORBOT_RUNTIME=.*|ORBOT_RUNTIME=$runtime|" \
+    -e "s|^ORBOT_CLAUDE_HOME=.*|ORBOT_CLAUDE_HOME=$claude_home|" \
+    deploy/orbot/env.production.example > .env
+  chmod 600 .env
+
+  if [[ "$runtime" == "claude-code" ]]; then
+    if [[ -d "$claude_home" ]]; then
+      if command -v setfacl >/dev/null; then
+        say "Letting the container's user (uid 1001) use the Claude login in $claude_home"
+        setfacl -R -m u:1001:rwX "$claude_home" && setfacl -R -d -m u:1001:rwX "$claude_home" \
+          || echo "  Could not set the ACL; run it yourself: setfacl -R -m u:1001:rwX $claude_home"
+      else
+        echo "  setfacl is not installed: give uid 1001 read/write access to $claude_home yourself."
+      fi
+    else
+      echo "  $claude_home does not exist yet: run \`claude\` once and log in, then: setfacl -R -m u:1001:rwX $claude_home"
+    fi
+  fi
+  if [[ "$runtime" == "claude" ]]; then
+    echo "  Put your key in .env: ANTHROPIC_API_KEY=…"
+  fi
+
+  cat <<MSG
+
+✔ $root/.env written (mode 600). Your Commander passphrase:
+
+    $passphrase
+
+Next:  orbot up      then open $origin
+Keep the ORBOT_SECRETS_KEY line of .env somewhere safe: backups cannot be read without it.
+MSG
+}
+
+cmd_up() {
+  load_env
+  mapfile -t profiles < <(profile_args)
+  say "Building the image for $(checked_out) and starting ORBOT"
+  ORBOT_COMMIT="$(checked_out)" "${compose[@]}" "${profiles[@]}" up -d --build --remove-orphans
+  wait_healthy
+  echo
+  echo "✔ ORBOT is up at $ORBOT_WEB_ORIGIN"
+}
+
+cmd_update() {
+  local backup=1
+  [[ "${1:-}" == "--no-backup" ]] && backup=0
+  load_env
+  [[ -d .git ]] || die "$root is not a git checkout; update it the way it was installed."
+  say "Fetching"
+  git fetch --quiet
+  local branch; branch="$(git rev-parse --abbrev-ref HEAD)"
+  local behind; behind="$(git rev-list --count "HEAD..origin/$branch" 2>/dev/null || echo 0)"
+  if [[ "$behind" == "0" ]]; then
+    echo "  Already at the latest commit on $branch ($(checked_out))."
+    if [[ "$(running_commit)" == "$(checked_out)" ]]; then
+      echo "  And it is what is running. Nothing to do."
+      return 0
+    fi
+    echo "  But the running build differs: rebuilding."
+  else
+    echo "  $behind new commit(s) on $branch:"
+    git --no-pager log --oneline "HEAD..origin/$branch" | sed 's/^/    /'
+    if [[ -n "$(git status --porcelain)" ]]; then
+      die "The checkout has local changes; commit or discard them first (git status)."
+    fi
+  fi
+  if [[ "$backup" == 1 ]] && "${compose[@]}" ps --status running --services 2>/dev/null | grep -qx db; then
+    say "Backing up first"
+    scripts/backup.sh
+  fi
+  if [[ "$behind" != "0" ]]; then
+    say "Pulling"
+    git pull --ff-only --quiet
+  fi
+  cmd_up
+  echo "  Running: $(running_commit)"
+}
+
+cmd_status() {
+  load_env
+  "${compose[@]}" ps
+  echo
+  local running; running="$(running_commit || true)"
+  echo "Checked out: $(checked_out)    Running: ${running:-not answering}    Origin: $ORBOT_WEB_ORIGIN"
+  if curl -fsS "$(health_url)" >/dev/null 2>&1; then
+    echo "Health: $(curl -fsS "$(health_url)")"
+  else
+    echo "Health: not answering at $(health_url)"
+  fi
+}
+
+cmd_logs() { load_env; "${compose[@]}" logs -f --tail=200 "${1:-api}"; }
+cmd_backup() { load_env; scripts/backup.sh "$@"; }
+cmd_restore() { load_env; scripts/restore.sh "$@"; }
+cmd_down() {
+  load_env
+  mapfile -t profiles < <(profile_args)
+  "${compose[@]}" "${profiles[@]}" down
+  echo "✔ Stopped. The record, secrets and workspaces stay in the Docker volumes."
+}
+cmd_passphrase() { load_env; echo "$ORBOT_COMMANDER_PASSPHRASE"; }
+
+usage() { sed -n '2,15p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+
+case "${1:-}" in
+  setup) shift; cmd_setup "$@" ;;
+  up) cmd_up ;;
+  update) shift; cmd_update "$@" ;;
+  status) cmd_status ;;
+  logs) shift; cmd_logs "$@" ;;
+  backup) shift; cmd_backup "$@" ;;
+  restore) shift; cmd_restore "$@" ;;
+  down) cmd_down ;;
+  passphrase) cmd_passphrase ;;
+  -h|--help|help|"") usage ;;
+  *) die "Unknown command: $1 (try: orbot help)" ;;
+esac

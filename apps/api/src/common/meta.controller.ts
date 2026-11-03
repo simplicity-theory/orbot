@@ -8,6 +8,8 @@ import { RuntimeRegistry } from '../runtime/runtime.registry.js';
 import { SECRETS_POOL } from '../secrets/secrets.service.js';
 
 export const ORBOT_VERSION = '0.1.0';
+/** The commit the running build came from, when the image was built with it (`orbot update`). */
+export const ORBOT_COMMIT = process.env['ORBOT_COMMIT'] || null;
 
 export interface HealthView {
   ok: boolean;
@@ -16,6 +18,8 @@ export interface HealthView {
   /** The secrets database answers. */
   secrets: 'ok' | 'down';
   version: string;
+  /** Short git commit of the build, or null when not built from a checkout. */
+  commit: string | null;
 }
 
 @Controller()
@@ -54,6 +58,7 @@ export class MetaController {
       record: up(record),
       secrets: up(secrets),
       version: ORBOT_VERSION,
+      commit: ORBOT_COMMIT,
     };
     if (!view.ok) throw new HttpException(view, HttpStatus.SERVICE_UNAVAILABLE);
     return view;

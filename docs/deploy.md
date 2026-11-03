@@ -1,104 +1,123 @@
-# Running ORBOT in production
+# Running ORBOT
 
-One Linux server, Docker Compose, one origin. The API serves the built web app, Postgres holds
-the record and the secrets store, and Caddy (optional) terminates HTTPS. Everything a bot does
-runs inside the API container (git worktrees under a volume) or on the servers you connect in
-the Supply Depot.
+ORBOT runs as one Docker Compose project: Postgres (the record and the secrets store), the
+API with the web app built in, and, when it has a domain, Caddy for HTTPS. The checkout lives
+in `/var/www/orbot`, and everything an operator does goes through one command, `orbot`, which
+is `scripts/orbot` in that checkout. Bots work inside the API container (git worktrees in a
+volume) and on the servers you connect in the Supply Depot.
 
 ## What you need
 
-- A Linux VPS (2 CPU, 4 GB RAM, 20 GB disk is enough to start) with Docker Engine 24+ and the
-  compose plugin. Your user in the `docker` group.
-- A DNS name pointing at it (for HTTPS), ports 80 and 443 open. Without a domain, run it on a
-  private network and put your own TLS in front: the session cookie is marked `Secure` as soon
-  as `ORBOT_WEB_ORIGIN` is https, and the API refuses a plain-http origin other than localhost.
+- Linux with Docker Engine 24+ and the compose plugin, your user in the `docker` group,
+  `git`, `openssl` and `curl`. For `claude-code` bots, `setfacl` (package `acl`).
+- **On your own machine:** nothing else. ORBOT answers at `http://localhost:<port>`, the one
+  plain-http origin it accepts.
+- **On a server for others to reach:** a DNS name pointing at it, ports 80 and 443 open. Caddy
+  gets the certificate. ORBOT refuses to start in production with a plain-http origin anyone
+  else could reach, because the session cookie would travel in clear.
 - For real bots: an Anthropic API key (`claude` runtime), or your own Claude plan signed in
-  with Claude Code on the server (`claude-code` runtime; one Commander's own use only).
+  with Claude Code on the same machine (`claude-code` runtime; one Commander's own use only).
 
-## First deployment
-
-```bash
-git clone <your fork or this repository> orbot && cd orbot
-cp deploy/orbot/env.production.example .env
-chmod 600 .env
-```
-
-Fill in `.env`. Generate what must be random:
+## Install
 
 ```bash
-openssl rand -base64 32   # ORBOT_SECRETS_KEY (exactly 32 bytes, base64)
-openssl rand -base64 32   # ORBOT_SESSION_SECRET
-openssl rand -base64 18   # ORBOT_COMMANDER_PASSPHRASE
-openssl rand -base64 24   # POSTGRES_ADMIN_PASSWORD, ORBOT_DB_OWNER_PASSWORD,
-                          # ORBOT_DB_APP_PASSWORD, ORBOT_DB_SECRETS_PASSWORD (one each)
+sudo mkdir -p /var/www/orbot && sudo chown "$USER": /var/www/orbot
+git clone <your fork or this repository> /var/www/orbot
+sudo ln -sf /var/www/orbot/scripts/orbot /usr/local/bin/orbot
 ```
 
-Set `ORBOT_DOMAIN` and `ORBOT_WEB_ORIGIN=https://<ORBOT_DOMAIN>`. Then:
+`orbot` always acts on the checkout it was linked from, whatever directory you run it in.
+
+## Set up
+
+`orbot setup` writes `/var/www/orbot/.env` (mode 600) from `deploy/orbot/env.production.example`
+with every secret freshly generated, and prints your Commander passphrase once.
 
 ```bash
-docker compose -f docker-compose.prod.yml --profile tls up -d --build
-docker compose -f docker-compose.prod.yml logs -f api
+# Your own machine, bots on your Claude plan (the dev API uses 3000; take 3001):
+orbot setup --port 3001 --runtime claude-code
+
+# A server with a domain, bots on an API key:
+orbot setup --origin https://orbot.example.com --runtime claude
 ```
 
-The first start builds the image (several minutes), waits for Postgres, applies the
-migrations, seeds the force (`ORBOT_SEED=force`: Engineers, Logistics, Inspection and Guard
-with their Overseers, bots and Field Manuals, nothing else) and listens. Caddy fetches a
-certificate for `ORBOT_DOMAIN`. Open `https://<ORBOT_DOMAIN>` and sign in with
-`ORBOT_COMMANDER_PASSPHRASE`.
+| Option          | Default                 | Meaning                                                                                                           |
+| --------------- | ----------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `--origin URL`  | `http://localhost:PORT` | `ORBOT_WEB_ORIGIN`, where ORBOT is reached. `https://…` also sets `ORBOT_DOMAIN`, and `orbot up` then runs Caddy. |
+| `--port N`      | `3000`                  | The port on this machine (loopback only; Caddy or your own proxy faces the internet).                             |
+| `--runtime …`   | `simulated`             | `simulated` (scripted bots, free), `claude` (needs `ANTHROPIC_API_KEY` in `.env`), `claude-code`.                 |
+| `--claude-home` | `~/.claude`             | For `claude-code`: the `claude` login to mount into the container.                                                |
 
-Without the `tls` profile the API listens on `127.0.0.1:3000` only (`ORBOT_BIND`,
-`ORBOT_API_PORT`); point your own reverse proxy at it and keep `ORBOT_TRUST_PROXY=on` so client
-addresses and the scheme come from its `X-Forwarded-*` headers.
+For `claude-code`, run `claude` once as yourself and log in before `orbot up`. The container's
+user (uid 1001) needs to read and write that folder; `orbot setup` grants it with an ACL
+(`setfacl -R -m u:1001:rwX ~/.claude`), which leaves your own access as it was. Anthropic's
+terms allow a Pro/Max login for one person's own use, so don't give other officers orders
+while bots run on it.
 
-The container refuses to start in production with placeholder database passwords or a
-plain-http origin, and says which setting to fix.
+Anything else (`ORBOT_CLAUDE_MODEL`, the pace settings, `ORBOT_SEED`) is edited in `.env`.
+`ORBOT_SEED=force` (the default) seeds the four units with their Overseers, bots and Field
+Manuals and nothing else; `demo` adds the demo repositories and an operation; `none` leaves
+the record empty.
 
-## Choosing the bot runtime
-
-| `ORBOT_RUNTIME` | Needs                                                           | Billed to        |
-| --------------- | --------------------------------------------------------------- | ---------------- |
-| `simulated`     | nothing (scripted bots; for trying the command system)          | nothing          |
-| `claude`        | `ANTHROPIC_API_KEY`                                             | the API key      |
-| `claude-code`   | the `claude` login mounted at `/home/orbot/.claude` (see below) | your Claude plan |
-
-For `claude-code`: install Claude Code on the server, run `claude` once as the user who runs
-compose and log in, then set `ORBOT_CLAUDE_HOME=/home/<you>/.claude` and
-`ORBOT_RUNTIME=claude-code` in `.env`. The container user (uid 1001) must be able to read and
-write that directory (`chown -R 1001:1001` or a group with write access). Anthropic's terms
-allow a Pro/Max login for one person's own use, so do not give other officers orders while
-bots run on it.
-
-The model for both Claude runtimes is `ORBOT_CLAUDE_MODEL`.
-
-## After the first start
-
-- **Connect your repositories** in the Supply Depot (a clone URL, with a token stored as a
-  credential and referenced by name), issue them to units, and state your first intent.
-- **Servers** your bots should use (dev servers, staging, production) are connected with an
-  SSH key stored as a credential. The container ships git, ssh and rsync.
-- **Other officers** are added under Officers; they sign in with their own login.
-
-## Health, logs, updates
-
-- `GET /api/health` answers `{ ok, record, secrets, version }` and 503 when a database is
-  down. Compose uses it; so can your monitoring.
-- Logs go to stdout as JSON through the redacting logger: `docker compose -f
-docker-compose.prod.yml logs -f api`. Secret values never appear in them.
-- **Upgrading:** `git pull`, then `docker compose -f docker-compose.prod.yml up -d --build`.
-  Migrations are forward-only and run on start; the record is append-only, so an upgrade
-  never rewrites history.
-
-## Backups
+## Start
 
 ```bash
-scripts/backup.sh                  # → backups/<date>/ record.dump, secrets.dump, workspaces.tar.gz
-scripts/restore.sh backups/<date>  # replaces both databases and the workspaces; asks twice
+orbot up
 ```
 
-Keep the backup folder **and** the `ORBOT_SECRETS_KEY` line of `.env` somewhere other than the
-server. The secrets dump is encrypted with that key and cannot be read without it; the record
-is useless to a bot without the credentials it names. Schedule `scripts/backup.sh` from cron
-(daily is reasonable) and copy the folder off the machine.
+Builds the image (several minutes the first time), starts Postgres, applies the migrations,
+seeds the force, waits until `/api/health` answers, and prints the address. Sign in with the
+passphrase (`orbot passphrase` shows it again). Then connect your repositories in the Supply
+Depot, or use **New project** on Operations for a single-HTML-file project.
+
+## Update
+
+```bash
+orbot update
+```
+
+1. Fetches and lists the new commits on the current branch (and stops if the checkout has local
+   changes).
+2. Backs up both databases and the workspaces first (`orbot update --no-backup` skips it).
+3. Pulls (fast-forward only), rebuilds the image stamped with the commit, restarts, and waits
+   for health. Migrations are forward-only and run on start; the record is append-only, so an
+   update never rewrites history.
+4. Prints the commit now running. `orbot status` shows it next to the commit checked out at
+   any time; `/api/health` carries it as `commit`.
+
+If nothing new was pulled but the running build is older than the checkout, `orbot update`
+rebuilds anyway.
+
+## Every day
+
+| Command                  | What it does                                                                                                            |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| `orbot status`           | Containers, health, the commit running and the commit checked out.                                                      |
+| `orbot logs [db\|caddy]` | Follows the API's logs (JSON through the redacting logger; secret values never appear).                                 |
+| `orbot backup [dir]`     | `record.dump`, `secrets.dump`, `workspaces.tar.gz` into `backups/<date>/`.                                              |
+| `orbot restore DIR`      | Replaces both databases and the workspaces with a backup. Asks twice: it is the one operation that throws records away. |
+| `orbot down`             | Stops everything. The record, secrets and workspaces stay in the Docker volumes.                                        |
+| `orbot passphrase`       | Prints the Commander passphrase from `.env`.                                                                            |
+
+Schedule `orbot backup` from cron (daily is reasonable) and copy `backups/` off the machine,
+together with the `ORBOT_SECRETS_KEY` line of `.env`: the secrets dump is encrypted with that
+key and cannot be read without it, and the record is useless to a bot without the credentials
+it names.
+
+## Health, monitoring
+
+`GET /api/health` answers `{ ok, record, secrets, version, commit }` and 503 when a database
+is down. Compose restarts the API on it; your monitoring can read it too. The API listens on
+`127.0.0.1:<port>` (`ORBOT_BIND` in `.env` to change it); with a domain, Caddy proxies
+`https://<domain>` to it and `ORBOT_TRUST_PROXY=on` makes client addresses and the scheme come
+from its headers.
+
+## Reaching it from other devices
+
+Make the origin https: a domain pointed at the machine (`orbot setup --origin https://…`, or
+set `ORBOT_WEB_ORIGIN` and `ORBOT_DOMAIN` in `.env` and `orbot up`), or a private network with
+its own certificates (Tailscale's HTTPS names work with the same two settings). A plain-http
+origin other than localhost is refused.
 
 ## What this setup does not do yet
 

@@ -62,7 +62,13 @@ describe('production readiness', () => {
 
   it('answers the health check from both databases', async () => {
     const h = await request(t.app.getHttpServer()).get('/api/health').expect(200);
-    expect(h.body).toEqual({ ok: true, record: 'ok', secrets: 'ok', version: expect.any(String) });
+    expect(h.body).toEqual({
+      ok: true,
+      record: 'ok',
+      secrets: 'ok',
+      version: expect.any(String),
+      commit: null,
+    });
   });
 
   it('throttles sign-in after repeated failures and clears on success', async () => {

@@ -20,8 +20,9 @@ step "Format check"
 npx prettier --check .
 
 step "Server scripts (deploy/)"
-(cd deploy && docker run --rm -v "$PWD:/mnt:ro" -w /mnt koalaman/shellcheck:v0.10.0 -x \
-  lib/common.sh apps/*/*.sh server/*.sh orbot/*.sh)
+docker run --rm -v "$PWD:/mnt:ro" -w /mnt koalaman/shellcheck:v0.10.0 -x \
+  deploy/lib/common.sh deploy/apps/*/*.sh deploy/server/*.sh deploy/orbot/*.sh \
+  scripts/orbot scripts/backup.sh scripts/restore.sh
 
 step "Typecheck"
 npm run typecheck -w @orbot/shared

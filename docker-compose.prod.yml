@@ -25,7 +25,10 @@ services:
       retries: 30
 
   api:
-    build: .
+    build:
+      context: .
+      args:
+        ORBOT_COMMIT: ${ORBOT_COMMIT:-}
     image: orbot:latest
     restart: unless-stopped
     env_file: .env
