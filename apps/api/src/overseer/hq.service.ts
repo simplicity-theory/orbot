@@ -233,7 +233,8 @@ export class HqService implements OnApplicationBootstrap, OnModuleDestroy {
   /**
    * Assign a depot item to an operation. Waiting at the O Group, it may be what it needed: HQ
    * checks again. Once missions are out, the units in the chain get it too (a production
-   * environment excepted: deploy rights are given by order, with confirmation).
+   * environment excepted: deploy rights are given by order, with confirmation; a static site
+   * goes to the unit that deploys).
    */
   async assignResource(opId: string, supplyId: string, actor: string, reason?: string) {
     const op = await this.record.requireActive('operation', opId);
@@ -475,20 +476,28 @@ export class HqService implements OnApplicationBootstrap, OnModuleDestroy {
 
   /**
    * Give the units in an operation's chain what it was assigned, and open the integration branch
-   * on each new repository. A production environment is not issued: that is deploy rights.
+   * on each new repository. A production environment is not issued: that is deploy rights, given
+   * by order with confirmation. A static site is the exception: ORBOT publishes it itself, no
+   * server is reached, so the unit that deploys gets it with the mission (D111).
    */
   private async equipChain(op: RecordVersion<OperationBody>, items: RecordVersion<SupplyBody>[]) {
     const missions = await Promise.all(
       op.body.missionIds.map((id) => this.record.requireActive('mission', id)),
     );
     const unitIds = [...new Set(missions.map((m) => m.body.unitId))];
+    const deployUnitIds = [
+      ...new Set(missions.filter((m) => m.body.stage === 'deploy').map((m) => m.body.unitId)),
+    ];
     for (const s of items) {
       if (s.body.spec.kind === 'repository' && op.body.integrationBranch) {
         await this.workspaces.createBranch(s.body, op.body.integrationBranch);
       }
-      if (s.body.spec.kind === 'environment' && s.body.spec.details['tier'] === 'production')
-        continue;
-      for (const unitId of unitIds) {
+      let receivers = unitIds;
+      if (s.body.spec.kind === 'environment' && s.body.spec.details['tier'] === 'production') {
+        if (!s.body.spec.site) continue;
+        receivers = deployUnitIds;
+      }
+      for (const unitId of receivers) {
         const u = await this.record.requireActive('unit', unitId);
         if (!u.body.supplyIds.includes(s.entityId)) {
           await this.supply.allotToUnit(s.entityId, unitId, {

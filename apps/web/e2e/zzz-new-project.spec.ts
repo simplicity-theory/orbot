@@ -16,11 +16,6 @@ test('start a new single-HTML project: operation launched with its repository an
   await dialog
     .getByLabel('Intent')
     .fill('A personal ledger that works offline and keeps its data in the browser.');
-  await dialog
-    .getByLabel('Deploy rights to the site')
-    .selectOption({ label: 'Logistics (DevOps)' });
-  await expect(dialog.getByRole('button', { name: 'Start project and launch' })).toBeDisabled();
-  await dialog.getByLabel(/deploy rights cannot be taken back/).check();
   await expectAccessible(page, 'new project dialog');
   await dialog.getByRole('button', { name: 'Start project and launch' }).click();
 

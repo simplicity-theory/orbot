@@ -232,7 +232,7 @@ export class SandTableService {
           ...at,
           severity: 'blocker',
           text: `${name} has no production environment: the deploy will block.`,
-          fix: `Grant ${name} production deploy rights (in chat, to HQ).`,
+          fix: `Give ${name} deploy rights to the operation's production environment (or site): in chat to HQ, “Give ${name} deploy rights to <its name>”, or issue it from the Supply Depot.`,
           link: '/chat/hq',
         });
       }

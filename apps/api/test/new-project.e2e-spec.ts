@@ -62,7 +62,6 @@ describe('New project: a single HTML file, published by ORBOT', () => {
           name: 'Ledger',
           kind: 'single-html',
           intent: 'A personal ledger that works offline and keeps its data in the browser.',
-          deployRightsUnitId: units.log,
         })
         .expect(201)
     ).body;
@@ -119,7 +118,7 @@ describe('New project: a single HTML file, published by ORBOT', () => {
     );
   });
 
-  it('gave the project a production static site, held by Logistics, that meets the plan’s deploy need', async () => {
+  it('gave the project a production static site that meets the plan’s deploy need; HQ issued it to the unit that deploys', async () => {
     expect(project.site).toMatchObject({
       name: 'Ledger site',
       connected: true,
@@ -130,8 +129,16 @@ describe('New project: a single HTML file, published by ORBOT', () => {
         site: { entry: 'index.html', last: null },
       },
     });
-    const log = await t.app.get(RecordService).requireActive('unit', units.log!);
-    expect(log.body.supplyIds).toContain(project.site.id);
+    // The site went to Logistics with its deploy mission, and to nobody else (D111).
+    for (const [slug, holds] of [
+      ['log', true],
+      ['eng', false],
+      ['ins', false],
+      ['grd', false],
+    ] as const) {
+      const u = await t.app.get(RecordService).requireActive('unit', units[slug]!);
+      expect(u.body.supplyIds.includes(project.site.id)).toBe(holds);
+    }
     expect(op.resources).toMatchObject({ blocked: false, missing: [] });
     expect(op.resources.assigned.map((s) => s.name)).toEqual(['Ledger', 'Ledger site']);
     expect(op.operation.repoSupplyId).toBe(project.repository.id);

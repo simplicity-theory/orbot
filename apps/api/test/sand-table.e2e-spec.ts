@@ -85,7 +85,7 @@ describe('Sand table', () => {
     const deploy = v.sandTable!.body.findings.find((f) => f.text.startsWith('Logistics has no'))!;
     expect(deploy).toMatchObject({
       unitId: logId,
-      fix: 'Grant Logistics production deploy rights (in chat, to HQ).',
+      fix: "Give Logistics deploy rights to the operation's production environment (or site): in chat to HQ, “Give Logistics deploy rights to <its name>”, or issue it from the Supply Depot.",
       link: '/chat/hq',
     });
     expect(v.sandTable!.body.estimate).toEqual({ tasks: 4, units: 16 });

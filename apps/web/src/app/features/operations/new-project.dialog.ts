@@ -1,10 +1,8 @@
 import { DialogRef } from '@angular/cdk/dialog';
-import { httpResource } from '@angular/common/http';
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
-import type { UnitView } from '@orbot/shared';
-import { Api, apiUrl } from '../../core/api';
+import { Api } from '../../core/api';
 import { toUserError, type UserFacingError } from '../../core/api-error';
 import { Term } from '../../ui/term';
 import { Toasts } from '../../ui/toast';
@@ -59,34 +57,16 @@ import { Toasts } from '../../ui/toast';
         step="1"
         [(ngModel)]="budget"
       />
-      @if (units.value(); as list) {
-        <label for="np-unit">Deploy rights to the site</label>
-        <select id="np-unit" name="unit" class="input" [(ngModel)]="deployUnitId">
-          <option [ngValue]="null">Not yet (issue them later, with confirmation)</option>
-          @for (u of list; track u.id) {
-            <option [ngValue]="u.id">{{ u.name }} ({{ u.role }})</option>
-          }
-        </select>
-        @if (deployUnitId) {
-          <label class="check">
-            <input type="checkbox" name="confirm" [(ngModel)]="confirmed" />
-            <span>
-              I understand deploy rights cannot be taken back: {{ unitName() }} will publish the
-              site whenever a deploy is approved.
-            </span>
-          </label>
-        }
-      }
+      <p class="hint">
+        The site is ORBOT’s own, no server: the unit that deploys gets it with its mission, and each
+        deploy still waits for your approval.
+      </p>
       @if (error(); as e) {
         <p role="alert" class="error">{{ e.message }} {{ e.action }}</p>
       }
       <div class="actions">
         <button type="button" class="btn btn--ghost" (click)="ref.close()">Cancel</button>
-        <button
-          type="submit"
-          class="btn btn--primary"
-          [disabled]="busy() || !name.trim() || (!!deployUnitId && !confirmed)"
-        >
+        <button type="submit" class="btn btn--primary" [disabled]="busy() || !name.trim()">
           {{ intent.trim() ? 'Start project and launch' : 'Start project' }}
         </button>
       </div>
@@ -109,17 +89,11 @@ export class NewProjectDialog {
   private readonly api = inject(Api);
   private readonly router = inject(Router);
   private readonly toasts = inject(Toasts);
-  protected readonly units = httpResource<UnitView[]>(() => apiUrl.units());
   protected name = '';
   protected intent = '';
   protected budget: number | null = null;
-  protected deployUnitId: string | null = null;
-  protected confirmed = false;
   protected readonly busy = signal(false);
   protected readonly error = signal<UserFacingError | null>(null);
-  protected readonly unitName = computed(
-    () => this.units.value()?.find((u) => u.id === this.deployUnitId)?.name ?? 'the unit',
-  );
 
   protected async submit(): Promise<void> {
     this.busy.set(true);
@@ -130,7 +104,7 @@ export class NewProjectDialog {
         kind: 'single-html',
         intent: this.intent.trim() || null,
         budgetUnits: this.budget || null,
-        deployRightsUnitId: this.confirmed ? this.deployUnitId : null,
+        deployRightsUnitId: null,
       });
       this.ref.close();
       if (p.operation) {
