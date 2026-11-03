@@ -1,5 +1,7 @@
 # ORBOT
 
+Source: https://github.com/simplicity-theory/orbot
+
 Command teams of software-development bots the way an officer commands units: state intent,
 issue orders, read reports. HQ plans an operation, each unit (Engineers, Inspection, Guard,
 Logistics) briefs back its plan, bots work in their own git worktrees, and everything they do is
@@ -25,7 +27,7 @@ Conventions, layout and the five principles are in `CLAUDE.md`; design decisions
 update and back it up; Docker Compose underneath, automatic HTTPS with a domain.
 
 ```bash
-git clone <this repository> /var/www/orbot
+git clone git@github.com:simplicity-theory/orbot.git /var/www/orbot
 sudo ln -sf /var/www/orbot/scripts/orbot /usr/local/bin/orbot
 orbot setup --port 3001 --runtime claude-code   # or --origin https://orbot.example.com --runtime claude
 orbot up                                        # later: orbot update

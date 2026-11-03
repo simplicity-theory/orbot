@@ -20,9 +20,12 @@ volume) and on the servers you connect in the Supply Depot.
 
 ## Install
 
+The code is at https://github.com/simplicity-theory/orbot (private: the machine needs an SSH
+key or a token that can read it; a deploy key with read access is enough for `orbot update`).
+
 ```bash
 sudo mkdir -p /var/www/orbot && sudo chown "$USER": /var/www/orbot
-git clone <your fork or this repository> /var/www/orbot
+git clone git@github.com:simplicity-theory/orbot.git /var/www/orbot
 sudo ln -sf /var/www/orbot/scripts/orbot /usr/local/bin/orbot
 ```
 
