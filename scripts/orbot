@@ -156,6 +156,9 @@ cmd_update() {
   say "Fetching"
   git fetch --quiet
   local branch; branch="$(git rev-parse --abbrev-ref HEAD)"
+  if ! git merge-base HEAD "origin/$branch" >/dev/null 2>&1; then
+    die "The checkout and origin/$branch share no history (the repository was rewritten). Once: git -C $root fetch origin && git -C $root reset --hard origin/$branch   then run orbot update again."
+  fi
   local behind; behind="$(git rev-list --count "HEAD..origin/$branch" 2>/dev/null || echo 0)"
   if [[ "$behind" == "0" ]]; then
     echo "  Already at the latest commit on $branch ($(checked_out))."
