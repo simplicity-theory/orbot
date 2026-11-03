@@ -14,6 +14,7 @@ import { PhaseStepper } from '../../ui/phase-stepper';
 import { Skeleton } from '../../ui/skeleton';
 import { Term } from '../../ui/term';
 import { IntentDialog } from './intent.dialog';
+import { NewProjectDialog } from './new-project.dialog';
 import { MainEfforts } from '../../core/main-effort';
 import { MainEffortBadge } from '../../ui/main-effort';
 import { MissionChain } from './mission-chain';
@@ -41,9 +42,12 @@ import { MissionChain } from './mission-chain';
             Each operation runs from your intent through HQ to every unit involved.
           </p>
         </div>
-        <button *orbCan="null" type="button" class="btn btn--primary" (click)="stateIntent()">
-          State intent
-        </button>
+        <div *orbCan="null" class="buttons">
+          <button type="button" class="btn" (click)="newProject()">New project</button>
+          <button type="button" class="btn btn--primary" (click)="stateIntent()">
+            State intent
+          </button>
+        </div>
       </header>
       @if (ops.error(); as err) {
         <orb-load-error [error]="err" (retry)="ops.reload()" />
@@ -95,6 +99,11 @@ import { MissionChain } from './mission-chain';
     </div>
   `,
   styles: `
+    .buttons {
+      display: inline-flex;
+      gap: var(--space-2);
+      flex-wrap: wrap;
+    }
     .board {
       display: flex;
       flex-direction: column;
@@ -139,5 +148,9 @@ export class OperationsPage {
 
   protected stateIntent(): void {
     openDialog(this.dialog, IntentDialog, null, 'State intent');
+  }
+
+  protected newProject(): void {
+    openDialog(this.dialog, NewProjectDialog, null, 'New project');
   }
 }

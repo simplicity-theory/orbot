@@ -15,19 +15,21 @@ If an implementation choice conflicts with a principle, the principle wins. Reco
 
 ## Commands
 
-| What                                                                          | Command                                  |
-| ----------------------------------------------------------------------------- | ---------------------------------------- |
-| Everything for local dev (Postgres, migrate, seed, shared+API+web with watch) | `npm run dev` → http://localhost:4200    |
-| Start Postgres only                                                           | `npm run db:up`                          |
-| Migrate / seed                                                                | `npm run db:migrate` / `npm run db:seed` |
-| Unit tests (all workspaces)                                                   | `npm test`                               |
-| API e2e (needs Postgres)                                                      | `npm run test:e2e`                       |
-| UI tests (Playwright + axe; starts its own API on :3100 and web on :4300)     | `npm run test:ui`                        |
-| Full CI                                                                       | `npm run ci`                             |
-| Design-token guard                                                            | `node scripts/check-tokens.mjs`          |
+| What                                                                           | Command                                                   |
+| ------------------------------------------------------------------------------ | --------------------------------------------------------- |
+| Everything for local dev (Postgres, migrate, seed, shared+API+web with watch)  | `npm run dev` → http://localhost:4200                     |
+| Start Postgres only                                                            | `npm run db:up`                                           |
+| Migrate / seed                                                                 | `npm run db:migrate` / `npm run db:seed`                  |
+| Unit tests (all workspaces)                                                    | `npm test`                                                |
+| API e2e (needs Postgres)                                                       | `npm run test:e2e`                                        |
+| UI tests (Playwright + axe; starts its own API on :3100 and web on :4300)      | `npm run test:ui`                                         |
+| Full CI                                                                        | `npm run ci`                                              |
+| Design-token guard                                                             | `node scripts/check-tokens.mjs`                           |
+| Production (Docker Compose, one origin, HTTPS via Caddy; see `docs/deploy.md`) | `docker compose -f docker-compose.prod.yml up -d --build` |
 
 The Commander passphrase is `ORBOT_COMMANDER_PASSPHRASE` in `.env` (generated on the first `npm run dev`).
 Tests use the `orbot_test` / `orbot_secrets_test` databases and reset them; the dev databases are never touched by tests.
+`docs/deploy.md` is how ORBOT is run as production software (image, compose, backups, upgrades); `ORBOT_SEED=force` seeds the units without the demo.
 
 ## Layout
 
@@ -59,6 +61,8 @@ Tests use the `orbot_test` / `orbot_secrets_test` databases and reset them; the 
   - `officers/` — `OfficersService` (officer entities; passwords hashed in the secrets store as `officer-login.<id>`), `AuthorityService` + `AuthorityGuard` (rank checks on every write).
   - `servers/` — `ServersService` + `SshClient`: environments that are servers. Bots run commands and upload their committed work over SSH (key by credential name in a temp file, pinned host keys, no agent/config); every command on the record as `server.command`; production only inside an approved deploy (policy rule). Dev servers (tier `dev`): `devRun` syncs the bot's working tree to `~/orbot-dev/<repo>/<bot>` (rsync, else tar) and runs there; `devFetch` copies files back. The bot workspace (`setupWorkspace`) gives dev work its own login without sudo (`orbot-dev`, ORBOT-generated key); a server that runs apps refuses bots its admin login outside an approved deploy (policy rule).
   - `servers/apps.service.ts` — `AppsService`: installs apps from `deploy/apps/<id>` (manifest + scripts) on a server under `systemd-run`, follows the state file they write, and adds what they provide (a `model` supply item: OpenAI-compatible URL, model, key by name). See `deploy/README.md`. `HealthService`: a server's health check (login, each app's `status.sh`, disks) as a `server.health` event.
+  - `servers/sites.service.ts` — `SitesService`: static sites (environments with no server, `spec.site`): `publish` takes files from a task's HEAD into `<dir>/versions/<stamp>` and points `current` at it (`deployment` event with the URL); a policy rule allows production sites only inside an approved deploy. `SitesController` serves `current` at `/api/sites/:id/` to anyone, sandboxed by CSP, and `/download` (D104).
+  - `supply/templates.ts` + `SupplyService.createRepository` — repositories started from a template (`single-html`, `empty`); the shape stays on the depot item (`RepositorySupply.project`) and is briefed to bots, Overseers and HQ. `supply/projects.service.ts` — `ProjectsService`: one order (`POST /api/projects`, chat `new-project`) makes the repository, its site, deploy rights if confirmed, and the operation.
   - `code/` — `CodeService`: the code bots wrote, read straight from git (read-only, never copied into the record): repository history per branch, commits with diffs (`diff.ts` parses them), a task's changes, each commit tied to the task/bot/operation by the events that name it (D103).
   - `connections/` — `ConnectionsService` + `Connector` (GitHub adapter): push and pull requests, pipeline results (a red pipeline holds production deploys via a policy rule), issues taken on as missions. Tokens by credential name only.
   - `chat/` — `ChatService` (message → `runtime.interpret` → actions/pending → orders log → read-back; undo; confirm/decline) and `ActionsService` (one executor per `ChatAction`, each returning its inverse).

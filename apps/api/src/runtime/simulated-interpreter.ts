@@ -50,6 +50,12 @@ const CANCEL_OPERATION =
   /^(?:please\s+)?(?:cancel|call off|abort|scrub)\s+(?:the\s+)?(?:operation|op)\b\s*([^:]*?)(?:\s*(?::|—|\bbecause\b)\s*(.+))?$/i;
 /** "…, using payments-service and gpu1" at the end of a statement of intent. */
 const INTENT_RESOURCES = /,?\s+(?:using|with|on|against)\s+(?:the\s+|our\s+)?(.+)$/i;
+/**
+ * "Start a (new) project called X: …", "New project X, a single HTML file that …". The name
+ * ends at a colon, comma, dash or quote; what follows is the intent.
+ */
+const NEW_PROJECT =
+  /^(?:(?:please|maybe|perhaps|possibly|let'?s)\s+)*(?:start|create|begin|open|new)\s+(?:a\s+)?(?:new\s+)?(?:single[- ]?(?:html|file)\s+)?project(?:\s+(?:called|named))?\s*["“]?([A-Za-z0-9][A-Za-z0-9 ._-]{0,59}?)["”]?\s*(?:[:,–—-]\s*(.+))?[.!]?$/i;
 const KIND_WORDS =
   /\b(repo|repository|repositories|server|environment|env|model|credential|token|key)\b/gi;
 const MAIN_EFFORT_CLEAR =
@@ -262,6 +268,27 @@ export class SimulatedInterpreter {
         continue;
       }
       if (!unit) {
+        // "Start a new project called Ledger: a ledger that works offline." A repository from a
+        // template, a site to deploy it to, and (with the rest of the sentence) the operation.
+        const project = NEW_PROJECT.exec(sentence);
+        if (!input.channelUnitId && project) {
+          const rest = (project[2] ?? '').trim().replace(/[.!]+$/, '');
+          const action: ChatAction = {
+            kind: 'new-project',
+            unitId: null,
+            name: project[1]!.trim(),
+            projectKind: 'single-html',
+            intent: rest ? `${sentenceCase(rest)}.` : null,
+          };
+          if (hedged) {
+            kinds.add('musing');
+            out.musings.push(action);
+          } else {
+            kinds.add('order');
+            out.actions.push(action);
+          }
+          continue;
+        }
         // To HQ, an order that names no unit is a statement of intent: launch an operation.
         if (
           !input.channelUnitId &&

@@ -1,6 +1,11 @@
 import { OFFICER_SECRET_PREFIX } from '../officers/officers.service.js';
 import { Body, Controller, Get, HttpCode, Post } from '@nestjs/common';
-import { ConnectRepositoryRequest, StoreCredentialRequest } from '@orbot/shared';
+import {
+  ConnectEnvironmentRequest,
+  ConnectRepositoryRequest,
+  CreateRepositoryRequest,
+  StoreCredentialRequest,
+} from '@orbot/shared';
 import { z } from 'zod';
 import { Actor } from '../auth/auth.guard.js';
 import { ZodPipe } from '../common/zod.pipe.js';
@@ -8,10 +13,6 @@ import { toView, toViews } from '../domain/view.js';
 import { SecretsService } from '../secrets/secrets.service.js';
 import { SupplyService } from './supply.service.js';
 
-const ConnectEnvironment = z.object({
-  name: z.string().trim().min(1).max(100),
-  tier: z.enum(['staging', 'production']),
-});
 const Allotment = z.object({
   supplyId: z.uuid(),
   unitId: z.uuid(),
@@ -43,6 +44,20 @@ export class SupplyController {
     );
   }
 
+  /** Start a repository from a template; ORBOT makes the first commit and connects it. */
+  @Post('repositories/new')
+  async createRepository(
+    @Body(new ZodPipe(CreateRepositoryRequest)) body: z.output<typeof CreateRepositoryRequest>,
+    @Actor() actor: string,
+  ) {
+    return toView(
+      await this.supply.createRepository(body, {
+        actor,
+        reason: `Repository ${body.name} created`,
+      }),
+    );
+  }
+
   /** Write-only: the value goes to the secrets store and is never returned. */
   @Post('credentials')
   async storeCredential(
@@ -56,13 +71,13 @@ export class SupplyController {
 
   @Post('environments')
   async connectEnvironment(
-    @Body(new ZodPipe(ConnectEnvironment)) body: z.output<typeof ConnectEnvironment>,
+    @Body(new ZodPipe(ConnectEnvironmentRequest)) body: z.output<typeof ConnectEnvironmentRequest>,
     @Actor() actor: string,
   ) {
     return toView(
       await this.supply.connectEnvironment(body, {
         actor,
-        reason: `Environment ${body.name} connected`,
+        reason: `${body.site ? 'Site' : 'Environment'} ${body.name} connected`,
       }),
     );
   }

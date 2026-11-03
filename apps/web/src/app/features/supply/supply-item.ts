@@ -1,3 +1,4 @@
+import { DatePipe } from '@angular/common';
 import { Component, computed, inject, input, output, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import type { SupplyView, UnitView } from '@orbot/shared';
@@ -11,7 +12,7 @@ import { iconOf, tierOf } from './supply-sections';
 /** One thing in the depot: what it is, how it is reached, and which units hold it. */
 @Component({
   selector: 'orb-supply-item',
-  imports: [Can, Icon, RouterLink],
+  imports: [Can, DatePipe, Icon, RouterLink],
   template: `
     @let s = item();
     <div class="head">
@@ -28,6 +29,12 @@ import { iconOf, tierOf } from './supply-sections';
       @if (tier(); as t) {
         <span class="chip" [class.prod]="t === 'production'">{{ t }}</span>
       }
+      @if (site()) {
+        <span class="chip">static site</span>
+      }
+      @if (project(); as p) {
+        <span class="chip">{{ p.kind === 'single-html' ? 'single HTML file' : p.kind }}</span>
+      }
       @if (!s.connected) {
         <span class="chip off">not connected</span>
       }
@@ -35,6 +42,14 @@ import { iconOf, tierOf } from './supply-sections';
         <span class="end buttons">
           <button *orbCan="null" type="button" class="btn small" (click)="edit.emit()">Edit</button>
           <a class="btn small" [routerLink]="['/supply/servers', s.id]">Apps & workspace</a>
+        </span>
+      } @else if (site(); as st) {
+        <span class="end buttons">
+          <button *orbCan="null" type="button" class="btn small" (click)="edit.emit()">Edit</button>
+          @if (st.last) {
+            <a class="btn small" [href]="siteUrl()" target="_blank" rel="noopener">Open</a>
+            <a class="btn small" [href]="siteUrl() + 'download'">Download</a>
+          }
         </span>
       } @else if (s.spec.kind === 'environment') {
         <button *orbCan="null" type="button" class="btn small end" (click)="edit.emit()">
@@ -56,6 +71,13 @@ import { iconOf, tierOf } from './supply-sections';
           <dd class="mono">{{ s.spec.location }}</dd>
           <dt>Default branch</dt>
           <dd class="mono">{{ s.spec.defaultBranch }}</dd>
+          @if (s.spec.project; as p) {
+            <dt>Product</dt>
+            <dd>
+              One self-contained HTML file, <span class="mono">{{ p.entry }}</span
+              >: no build step, no server.
+            </dd>
+          }
         }
         @case ('credential') {
           <dt>Secret</dt>
@@ -92,6 +114,25 @@ import { iconOf, tierOf } from './supply-sections';
           }
         }
         @default {
+          @if (site(); as st) {
+            <dt>Published at</dt>
+            <dd>
+              @if (st.last) {
+                <a [href]="siteUrl()" target="_blank" rel="noopener">{{ siteUrl() }}</a>
+              } @else {
+                <span class="mono">{{ siteUrl() }}</span> (nothing published yet)
+              }
+            </dd>
+            <dt>Last published</dt>
+            <dd>
+              @if (st.last; as last) {
+                <span class="mono">{{ last.commit.slice(0, 10) }}</span> on
+                {{ last.at | date: 'medium' }}
+              } @else {
+                never: the deploy task publishes it
+              }
+            </dd>
+          }
           @if (server(); as sv) {
             <dt>Login</dt>
             <dd class="mono">{{ sv.user }}&#64;{{ sv.host }}:{{ sv.port }}</dd>
@@ -277,6 +318,16 @@ export class SupplyItem {
     const s = this.item();
     return s.spec.kind === 'environment' ? (s.spec.server ?? null) : null;
   });
+  protected readonly site = computed(() => {
+    const s = this.item();
+    return s.spec.kind === 'environment' ? (s.spec.site ?? null) : null;
+  });
+  protected readonly project = computed(() => {
+    const s = this.item();
+    return s.spec.kind === 'repository' ? (s.spec.project ?? null) : null;
+  });
+  /** Where the site is served: the API's address, on this origin. */
+  protected readonly siteUrl = computed(() => `${location.origin}/api/sites/${this.item().id}/`);
   protected readonly apps = computed(() =>
     (this.server()?.apps ?? [])
       .filter((a) => a.status !== 'removed')

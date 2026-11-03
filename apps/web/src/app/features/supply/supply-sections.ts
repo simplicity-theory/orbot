@@ -8,10 +8,10 @@ export const SUPPLY_SECTIONS = [
     label: 'Repositories',
     icon: 'git-branch',
     add: 'Connect repository',
-    lede: 'Code your units work on. Each task gets its own git worktree from the local clone.',
+    lede: 'Code your units work on. Each task gets its own git worktree from the local clone. Start one from a template (a single HTML file) or connect your own.',
     empty: 'No repositories yet',
     emptyBody:
-      'Connect a local repository or a clone URL. Then issue it to the units that should work on it.',
+      'Start a repository from a template, or connect a local repository or a clone URL. Then issue it to the units that should work on it.',
   },
   {
     id: 'credentials',
@@ -28,10 +28,10 @@ export const SUPPLY_SECTIONS = [
     label: 'Servers & environments',
     icon: 'server',
     add: 'Add server or environment',
-    lede: 'Dev servers bots build and test on, staging, and production. Issuing production gives deploy rights.',
+    lede: 'Dev servers bots build and test on, staging, production, and static sites ORBOT publishes itself. Issuing production gives deploy rights.',
     empty: 'No servers or environments yet',
     emptyBody:
-      'Add a dev server for bots to build and test on, or the staging and production environments they deploy to.',
+      'Add a dev server for bots to build and test on, the staging and production environments they deploy to, or a static site ORBOT publishes with no server at all.',
   },
   {
     id: 'models',
@@ -107,7 +107,7 @@ export function iconOf(s: SupplyView): IconName {
     case 'model':
       return 'bot';
     case 'environment':
-      return s.spec.server ? 'server' : 'grid';
+      return s.spec.server ? 'server' : s.spec.site ? 'file-text' : 'grid';
     default:
       return 'coins';
   }

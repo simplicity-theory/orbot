@@ -82,11 +82,21 @@ export class BriefingService {
         rulesOfEngagement: unit.body.rulesOfEngagement,
       },
       workspace,
+      repository: await this.repository(task),
       permissions: await this.permissions(task.entityId),
       ...k,
       rulings: await this.rulings(task.entityId),
       recon,
     };
+  }
+
+  /** The repository the task works in, with the shape of the product when ORBOT templated it. */
+  private async repository(task: RecordVersion<TaskBody>): Promise<TaskBrief['repository']> {
+    const s = task.body.repoSupplyId
+      ? await this.record.getActive('supply', task.body.repoSupplyId)
+      : null;
+    if (!s || s.body.spec.kind !== 'repository') return null;
+    return { name: s.body.name, project: s.body.spec.project };
   }
 
   /** The unit's recon reports that share the most words with this work (at most two). */

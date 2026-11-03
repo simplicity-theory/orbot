@@ -1,5 +1,6 @@
 import type {
   OperationNeed,
+  ProjectShape,
   ProposedTask,
   RulesOfEngagement,
   TaskBody,
@@ -96,6 +97,8 @@ export interface TaskBrief {
     rulesOfEngagement: RulesOfEngagement;
   };
   workspace: Workspace;
+  /** The repository the task works in, and the shape of the product it holds (if templated). */
+  repository: { name: string; project: ProjectShape | null } | null;
   /** Decisions on this task's permission requests, oldest first: the bot follows them. */
   permissions: BriefPermission[];
   /** The last handover for this work (this task, or the one it continues). */
@@ -148,6 +151,24 @@ export interface RunContext {
   devRun(server: string | null, command: string): Promise<ServerResult>;
   /** Copy a file or directory from the bot's folder on a dev server back into the workspace. */
   devFetch(server: string | null, path: string): Promise<ServerResult>;
+  /** Static sites the unit holds: environments ORBOT publishes to itself, with no server. */
+  sites(): Promise<SiteInfo[]>;
+  /**
+   * Publish files from the task's committed work (HEAD) to a static site the unit holds.
+   * Policy-checked (production only inside an approved deploy) and recorded as a deployment.
+   */
+  publish(site: string, paths: string[]): Promise<ServerResult>;
+}
+
+export interface SiteInfo {
+  name: string;
+  tier: string;
+  /** Where the site is served. */
+  url: string;
+  /** The file served at its root. */
+  entry: string;
+  /** The commit published last, if any. */
+  lastCommit: string | null;
 }
 
 export interface ServerInfo {
@@ -171,7 +192,8 @@ export interface ServerResult {
 export interface LiveOrders {
   standingOrders: string[];
   rulesOfEngagement: RulesOfEngagement;
-  supply: { name: string; kind: string }[];
+  /** `tier` is set for environments (dev, staging, production). */
+  supply: { name: string; kind: string; tier: string | null }[];
 }
 
 export interface FragoNote {
@@ -279,7 +301,7 @@ export interface BackbriefInput {
    * Where the work can land: the operation's repositories (the first is the default), or the
    * unit's own. A proposed task may name one by id.
    */
-  repositories: { id: string; name: string }[];
+  repositories: { id: string; name: string; project?: ProjectShape | null }[];
   fieldManual: BriefFieldManualEntry[];
   /** Notes from the Commander on earlier rounds (when the plan was sent back). */
   commanderNotes: string[];
@@ -369,7 +391,7 @@ export interface OperationPlanInput {
   recon?: { unit: string; title: string; markdown: string }[];
   units: { id: string; name: string; role: string; standingMission: string }[];
   /** Resources the Commander already assigned to the operation. */
-  resources: { name: string; kind: string }[];
+  resources: { name: string; kind: string; project?: ProjectShape | null }[];
 }
 
 export interface OperationPlan {

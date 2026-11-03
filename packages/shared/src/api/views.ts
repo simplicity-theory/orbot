@@ -34,6 +34,13 @@ export type BotView = Versioned<BotBody>;
 export type TaskView = Versioned<TaskBody>;
 export type MissionView = Versioned<MissionBody>;
 export type OperationView = Versioned<OperationBody>;
+
+/** What starting a project made: its repository, its site, and (with an intent) its operation. */
+export interface NewProjectView {
+  repository: SupplyView;
+  site: SupplyView;
+  operation: OperationView | null;
+}
 export type DocumentView = Versioned<DocumentBody>;
 /** Supply as the UI sees it. Credential supply carries only the secret's name. */
 export type SupplyView = Versioned<SupplyBody>;

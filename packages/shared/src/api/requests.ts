@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { Rank } from '../domain/principal.js';
-import { DocumentKind, Id, ProposedTask } from '../domain/entities.js';
+import { DocumentKind, Id, ProjectKind, ProposedTask } from '../domain/entities.js';
 
 /** Request bodies shared by the API (validation) and the web app (typing). */
 
@@ -61,6 +61,48 @@ export const ConnectRepositoryRequest = z.object({
   defaultBranch: z.string().trim().min(1).max(200).optional(),
 });
 export type ConnectRepositoryRequest = z.input<typeof ConnectRepositoryRequest>;
+
+/** A project name: becomes the repository's folder name too. */
+const ProjectName = z
+  .string()
+  .trim()
+  .min(1)
+  .max(60)
+  .regex(/^[A-Za-z0-9][A-Za-z0-9 ._-]*$/, {
+    message: 'Use letters, digits, spaces, dots, dashes and underscores.',
+  });
+
+/** Create a repository from a template (ORBOT makes the first commit) and connect it. */
+export const CreateRepositoryRequest = z.object({
+  name: ProjectName,
+  /** `single-html`: one self-contained HTML file; `empty`: a README only. */
+  template: z.enum(['single-html', 'empty']).default('single-html'),
+});
+export type CreateRepositoryRequest = z.input<typeof CreateRepositoryRequest>;
+
+/** Connect a plain environment, or a static site ORBOT publishes itself (no server). */
+export const ConnectEnvironmentRequest = z.object({
+  name: z.string().trim().min(1).max(100),
+  tier: z.enum(['staging', 'production']),
+  /** A static site: deploying publishes files into a folder ORBOT serves. */
+  site: z.boolean().default(false),
+});
+export type ConnectEnvironmentRequest = z.input<typeof ConnectEnvironmentRequest>;
+
+/**
+ * Start a new project in one order: a repository from a template, a static site to deploy it to,
+ * and (with an intent) the operation that builds it, with both assigned.
+ */
+export const NewProjectRequest = z.object({
+  name: ProjectName,
+  kind: ProjectKind.default('single-html'),
+  /** What to build; without it only the repository and site are created. */
+  intent: z.string().trim().max(1000).nullable().default(null),
+  budgetUnits: z.number().positive().nullable().default(null),
+  /** Issue the site to this unit now (deploy rights: irreversible, so the web asks first). */
+  deployRightsUnitId: Id.nullable().default(null),
+});
+export type NewProjectRequest = z.input<typeof NewProjectRequest>;
 
 export const StoreCredentialRequest = z.object({
   name: z

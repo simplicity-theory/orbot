@@ -11,6 +11,8 @@ import type {
   ModelCheckView,
   ConnectServiceRequest,
   MeView,
+  NewProjectRequest,
+  NewProjectView,
   OfficerView,
   UpdateOfficerRequest,
   MainEffortView,
@@ -338,8 +340,23 @@ export class Api {
     return firstValueFrom(this.http.post<ModelCheckView>(`${API}/supply/models/${id}/check`, {}));
   }
 
-  connectEnvironment(name: string, tier: 'staging' | 'production') {
-    return firstValueFrom(this.http.post<SupplyView>(`${API}/supply/environments`, { name, tier }));
+  /** A plain environment, or (`site`) a static site ORBOT publishes itself: no server. */
+  connectEnvironment(name: string, tier: 'staging' | 'production', site = false) {
+    return firstValueFrom(
+      this.http.post<SupplyView>(`${API}/supply/environments`, { name, tier, site }),
+    );
+  }
+
+  /** Start a repository from a template; ORBOT makes the first commit and connects it. */
+  createRepository(name: string, template: 'single-html' | 'empty') {
+    return firstValueFrom(
+      this.http.post<SupplyView>(`${API}/supply/repositories/new`, { name, template }),
+    );
+  }
+
+  /** A new project: repository, site, and (with an intent) the operation that builds it. */
+  startProject(req: NewProjectRequest) {
+    return firstValueFrom(this.http.post<NewProjectView>(`${API}/projects`, req));
   }
 
   allotSupply(supplyId: string, unitId: string, revoke = false) {

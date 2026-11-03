@@ -39,6 +39,7 @@ type ReadbackItem = Readback['items'][number];
  */
 /** Orders about supply, budgets, operations and the main effort are the Commander's alone. */
 const COMMANDER_ONLY: ChatAction['kind'][] = [
+  'new-project',
   'supply-grant',
   'supply-revoke',
   'budget-grant',
@@ -538,6 +539,8 @@ export class ChatService {
   /** A one-line, human description of an action that has not run yet. */
   private async describe(a: ChatAction): Promise<string> {
     if (a.kind === 'create-operation') return `Launch Operation ${a.name}: “${a.intent}”`;
+    if (a.kind === 'new-project')
+      return `Start project ${a.name} (one HTML file, published by ORBOT)${a.intent ? `: “${a.intent}”` : ''}`;
     if (a.kind === 'assign-resource' || a.kind === 'release-resource') {
       const op = await this.record.requireActive('operation', a.operationId);
       const s = await this.record.requireActive('supply', a.supplyId);

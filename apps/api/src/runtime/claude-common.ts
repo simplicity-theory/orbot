@@ -169,6 +169,18 @@ export const TOOLS: BotTool[] = [
     input_schema: obj({ server: str, path: str }),
   },
   {
+    name: 'list_sites',
+    description:
+      'List the static sites your unit holds: environments with no server, which ORBOT publishes itself. Name, tier, URL, the file served at the root, and the commit published last.',
+    input_schema: obj({}),
+  },
+  {
+    name: 'publish',
+    description:
+      'Publish files from your committed work (HEAD of your branch) to one of your unit’s static sites: paths relative to the repository (leave empty for the project’s entry file). The site’s entry file (index.html) must be among them. Commit first. Recorded as a deployment; production sites only inside an approved deploy task.',
+    input_schema: obj({ site: str, paths: strArr }),
+  },
+  {
     name: 'dev_run',
     description:
       'Build, test or run anything on your unit’s dev server: your folder there is first brought up to date with your working tree (uncommitted edits included; .git and gitignored paths such as node_modules are left as they are), then the shell command runs in that folder. Install what you need (non-interactive; `sudo -n` if allowed). Leave server empty for the unit’s dev server.',
@@ -194,6 +206,24 @@ export const TOOLS: BotTool[] = [
   },
 ];
 
+/** What the shape of the product means for the bot's work, when the repository was templated. */
+export function projectRules(brief: Pick<TaskBrief, 'repository' | 'task'>): string {
+  const p = brief.repository?.project;
+  if (!p) return '';
+  if (p.kind === 'single-html') {
+    return [
+      `${brief.repository!.name} is a single-file web app: the whole product is ${p.entry}, one self-contained HTML file. No build step, no package manager, no server, and nothing fetched from any other origin at runtime: markup, styles and scripts stay inline in that file, and it must work opened straight from disk. Anything it remembers lives in the browser (localStorage, or files the user saves). Keep it accessible and usable on a phone.`,
+      `Test it with run_script (for example a Node script that parses ${p.entry} or checks what it must contain); a test page, if you add one, loads nothing but ${p.entry}'s code.`,
+      brief.task.kind === 'deploy'
+        ? `Deploying it means publishing ${p.entry} as it is: use list_sites to find the unit's site, then publish with no paths (the entry file).`
+        : '',
+    ]
+      .filter(Boolean)
+      .join(' ');
+  }
+  return '';
+}
+
 /** Recon is read-only: no tool that changes the workspace. */
 const WRITE_TOOLS = new Set([
   'write_file',
@@ -203,6 +233,7 @@ const WRITE_TOOLS = new Set([
   'server_run',
   'server_upload',
   'dev_fetch',
+  'publish',
 ]);
 export const RECON_TOOLS = TOOLS.filter((t) => !WRITE_TOOLS.has(t.name));
 
@@ -324,6 +355,25 @@ export abstract class ClaudeFamilyRuntime implements BotRuntime {
               : [],
           output: `exit ${r.exitCode ?? 'none (stopped)'}\n${r.output}`,
         };
+      }
+      case 'list_sites': {
+        const list = await ctx.sites();
+        return {
+          events: [],
+          output: list.length
+            ? list
+                .map(
+                  (x) =>
+                    `- ${x.name} (${x.tier}): ${x.url}, serves ${x.entry} at its root${x.lastCommit ? `, last published ${x.lastCommit.slice(0, 10)}` : ', nothing published yet'}`,
+                )
+                .join('\n')
+            : 'Your unit holds no static sites.',
+        };
+      }
+      case 'publish': {
+        // The sites service puts the deployment on the record.
+        const r = await ctx.publish(s('site'), (input['paths'] as string[]) ?? []);
+        return { events: [], output: `exit ${r.exitCode ?? 'none'}\n${r.output}` };
       }
       case 'server_run':
       case 'server_upload': {
@@ -467,6 +517,7 @@ export abstract class ClaudeFamilyRuntime implements BotRuntime {
       'If a check you are running fails because of the previous unit’s work, use send_back with a reason they can act on. If you need something only someone outside the unit can give (access, a decision), use blocked. If another unit’s rules conflict with your brief, use raise_dispute; once ruled on, follow the ruling. If your unit’s rules of engagement say something must be escalated, use request_permission before doing it.',
       'If your unit holds a dev server (list_servers shows tier dev), build, test and iterate there with dev_run: edit code in your workspace with write_file, then dev_run syncs it and runs the command in your own folder on the server. Use dev_fetch for files the server generates that belong in the repository. Commit as usual: the workspace is the work of record, not the dev server.',
       'If your unit holds servers (list_servers), you may log in to them with server_run and set them up as the task needs; copy committed work there with server_upload. Leave each server documented: what you installed, where, how to restart it, in the War Diary and your handover, so a successor can carry on.',
+      projectRules(brief),
       brief.task.kind === 'recon'
         ? 'This is a recon task: read-only. Survey the code to answer the question, change nothing, and file_report your findings (what you looked at, what you found, risks, a suggested approach) before the handover and done.'
         : '',
@@ -530,7 +581,7 @@ export abstract class ClaudeFamilyRuntime implements BotRuntime {
       JSON.stringify({
         ...input,
         instructions:
-          'Split the mission into tasks (one per definition-of-done item unless a better split is obvious), assign each to the least busy suitable bot by id, and list real risks. For stage "inspect"/"guard" use one "check" task; for stage "deploy" one "deploy" task. If there is more than one repository, set repoSupplyId to the id of the one each task changes (null = the first).',
+          'Split the mission into tasks (one per definition-of-done item unless a better split is obvious), assign each to the least busy suitable bot by id, and list real risks. For stage "inspect"/"guard" use one "check" task; for stage "deploy" one "deploy" task. If there is more than one repository, set repoSupplyId to the id of the one each task changes (null = the first). A repository whose project is "single-html" holds one self-contained HTML file (its entry) and nothing else: no build, no server; plan tasks that keep it that way, and a deploy that publishes the entry file to the unit’s static site.',
       }),
     );
     const repos = new Set(input.repositories.map((r) => r.id));
@@ -617,7 +668,7 @@ export abstract class ClaudeFamilyRuntime implements BotRuntime {
     });
     return this.structured(
       I,
-      'You are an Overseer (or HQ) in ORBOT. The Commander commands by chat. Turn the message into typed actions; answer questions from the context. Hedged statements ("I might…", "maybe") are musings, not orders. Only reference ids that appear in the context. If promised supply is not in the depot, list it as missing instead of acting. Operations get resources from the depot: assign-resource gives one to an operation (create-operation may also list supplyIds to start with, repositories first); release-resource takes one off. The first repository is the main one, where work lands: to change an operation’s repository ("change the repo from A to B") use set-main-repository with B (it is assigned if it is not yet; once missions are out they are issued again there), never only assign-resource. cancel-operation calls an operation off (note: why, if given).',
+      'You are an Overseer (or HQ) in ORBOT. The Commander commands by chat. Turn the message into typed actions; answer questions from the context. Hedged statements ("I might…", "maybe") are musings, not orders. Only reference ids that appear in the context. If promised supply is not in the depot, list it as missing instead of acting. Operations get resources from the depot: assign-resource gives one to an operation (create-operation may also list supplyIds to start with, repositories first); release-resource takes one off. The first repository is the main one, where work lands: to change an operation’s repository ("change the repo from A to B") use set-main-repository with B (it is assigned if it is not yet; once missions are out they are issued again there), never only assign-resource. cancel-operation calls an operation off (note: why, if given). new-project starts a project ("start a new project called X: …"): a repository from a template (projectKind single-html: one self-contained HTML file, no server) and a static site ORBOT publishes it to; with an intent, the operation that builds it.',
       JSON.stringify(input),
     );
   }
@@ -641,7 +692,7 @@ export abstract class ClaudeFamilyRuntime implements BotRuntime {
       JSON.stringify({
         ...input,
         instructions:
-          'Give each unit one mission, in handoff order build → inspect → guard → deploy, matched to the unit roles. Use only the unit ids given. In needs, list what else the operation must have from the Supply Depot to succeed, beyond a repository and (for a deploy) a production environment, which are always added: e.g. a dev server with a GPU, a model, a staging environment, a credential for an outside service. Mark nice-to-haves optional. List nothing it does not need; resources already assigned are given.',
+          'Give each unit one mission, in handoff order build → inspect → guard → deploy, matched to the unit roles. Use only the unit ids given. In needs, list what else the operation must have from the Supply Depot to succeed, beyond a repository and (for a deploy) a production environment, which are always added: e.g. a dev server with a GPU, a model, a staging environment, a credential for an outside service. Mark nice-to-haves optional. List nothing it does not need; resources already assigned are given. A resource whose project is "single-html" is a repository holding one self-contained HTML file: the product is that file alone (no build, no server), and its deploy publishes the file to a static site, which the operation’s site resource is.',
       }),
     );
   }

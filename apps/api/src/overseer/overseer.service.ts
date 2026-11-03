@@ -15,6 +15,7 @@ import {
   RejectBackbriefRequest,
   ReassignTaskRequest,
   type BackbriefBody,
+  type ProjectShape,
   type ProposedTask,
   type RecordEvent,
   SETTINGS_ID,
@@ -120,11 +121,11 @@ export class OverseerService implements OnApplicationBootstrap, OnModuleDestroy 
   /** Where a mission's work can land: its operation's repositories, else the unit's. */
   private async repositoriesFor(operationId: string | null, unitSupplyIds: string[]) {
     const op = operationId ? await this.record.getActive('operation', operationId) : null;
-    const out: { id: string; name: string }[] = [];
+    const out: { id: string; name: string; project: ProjectShape | null }[] = [];
     for (const id of op?.body.supplyIds.length ? op.body.supplyIds : unitSupplyIds) {
       const s = await this.record.getActive('supply', id);
       if (s?.body.connected && s.body.spec.kind === 'repository') {
-        out.push({ id: s.entityId, name: s.body.name });
+        out.push({ id: s.entityId, name: s.body.name, project: s.body.spec.project });
       }
     }
     return out;

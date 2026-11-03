@@ -565,6 +565,7 @@ export class HqService implements OnApplicationBootstrap, OnModuleDestroy {
         resources: resources.map((r) => ({
           name: r.body.name,
           kind: resourceKindOf(r.body) ?? r.body.spec.kind,
+          project: r.body.spec.kind === 'repository' ? r.body.spec.project : null,
         })),
         recon,
       });
@@ -987,6 +988,7 @@ export class HqService implements OnApplicationBootstrap, OnModuleDestroy {
           commit: e.body.commit,
           taskId: e.taskId!,
           at: e.createdAt,
+          url: e.body.url ?? null,
         },
       }),
       { actor: HQ_ACTOR, reason: `Deployed to ${e.body.environment}` },
@@ -994,7 +996,7 @@ export class HqService implements OnApplicationBootstrap, OnModuleDestroy {
     await this.hqSitrep(
       null,
       e.operationId!,
-      `Deployed to ${e.body.environment} (${e.body.commit.slice(0, 10)}).`,
+      `Deployed to ${e.body.environment} (${e.body.commit.slice(0, 10)})${e.body.url ? `: ${e.body.url}` : ''}.`,
     );
     await this.renderRecord(e.operationId!);
   }

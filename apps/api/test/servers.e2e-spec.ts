@@ -210,7 +210,12 @@ describe('Servers: bots log in over SSH to the servers their unit holds', () => 
     const upload = runs.find((r) => r.command === 'mkdir -p /srv/app && tar -xf - -C /srv/app')!;
     expect(upload.stdinBytes).toBeGreaterThan(0);
     const deployment = d.events.find((e) => e.kind === 'deployment') as RecordEvent<'deployment'>;
-    expect(deployment.body).toEqual({ environment: 'web1', ref: 'deploy/web1', commit: head });
+    expect(deployment.body).toEqual({
+      environment: 'web1',
+      ref: 'deploy/web1',
+      commit: head,
+      url: null,
+    });
   });
 
   it('a unit that does not hold the server cannot reach it', async () => {

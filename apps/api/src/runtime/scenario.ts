@@ -97,8 +97,16 @@ export const ScenarioStep = z.discriminatedUnion('do', [
   z.object({ do: z.literal('survey') }),
   /** Deploy the workspace head to an environment (moves `deploy/<environment>` to it). */
   z.object({ do: z.literal('deploy'), environment: z.string() }),
-  /** Block unless the unit's live supply has an item whose name matches `pattern`. */
-  z.object({ do: z.literal('require-supply'), pattern: z.string(), missing: Text }),
+  /**
+   * Block unless the unit's live supply has an item whose name matches `pattern` (and/or, for
+   * environments, whose tier is `tier`).
+   */
+  z.object({
+    do: z.literal('require-supply'),
+    pattern: z.string().optional(),
+    tier: z.string().optional(),
+    missing: Text,
+  }),
 ]);
 export type ScenarioStep = z.infer<typeof ScenarioStep>;
 

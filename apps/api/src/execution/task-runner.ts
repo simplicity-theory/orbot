@@ -18,6 +18,7 @@ import {
 } from '@orbot/shared';
 import { APP_CONFIG, type AppConfig } from '../config/config.js';
 import { ServersService } from '../servers/servers.service.js';
+import { SitesService } from '../servers/sites.service.js';
 import { BriefingService } from '../overseer/briefing.service.js';
 import { PolicyService } from '../policy/policy.service.js';
 import { RecordService, type RecordWriter } from '../record/record.service.js';
@@ -74,6 +75,7 @@ export class TaskRunner {
     private readonly logger: RedactingLogger,
     private readonly briefing: BriefingService,
     private readonly servers: ServersService,
+    private readonly sites: SitesService,
   ) {}
 
   isRunning(taskId: string): boolean {
@@ -133,7 +135,12 @@ export class TaskRunner {
       rulesOfEngagement: unit.body.rulesOfEngagement,
       supply: supply
         .filter((s): s is NonNullable<typeof s> => !!s && s.body.connected)
-        .map((s) => ({ name: s.body.name, kind: s.body.spec.kind })),
+        .map((s) => ({
+          name: s.body.name,
+          kind: s.body.spec.kind,
+          tier:
+            s.body.spec.kind === 'environment' ? (s.body.spec.details['tier'] ?? 'staging') : null,
+        })),
     };
   }
 
@@ -387,6 +394,15 @@ export class TaskRunner {
             path,
             run.abort.signal,
           ),
+        sites: () => this.sites.list(t.unitId),
+        publish: async (site, paths) =>
+          this.sites.publish(
+            await this.record.requireActive('task', taskId),
+            botPrincipal,
+            refs,
+            site,
+            paths,
+          ),
       };
 
       const finished = this.drive(runtime.run(brief, ctx), run, task, botPrincipal, refs).finally(
@@ -489,7 +505,12 @@ export class TaskRunner {
               const [ref, commit] = ev.ref.split('@');
               await this.record.event(
                 'deployment',
-                { environment: ref!.replace(/^deploy\//, ''), ref: ref!, commit: commit ?? '' },
+                {
+                  environment: ref!.replace(/^deploy\//, ''),
+                  ref: ref!,
+                  commit: commit ?? '',
+                  url: null,
+                },
                 refs,
                 botActor,
               );

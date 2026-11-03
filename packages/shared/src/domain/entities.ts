@@ -133,6 +133,8 @@ export const Deployment = z.object({
   commit: z.string(),
   taskId: Id,
   at: z.iso.datetime({ offset: true }),
+  /** Where the deployed work can be opened, when ORBOT knows (a static site it published). */
+  url: z.string().nullable().default(null),
 });
 export type Deployment = z.infer<typeof Deployment>;
 
@@ -354,6 +356,20 @@ export const SupplyKind = z.enum([
 ]);
 export type SupplyKind = z.infer<typeof SupplyKind>;
 
+/**
+ * The shape of the product a repository holds, when ORBOT started it from a template. Bots are
+ * briefed with it; a deploy publishes its entry file.
+ */
+export const ProjectShape = z.object({
+  /** One self-contained HTML file: no build step, no server. */
+  kind: z.literal('single-html'),
+  /** The product itself, relative to the repository root. */
+  entry: z.string().min(1).default('index.html'),
+});
+export type ProjectShape = z.infer<typeof ProjectShape>;
+export const ProjectKind = ProjectShape.shape.kind;
+export type ProjectKind = z.infer<typeof ProjectKind>;
+
 export const RepositorySupply = z.object({
   kind: z.literal('repository'),
   /** Local path or clone URL as given by the Commander. Credentials are never embedded. */
@@ -361,6 +377,8 @@ export const RepositorySupply = z.object({
   /** Local clone the WorkspaceManager creates worktrees from. */
   localPath: z.string().min(1),
   defaultBranch: z.string().min(1),
+  /** What the repository holds, when ORBOT created it from a template. */
+  project: ProjectShape.nullable().default(null),
 });
 
 export const CredentialSupply = z.object({
@@ -427,6 +445,23 @@ export const ServerAccess = z.object({
 });
 export type ServerAccess = z.infer<typeof ServerAccess>;
 
+/**
+ * A static site: an environment with no server. ORBOT publishes the files itself into a folder
+ * it serves, and keeps every earlier version beside them.
+ */
+export const StaticSite = z.object({
+  /** The folder ORBOT publishes into, on its own machine. */
+  dir: z.string().min(1),
+  /** The file a visitor gets at the site's root. */
+  entry: z.string().min(1).default('index.html'),
+  /** The last publication, if any. */
+  last: z
+    .object({ commit: z.string(), at: z.string(), taskId: Id.nullable() })
+    .nullable()
+    .default(null),
+});
+export type StaticSite = z.infer<typeof StaticSite>;
+
 export const GenericSupply = z.object({
   kind: z.enum(['environment', 'tool', 'compute']),
   /**
@@ -436,6 +471,8 @@ export const GenericSupply = z.object({
   details: z.record(z.string(), z.string()),
   /** For environments that are servers: how bots log in. */
   server: ServerAccess.nullable().default(null),
+  /** For environments that are static sites: where ORBOT publishes. Never both a server and a site. */
+  site: StaticSite.nullable().default(null),
 });
 
 /**

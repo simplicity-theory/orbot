@@ -11,6 +11,7 @@ import { StandDownService } from '../overseer/stand-down.service.js';
 import { BudgetService } from '../overseer/budget.service.js';
 import { OverseerService } from '../overseer/overseer.service.js';
 import { RecordService, type WriteContext } from '../record/record.service.js';
+import { ProjectsService } from '../supply/projects.service.js';
 import { SupplyService } from '../supply/supply.service.js';
 
 export interface ActionResult {
@@ -45,9 +46,44 @@ export class ActionsService {
     private readonly recon: ReconService,
     private readonly sandTables: SandTableService,
     private readonly connections: ConnectionsService,
+    private readonly projects: ProjectsService,
   ) {}
 
   async run(action: ChatAction, ctx: WriteContext): Promise<ActionResult> {
+    if (action.kind === 'new-project') {
+      const p = await this.projects.start(
+        {
+          name: action.name,
+          kind: action.projectKind,
+          intent: action.intent,
+          budgetUnits: null,
+          deployRightsUnitId: null,
+        },
+        ctx,
+      );
+      return {
+        summary:
+          `Project ${action.name} started: repository ${p.repository.body.name} (one HTML file) and its site ${p.site.body.name} are in the Supply Depot.` +
+          (p.operation
+            ? ` Operation ${p.operation.body.name} launched with both; HQ is holding the O Group. Give the deploying unit deploy rights to ${p.site.body.name} when you are ready.`
+            : ' State your intent, using both, when you are ready.'),
+        links: [
+          ...(p.operation
+            ? [
+                {
+                  label: `Operation ${p.operation.body.name}`,
+                  link: `/operations/${p.operation.entityId}`,
+                },
+              ]
+            : []),
+          { label: p.repository.body.name, link: '/supply' },
+          { label: p.site.body.name, link: '/supply?section=environments' },
+        ],
+        // Nothing is deleted: a project, once started, stays in the depot.
+        inverse: null,
+        affects: [],
+      };
+    }
     if (action.kind === 'create-operation') {
       const op = await this.hq.createOperation(
         action.intent,

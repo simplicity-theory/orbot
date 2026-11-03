@@ -198,6 +198,10 @@ import { SandTable } from './sand-table';
             <p class="deployed">
               Deployed to {{ d.environment }} at
               <span class="mono">{{ d.commit.slice(0, 10) }}</span>
+              @if (d.url) {
+                · <a [href]="d.url" target="_blank" rel="noopener">Open it</a> ·
+                <a [href]="d.url + 'download'">Download the file</a>
+              }
             </p>
           }
         </section>

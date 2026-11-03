@@ -237,7 +237,7 @@ export function describeEvent(e: RecordEvent): EventSummary {
       return {
         icon: 'check',
         label: 'Deployed',
-        text: `${s('environment')} at ${s('commit').slice(0, 10)}`,
+        text: `${s('environment')} at ${s('commit').slice(0, 10)}${s('url') ? ` · ${s('url')}` : ''}`,
         tone: 'success',
       };
     case 'deploy.approval':

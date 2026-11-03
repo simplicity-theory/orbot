@@ -45,7 +45,13 @@ export const RecordEventBodies = {
     fixTaskId: z.string(),
   }),
   integration: z.object({ branch: z.string(), commit: z.string(), from: z.string() }),
-  deployment: z.object({ environment: z.string(), ref: z.string(), commit: z.string() }),
+  deployment: z.object({
+    environment: z.string(),
+    ref: z.string(),
+    commit: z.string(),
+    /** Where it can be opened, when ORBOT published it itself. */
+    url: z.string().nullable().default(null),
+  }),
   'deploy.approval': z.object({
     status: z.enum(['approved', 'rejected']),
     note: z.string().nullable(),

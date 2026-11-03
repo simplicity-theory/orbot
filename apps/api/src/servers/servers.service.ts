@@ -218,6 +218,12 @@ export class ServersService implements OnModuleInit {
     if (input.name !== s.body.name) changed.push(`name ${s.body.name} → ${input.name}`);
     if (input.tier !== tier) changed.push(`tier ${tier} → ${input.tier}`);
     let next: ServerAccess | null = sv;
+    if (login && !sv && s.body.spec.kind === 'environment' && s.body.spec.site) {
+      throw new BadRequestException({
+        message: `${s.body.name} is a static site ORBOT publishes itself: it cannot also be a server.`,
+        action: 'Add the server as its own environment.',
+      });
+    }
     if (login && !sv) {
       // A plain environment becomes a server: pin its keys and prove the login, as on connect.
       await this.requireKey(login.credentialName);
@@ -277,6 +283,7 @@ export class ServersService implements OnModuleInit {
           kind: 'environment',
           details: { ...(b.spec.kind === 'environment' ? b.spec.details : {}), tier: input.tier },
           server: next,
+          site: b.spec.kind === 'environment' ? b.spec.site : null,
         },
       }),
       { ...ctx, reason },
@@ -591,7 +598,7 @@ export class ServersService implements OnModuleInit {
     if (result.exitCode === 0) {
       await this.record.event(
         'deployment',
-        { environment: s.body.name, ref: `deploy/${s.body.name}`, commit },
+        { environment: s.body.name, ref: `deploy/${s.body.name}`, commit, url: null },
         refs,
         actorRef(bot),
       );

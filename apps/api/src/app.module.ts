@@ -35,6 +35,10 @@ import {
 } from './servers/servers.controller.js';
 import { AppsService } from './servers/apps.service.js';
 import { HealthService } from './servers/health.service.js';
+import { SitesController } from './servers/sites.controller.js';
+import { SitesService } from './servers/sites.service.js';
+import { ProjectsController } from './supply/projects.controller.js';
+import { ProjectsService } from './supply/projects.service.js';
 import { CodeController } from './code/code.controller.js';
 import { CodeService } from './code/code.service.js';
 import { ServersService } from './servers/servers.service.js';
@@ -124,6 +128,8 @@ export class AppModule {
         ServersController,
         ModelsController,
         EnvironmentsController,
+        SitesController,
+        ProjectsController,
       ],
       providers: [
         { provide: LOG_DESTINATION, useValue: opts.logDestination ?? null },
@@ -202,6 +208,8 @@ export class AppModule {
         ServersService,
         AppsService,
         HealthService,
+        SitesService,
+        ProjectsService,
         CodeService,
         AlertService,
         BudgetService,

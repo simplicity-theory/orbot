@@ -147,6 +147,30 @@ describe('SimulatedInterpreter', () => {
       ]);
     });
 
+    it('starts a new project, with the rest of the sentence as the intent', () => {
+      const r = i.interpret(
+        hq('Start a new project called Ledger: a personal ledger that works offline.'),
+      );
+      expect(r.kinds).toEqual(['order']);
+      expect(r.actions).toEqual([
+        {
+          kind: 'new-project',
+          unitId: null,
+          name: 'Ledger',
+          projectKind: 'single-html',
+          intent: 'A personal ledger that works offline.',
+        },
+      ]);
+      expect(i.interpret(hq('New project "Scratch Pad"')).actions).toEqual([
+        expect.objectContaining({ kind: 'new-project', name: 'Scratch Pad', intent: null }),
+      ]);
+      // Hedged: a musing, not an order. To a unit, not HQ: not a project.
+      expect(i.interpret(hq('Maybe start a new project called Notes.')).musings).toEqual([
+        expect.objectContaining({ kind: 'new-project', name: 'Notes' }),
+      ]);
+      expect(i.interpret(input('Start a new project called Notes.')).actions).toEqual([]);
+    });
+
     it('launches an operation with resources named in the intent', () => {
       const r = i.interpret(hq('Add audit logging to payments, using payments-service.'));
       expect(r.actions).toEqual([

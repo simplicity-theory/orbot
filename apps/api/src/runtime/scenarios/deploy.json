@@ -11,7 +11,7 @@
     },
     {
       "do": "require-supply",
-      "pattern": "^production$",
+      "tier": "production",
       "missing": "No deploy rights: the production environment has not been issued to {unit}."
     },
     {

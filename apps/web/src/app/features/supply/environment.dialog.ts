@@ -61,11 +61,34 @@ const TIERS: { id: Tier; label: string; hint: string }[] = [
       @if (editing && editingTier === 'production') {
         <p class="hint">Deploy rights cannot be taken back while a unit holds it.</p>
       }
-      @if (tier !== 'dev' && !current?.server) {
+      @if (tier !== 'dev' && !current?.server && !current?.site) {
         <label class="check"
           ><input type="checkbox" name="isServer" [(ngModel)]="isServer" /> It’s a server bots log
           in to over SSH</label
         >
+      }
+      @if (tier !== 'dev' && !editing && !isServer) {
+        <label class="check"
+          ><input type="checkbox" name="isSite" [(ngModel)]="isSite" /> It’s a static site: no
+          server, ORBOT publishes the files itself</label
+        >
+        @if (isSite) {
+          <p class="hint">
+            A deploy publishes the project’s files (its <span class="mono">index.html</span>) into a
+            folder ORBOT serves at its own address, sandboxed, and offers for download. Every
+            publication is kept.
+          </p>
+        }
+      }
+      @if (current?.site; as site) {
+        <p class="hint">
+          A static site ORBOT publishes itself
+          @if (site.last) {
+            (last published <span class="mono">{{ site.last.commit.slice(0, 10) }}</span
+            >)
+          }
+          . It cannot become a server.
+        </p>
       }
       @if (asServer()) {
         <div class="server-fields">
@@ -223,6 +246,7 @@ export class EnvironmentDialog {
   protected name = this.editing?.name ?? this.data.name ?? '';
   protected tier: Tier = this.editing ? this.editingTier : 'staging';
   protected isServer = !!this.current?.server;
+  protected isSite = false;
   protected host = this.current?.server?.host ?? '';
   protected port = this.current?.server?.port ?? 22;
   protected user = this.current?.server?.user ?? '';
@@ -239,9 +263,9 @@ export class EnvironmentDialog {
     return mine && !list.includes(mine) ? [mine, ...list] : list;
   }
 
-  /** A dev environment is always a server. */
+  /** A dev environment is always a server; a site never is. */
   protected asServer(): boolean {
-    return this.tier === 'dev' || this.isServer;
+    return (this.tier === 'dev' || this.isServer) && !this.isSite;
   }
 
   protected async submit(): Promise<void> {
@@ -284,8 +308,9 @@ export class EnvironmentDialog {
         s = await this.api.connectEnvironment(
           this.name.trim(),
           this.tier as 'staging' | 'production',
+          this.isSite,
         );
-        message = `Connected environment ${s.name}.`;
+        message = this.isSite ? `Added site ${s.name}.` : `Connected environment ${s.name}.`;
       }
       this.toasts.show({ tone: 'success', message });
       this.ref.close(s);

@@ -151,6 +151,17 @@ export const ChatAction = z.discriminatedUnion('kind', [
   }),
   /** Issue a production environment to a unit: deploy rights. Irreversible by default. */
   z.object({ kind: z.literal('grant-deploy-rights'), unitId: Id, supplyId: Id }),
+  /**
+   * Through HQ: start a new project. A repository from a template and a static site to deploy
+   * it to; with an intent, the operation that builds it.
+   */
+  z.object({
+    kind: z.literal('new-project'),
+    unitId: Id.nullable(),
+    name: z.string().min(1).max(60),
+    projectKind: z.enum(['single-html']),
+    intent: z.string().min(1).max(1000).nullable(),
+  }),
 ]);
 export type ChatAction = z.infer<typeof ChatAction>;
 export type ChatActionKind = ChatAction['kind'];

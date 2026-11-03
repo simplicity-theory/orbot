@@ -370,6 +370,25 @@ export class SimulatedRuntime implements BotRuntime {
       }
       case 'deploy': {
         const commit = await git(brief.workspace.path, ['rev-parse', 'HEAD']);
+        // A static site the unit holds, by name or by tier ("production"): ORBOT publishes it.
+        const sites = await ctx.sites();
+        const site =
+          sites.find((s) => s.name.toLowerCase() === step.environment.toLowerCase()) ??
+          sites.find((s) => s.tier === step.environment);
+        if (site) {
+          const r = await ctx.publish(site.name, []);
+          yield {
+            type: 'step',
+            action: 'deploy',
+            detail: r.output,
+            outcome: r.exitCode === 0 ? 'published' : `exit ${r.exitCode}`,
+          };
+          if (r.exitCode !== 0) {
+            yield { type: 'failed', reason: r.output };
+            return true;
+          }
+          return false;
+        }
         const ref = `deploy/${step.environment}`;
         await git(brief.workspace.path, ['branch', '--force', ref, commit]);
         yield {
@@ -387,8 +406,10 @@ export class SimulatedRuntime implements BotRuntime {
         return false;
       }
       case 'require-supply': {
-        const re = new RegExp(step.pattern, 'i');
-        const item = (await ctx.orders()).supply.find((s) => re.test(s.name));
+        const re = step.pattern ? new RegExp(step.pattern, 'i') : null;
+        const item = (await ctx.orders()).supply.find(
+          (s) => (!re || re.test(s.name)) && (!step.tier || s.tier === step.tier),
+        );
         if (!item) {
           yield { type: 'blocked', reason: text(step.missing) };
           return true;

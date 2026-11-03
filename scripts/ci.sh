@@ -21,7 +21,7 @@ npx prettier --check .
 
 step "Server scripts (deploy/)"
 (cd deploy && docker run --rm -v "$PWD:/mnt:ro" -w /mnt koalaman/shellcheck:v0.10.0 -x \
-  lib/common.sh apps/*/*.sh server/*.sh)
+  lib/common.sh apps/*/*.sh server/*.sh orbot/*.sh)
 
 step "Typecheck"
 npm run typecheck -w @orbot/shared
@@ -46,5 +46,10 @@ npm run build -w @orbot/web
 step "UI tests (Playwright + axe)"
 npx --workspace @orbot/web playwright install chromium >/dev/null
 npm run test:ui -w @orbot/web
+
+if [[ "${ORBOT_CI_DOCKER:-0}" == "1" ]]; then
+  step "Docker image (ORBOT_CI_DOCKER=1)"
+  docker build -t orbot:ci .
+fi
 
 printf '\n\033[1;32m✔ CI passed\033[0m\n'
