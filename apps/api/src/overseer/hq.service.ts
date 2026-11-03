@@ -38,6 +38,7 @@ import { ReconService } from './recon.service.js';
 import { SandTableService } from './sand-table.service.js';
 import { HQ_ACTOR } from './overseers.js';
 import { TaskRunner } from '../execution/task-runner.js';
+import { SettingsService } from '../settings/settings.service.js';
 
 export { HQ_ACTOR };
 
@@ -89,6 +90,7 @@ export class HqService implements OnApplicationBootstrap, OnModuleDestroy {
     private readonly recon: ReconService,
     private readonly sandTables: SandTableService,
     private readonly runner: TaskRunner,
+    private readonly settings: SettingsService,
   ) {}
 
   /** HQ's staff thinks through the default runtime (HQ has no unit of its own). */
@@ -98,6 +100,7 @@ export class HqService implements OnApplicationBootstrap, OnModuleDestroy {
 
   onApplicationBootstrap(): void {
     this.background.run('startup', 'hq:permissions', () => this.decidePendingForCommander());
+    this.background.run('startup', 'hq:retries', () => this.retryFailedForCommander());
     this.sub = this.bus.notifications$.subscribe((n) => {
       if (n.type === 'version') {
         const v = n.version;
@@ -130,6 +133,12 @@ export class HqService implements OnApplicationBootstrap, OnModuleDestroy {
           const s = (e as RecordEvent<'task.status'>).body;
           if (s.to === 'done' || (s.to === 'stood-down' && s.reason?.startsWith('Sent back:'))) {
             this.enqueue(e.operationId, 'task', () => this.taskChanged(e.taskId!, s.to, s.reason));
+          } else if (s.to === 'failed' && e.taskId && e.unitId) {
+            // A fully automatic theatre: HQ retries a failed task before anyone asks the Commander (D128).
+            const taskId = e.taskId;
+            this.background.run(`unit:${e.unitId}`, 'hq:retry', () =>
+              this.retryForCommander(taskId),
+            );
           }
         } else if (e.kind === 'permission.requested' && e.taskId) {
           // A fully automatic theatre: HQ answers for the Commander (D125).
@@ -1354,6 +1363,66 @@ export class HqService implements OnApplicationBootstrap, OnModuleDestroy {
       op.entityId,
       `HQ granted task #${task.body.number}'s request for the Commander (automatic theatre): ${task.body.permission.action.slice(0, 160)}`,
     );
+  }
+
+  /**
+   * In a fully automatic theatre a task that fails once is started again by HQ on the same
+   * branch, with a note saying why, before anything reaches the Commander; only a task that
+   * has failed as many times as the escalation setting allows goes up the chain (D128).
+   */
+  private async retryForCommander(taskId: string): Promise<void> {
+    const task = await this.record.getActive('task', taskId);
+    if (!task || task.body.status !== 'failed') return;
+    const mission = task.body.missionId
+      ? await this.record.getActive('mission', task.body.missionId)
+      : null;
+    const op = mission?.body.operationId
+      ? await this.record.getActive('operation', mission.body.operationId)
+      : null;
+    if (!op?.body.autonomous || op.body.phase === 'closed' || mission?.body.status === 'withdrawn')
+      return;
+    const { escalation } = await this.settings.get();
+    const failures = (
+      await this.record.listEvents({ taskId, kinds: ['task.status'], limit: 1000 })
+    ).filter((e) => (e as RecordEvent<'task.status'>).body.to === 'failed').length;
+    if (failures >= escalation.repeatedFailures) return;
+    const reason = task.body.statusReason ?? 'no reason recorded';
+    const note = `HQ started it again (attempt ${failures + 1}, automatic theatre): the last run stopped: ${reason} The branch holds the work so far: read it (git log, git status), finish what is left, commit, and hand over. Spend turns on the task, not on rebuilding what is there.`;
+    await this.record.revise(
+      'task',
+      taskId,
+      (t) => ({
+        ...t,
+        description: `${t.description}
+
+Frago: ${note}`.trim(),
+        statusAction: null,
+      }),
+      { actor: HQ_ACTOR, reason: `Retry ${failures + 1}: ${reason}` },
+    );
+    try {
+      await this.runner.resume(taskId, HQ_ACTOR);
+    } catch (err) {
+      await this.hqSitrep(
+        null,
+        op.entityId,
+        `HQ could not start task #${task.body.number} again: ${(err as Error).message}`,
+      );
+      return;
+    }
+    await this.hqSitrep(
+      null,
+      op.entityId,
+      `HQ started task #${task.body.number} again for the Commander (automatic theatre, attempt ${failures + 1}): ${reason}`,
+    );
+  }
+
+  /** Failed tasks of automatic operations left over from before a restart: started again now. */
+  private async retryFailedForCommander(): Promise<void> {
+    const failed = await this.record.listActive('task', { bodyContains: { status: 'failed' } });
+    for (const t of failed) {
+      if (t.body.missionId) await this.retryForCommander(t.entityId);
+    }
   }
 
   /** Requests left waiting on an automatic operation (a restart in between): decided now. */

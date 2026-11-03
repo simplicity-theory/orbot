@@ -58,7 +58,7 @@ runs as you (`orbot setup` writes your uid and gid into `.env` as `ORBOT_UID`/`O
 it reads that login however Claude rewrites its files. Anthropic's terms allow a Pro/Max login
 for one person's own use, so don't give other officers orders while bots run on it.
 
-Anything else (`ORBOT_CLAUDE_MODEL`, the pace settings, `ORBOT_SEED`) is edited in `.env`.
+Anything else (`ORBOT_CLAUDE_MODEL`, `ORBOT_CLAUDE_MAX_TURNS`, the pace settings, `ORBOT_SEED`) is edited in `.env`.
 `ORBOT_SEED=force` (the default) seeds the four units with their Overseers, bots and Field
 Manuals and nothing else; `demo` adds the demo repositories and an operation; `none` leaves
 the record empty.

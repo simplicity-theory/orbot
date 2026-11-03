@@ -171,6 +171,7 @@ export class AppModule {
               r.register(
                 new ClaudeRuntime(new Anthropic({ apiKey: c.anthropicApiKey }), {
                   model: c.claudeModel,
+                  maxTurns: c.claudeMaxTurns,
                 }),
               );
             }
@@ -180,6 +181,7 @@ export class AppModule {
                 new ClaudeCodeRuntime({
                   model: c.claudeModel,
                   executable: c.claudeCodePath || undefined,
+                  maxTurns: c.claudeMaxTurns,
                 }),
               );
             }

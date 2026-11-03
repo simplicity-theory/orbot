@@ -1,0 +1,37 @@
+{
+  "id": "out-of-turns",
+  "description": "Work committed, then the run stops short (as a real runtime does when it runs out of turns). Picked up again on the same branch, it finishes straight away.",
+  "seed": 4040,
+  "script": [
+    {
+      "do": "step",
+      "action": "read-brief",
+      "detail": "Read the brief for “{task}”.",
+      "outcome": "understood"
+    },
+    {
+      "do": "write-file",
+      "path": "orbot/task-{number}.md",
+      "content": "# Task #{number}: {task}\n\nUnder way by {callsign} ({unit}) on `{branch}`.\n"
+    },
+    { "do": "commit", "message": "Task #{number}: {task} (in progress)" },
+    { "do": "cost", "units": 1 },
+    { "do": "fail", "reason": "Stopped after 40 turns without finishing." }
+  ],
+  "resume": [
+    {
+      "do": "step",
+      "action": "read-brief",
+      "detail": "Picked up task #{number} again on {branch}: the work so far is there.",
+      "outcome": "understood"
+    },
+    { "do": "cost", "units": 1 },
+    {
+      "do": "handover",
+      "state": "Task #{number} complete on {branch}.",
+      "nextSteps": [],
+      "flagsForSuccessor": []
+    },
+    { "do": "done", "summary": "Finished on the second run." }
+  ]
+}

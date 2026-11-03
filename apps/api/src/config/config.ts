@@ -73,6 +73,8 @@ const Env = z.object({
     .transform((v) => v === 'on'),
   /** A `claude` binary to use instead of the one bundled with the Agent SDK. */
   ORBOT_CLAUDE_CODE_PATH: z.string().default(''),
+  /** Most tool turns one run of a task may take before it is stopped as failed (D128). */
+  ORBOT_CLAUDE_MAX_TURNS: z.coerce.number().int().min(1).default(150),
   /** How often each Overseer runs its cold-start check (0 = only on demand). */
   ORBOT_COLDSTART_INTERVAL_MINUTES: z.coerce.number().min(0).default(360),
   /** How often stuck work is looked for (0 = never; tests call the sweep directly). */
@@ -122,6 +124,7 @@ export interface AppConfig {
   anthropicApiKey: string;
   claudeCode: boolean;
   claudeCodePath: string;
+  claudeMaxTurns: number;
   coldStartIntervalMs: number;
   escalationSweepMs: number;
   dailyBriefCheckMs: number;
@@ -187,6 +190,7 @@ export function loadConfig(overrides: Record<string, string | undefined> = {}): 
     anthropicApiKey: e.ANTHROPIC_API_KEY,
     claudeCode: e.ORBOT_CLAUDE_CODE || e.ORBOT_RUNTIME === 'claude-code',
     claudeCodePath: e.ORBOT_CLAUDE_CODE_PATH,
+    claudeMaxTurns: e.ORBOT_CLAUDE_MAX_TURNS,
     coldStartIntervalMs: e.ORBOT_COLDSTART_INTERVAL_MINUTES * 60_000,
     escalationSweepMs: e.ORBOT_ESCALATION_SWEEP_SECONDS * 1000,
     dailyBriefCheckMs: e.ORBOT_DAILY_BRIEF_CHECK_SECONDS * 1000,

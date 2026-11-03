@@ -246,6 +246,57 @@ describe('Theatres', () => {
     expect(done.task.permission.note).toMatch(/^Automatic theatre: HQ decides for the Commander/);
   });
 
+  it('in an automatic theatre HQ starts a failed task again on the same branch; it reaches the Commander only when it fails again', async () => {
+    const list = await theatres();
+    const notes = list.find((x) => x.theatre.name === 'Pocket Notes')!;
+    const launched = (
+      await t.agent
+        .post(`/api/theatres/${notes.theatre.id}/operations`)
+        .send({ intent: 'Add note colours.', name: 'Colours' })
+        .expect(201)
+    ).body;
+    const v = await waitFor(async () => {
+      const x = await op(launched.id);
+      return x.missions.find((m) => m.unit.id === engineers.unitId) ? x : null;
+    });
+    const mission = v.missions.find((m) => m.unit.id === engineers.unitId)!.mission;
+    const task = (
+      await t.agent
+        .post('/api/tasks')
+        .send({
+          unitId: engineers.unitId,
+          botId: engineers.botId,
+          missionId: mission.id,
+          title: 'Colour the notes',
+          repoSupplyId: notes.theatre.repoSupplyId,
+          scenario: 'out-of-turns',
+        })
+        .expect(201)
+    ).body;
+    await t.agent.post(`/api/tasks/${task.id}/run`).expect(202);
+    const done = await waitFor(async () => {
+      const x = (await t.agent.get(`/api/tasks/${task.id}`).expect(200)).body;
+      return x.task.status === 'done' ? x : null;
+    }, 30_000);
+    const statuses = done.events
+      .filter((e: { kind: string }) => e.kind === 'task.status')
+      .map((e: { body: { to: string } }) => e.body.to);
+    expect(statuses).toEqual(['working', 'failed', 'working', 'done']);
+    expect(done.task.description).toMatch(
+      /Frago: HQ started it again \(attempt 2, automatic theatre\): the last run stopped: Stopped after 40 turns without finishing\./,
+    );
+    const texts = (await op(launched.id)).timeline.map(
+      (e) => (e.body as { text?: string }).text ?? '',
+    );
+    expect(texts).toContainEqual(
+      expect.stringMatching(
+        /^HQ started task #\d+ again for the Commander \(automatic theatre, attempt 2\)/,
+      ),
+    );
+    const inbox = (await t.agent.get('/api/approvals').expect(200)).body;
+    expect(inbox.attention.map((a: { entityId: string }) => a.entityId)).not.toContain(task.id);
+  });
+
   it('a gated theatre waits for the Commander; it closes only once its operations are over', async () => {
     const r: NewTheatreView = (
       await t.agent
@@ -265,6 +316,29 @@ describe('Theatres', () => {
       return x.operation.phase === 'backbrief' && x.missions[0]?.backbrief ? x : null;
     });
     expect(waiting.missions[0]!.backbrief?.status).toBe('awaiting-approval');
+    // Not automatic: a failed task is the Commander's to retry.
+    const failing = (
+      await t.agent
+        .post('/api/tasks')
+        .send({
+          unitId: engineers.unitId,
+          botId: engineers.botId,
+          missionId: waiting.missions[0]!.mission.id,
+          title: 'Build it',
+          repoSupplyId: r.repository!.id,
+          scenario: 'out-of-turns',
+        })
+        .expect(201)
+    ).body;
+    await t.agent.post(`/api/tasks/${failing.id}/run`).expect(202);
+    await waitFor(async () => {
+      const x = (await t.agent.get(`/api/tasks/${failing.id}`).expect(200)).body;
+      return x.task.status === 'failed' ? x : null;
+    });
+    await settled(t.app);
+    expect((await t.agent.get(`/api/tasks/${failing.id}`).expect(200)).body.task.status).toBe(
+      'failed',
+    );
     const refused = await t.agent
       .post(`/api/theatres/${r.theatre.id}/close`)
       .send({ note: 'Done' })
