@@ -1640,6 +1640,13 @@ Frago: ${note}`.trim(),
       units: units.map((u) => ({ id: u.entityId, name: u.body.name })),
       timeline,
       earlier: await this.earlierReviews(op),
+      open: op.body.theatreId
+        ? (
+            await this.record.listActive('recommendation', {
+              bodyContains: { theatreId: op.body.theatreId, status: 'open' },
+            })
+          ).map((r) => ({ kind: r.body.kind, text: r.body.text }))
+        : [],
     });
     // What the Commander has already taken up or dismissed is not recommended again.
     if (review.recommendations.length && op.body.theatreId) {

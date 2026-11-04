@@ -54,6 +54,7 @@ describe('SimulatedOverseer', () => {
       units,
       timeline,
       earlier: [],
+      open: [],
     });
     expect(first.openFindings).toEqual([{ unitId: 'i', text: 'touch targets below 24px' }]);
     expect(first.lessons).toEqual([
@@ -71,6 +72,7 @@ describe('SimulatedOverseer', () => {
           openFindings: first.openFindings.map((f) => f.text),
         },
       ],
+      open: [],
     });
     expect(second.recommendations).toEqual([
       {

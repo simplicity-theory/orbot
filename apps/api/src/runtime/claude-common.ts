@@ -775,7 +775,7 @@ export abstract class ClaudeFamilyRuntime implements BotRuntime {
       JSON.stringify({
         ...input,
         instructions:
-          'Be specific and brief. Lessons are recorded for the Commander and become standing orders for the named unit (or all units if unitId is null) only if the Commander gives them, so phrase each as a rule. openFindings: every defect a unit found and left as it is (waived, recorded, not fixed, a standing waiver), one line each, as something to fix. recommendations: ONLY what came up before in `earlier` (the theatre’s earlier reviews): a lesson that an earlier review also drew (kind rule, with the unit), or an open finding an earlier operation also left (kind fix, phrased as the intent of an operation that fixes it); in why, name the operations it came up in. Nothing in earlier: no recommendations. Two or three at most.',
+          'Be specific and brief. Lessons are recorded for the Commander and become standing orders for the named unit (or all units if unitId is null) only if the Commander gives them, so phrase each as a rule. openFindings: every defect a unit found and left as it is (waived, recorded, not fixed, a standing waiver), one line each, as something to fix. recommendations: ONLY what came up before in `earlier` (the theatre’s earlier reviews): a lesson that an earlier review also drew (kind rule, with the unit), or an open finding an earlier operation also left (kind fix, phrased as the intent of an operation that fixes it); in why, name the operations it came up in. If one in `open` already covers the same point, use its kind and its text word for word (it is then counted once, not raised twice). Nothing in earlier: no recommendations. Two or three at most.',
       }),
     );
   }

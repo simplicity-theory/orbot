@@ -463,6 +463,8 @@ export interface AfterActionInput {
   timeline: { at: string; unit: string | null; kind: string; text: string }[];
   /** Earlier reviews in the same theatre: their lessons and the findings they left open. */
   earlier: { operation: string; lessons: string[]; openFindings: string[] }[];
+  /** Recommendations still open in the theatre: one that covers the same point is repeated word for word, so it is counted once. */
+  open: { kind: 'rule' | 'fix'; text: string }[];
 }
 
 export interface AfterActionReview {
