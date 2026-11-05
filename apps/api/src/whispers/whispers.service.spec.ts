@@ -44,7 +44,7 @@ describe('WhispersService', () => {
     w.onModuleDestroy();
   });
 
-  it('notes fade at random, sooner the older, and never outlive two days', () => {
+  it('notes fade at random on the clock only, sooner the older, and never outlive two days', () => {
     const w = make();
     w.leave('fresh');
     w.fade();
@@ -59,7 +59,10 @@ describe('WhispersService', () => {
     w.fade(Date.now() + 49 * 60 * 60 * 1000);
     expect(w.board()).toHaveLength(0);
     w.random = () => 0;
-    w.leave('gone next sweep');
+    w.leave('gone next sweep, not before');
+    for (let i = 0; i < 20; i++) w.board();
+    w.overheard();
+    expect(w.board()).toHaveLength(1);
     w.fade();
     expect(w.board()).toHaveLength(0);
     w.onModuleDestroy();

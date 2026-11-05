@@ -37,15 +37,15 @@ export class WhispersService implements OnModuleDestroy {
     clearInterval(this.timer);
   }
 
-  /** The board, newest first. */
+  /** The board, newest first. Reading it throws no dice: only the clock does. */
   board(): WhisperView[] {
-    this.fade();
+    this.expire();
     return [...this.notes].reverse().map(({ id, text, at }) => ({ id, text, at }));
   }
 
   /** Leave a note. Nobody records who did. */
   leave(text: string): WhisperView {
-    this.fade();
+    this.expire();
     const now = Date.now();
     const note = {
       id: randomUUID(),
@@ -61,7 +61,7 @@ export class WhispersService implements OnModuleDestroy {
 
   /** A handful for a brief, in no particular order, never the same handful twice. */
   overheard(limit = OVERHEARD_MAX): string[] {
-    this.fade();
+    this.expire();
     const pool = [...this.notes];
     const out: string[] = [];
     while (pool.length && out.length < limit) {
@@ -71,15 +71,20 @@ export class WhispersService implements OnModuleDestroy {
     return out;
   }
 
+  /** Nothing outlives two days, whatever the dice said. */
+  private expire(now = Date.now()): void {
+    this.notes = this.notes.filter((n) => now - n.atMs < LONGEST_MS);
+  }
+
   /**
-   * Throw the dice: each note goes with a chance that grows with its age (about one in
-   * fifty per sweep when fresh, one in five after a day), and nothing outlives two days.
+   * Throw the dice, every ten minutes: each note goes with a chance that grows with its age
+   * (about one in fifty per sweep when fresh, one in five after a day), and nothing outlives
+   * two days. Never thrown on a read, so looking at the board does not wear it out.
    */
   fade(now = Date.now()): void {
+    this.expire(now);
     this.notes = this.notes.filter((n) => {
-      const age = now - n.atMs;
-      if (age >= LONGEST_MS) return false;
-      const chance = 0.02 + (age / LONGEST_MS) * 0.36;
+      const chance = 0.02 + ((now - n.atMs) / LONGEST_MS) * 0.36;
       return this.random() >= chance;
     });
   }
