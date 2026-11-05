@@ -100,6 +100,12 @@ export const routes: Routes = [
           import('./features/placeholder/approvals.page').then((m) => m.ApprovalsPage),
       },
       {
+        path: 'whispers',
+        title: 'Whispers',
+        loadComponent: () =>
+          import('./features/whispers/whispers.page').then((m) => m.WhispersPage),
+      },
+      {
         path: 'sitreps',
         title: 'Sitreps',
         loadComponent: () =>

@@ -122,6 +122,11 @@ export interface TaskBrief {
   rulings: { disputeId: string; text: string }[];
   /** The unit's recon reports that bear on this work. */
   recon: BriefRecon[];
+  /**
+   * A handful of whispers from the board: hearsay, not the unit's knowledge. The bot
+   * may use what helps, never cites it, never says it read it, and never writes it down.
+   */
+  overheard: string[];
 }
 
 export interface RecordSearchResult {
@@ -145,6 +150,8 @@ export interface RunContext {
   ): Promise<T>;
   /** Search the unit's knowledge on demand: current versions first, the archive as fallback. */
   searchRecord(query: string): Promise<RecordSearchResult[]>;
+  /** Leave an unsigned note on the whispers board. Not recorded, not attributed. */
+  whisper(text: string): Promise<void>;
   /** The unit's orders and supply as they stand right now (they can change mid-task). */
   orders(): Promise<LiveOrders>;
   /** Wait up to `ms` (real time) for a frago; resolves null on timeout or abort. */
@@ -417,6 +424,8 @@ export interface InterpretInput {
     /** Its work is on the repository's default branch (HQ landed it when it closed). */
     landed?: boolean;
   }[];
+  /** Whispers from the board: hearsay the Overseer may use, never cite or acknowledge. */
+  overheard?: string[];
   /** Open theatres (projects): an intent with none named goes to the only open one. */
   theatres?: { id: string; name: string; status: string }[];
   /** Campaigns under way or held, for "cancel the campaign", "carry on with the campaign". */

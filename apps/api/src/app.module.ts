@@ -52,6 +52,8 @@ import { TheatresController } from './overseer/theatres.controller.js';
 import { CampaignsController } from './overseer/campaigns.controller.js';
 import { CampaignsService } from './overseer/campaigns.service.js';
 import { RecommendationsController } from './overseer/recommendations.controller.js';
+import { WhispersController } from './whispers/whispers.controller.js';
+import { WhispersService } from './whispers/whispers.service.js';
 import { RecommendationsService } from './overseer/recommendations.service.js';
 import { createSecretsPool, SECRETS_POOL, SecretsService } from './secrets/secrets.service.js';
 import { SupplyController } from './supply/supply.controller.js';
@@ -140,6 +142,7 @@ export class AppModule {
         TheatresController,
         CampaignsController,
         RecommendationsController,
+        WhispersController,
       ],
       providers: [
         { provide: LOG_DESTINATION, useValue: opts.logDestination ?? null },
@@ -212,6 +215,7 @@ export class AppModule {
         TheatresService,
         CampaignsService,
         RecommendationsService,
+        WhispersService,
         StandDownService,
         MainEffortService,
         ReconService,

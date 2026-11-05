@@ -27,6 +27,7 @@ import { RuntimeRegistry } from '../runtime/runtime.registry.js';
 import { SettingsService } from '../settings/settings.service.js';
 import { headline, type PendingReason } from './headline.js';
 import { ActionsService } from './actions.service.js';
+import { WhispersService } from '../whispers/whispers.service.js';
 
 const HQ = 'hq';
 const HQ_ACTOR = 'system:hq';
@@ -78,6 +79,7 @@ export class ChatService {
     private readonly record: RecordService,
     private readonly overseers: Overseers,
     private readonly runtimes: RuntimeRegistry,
+    private readonly whispers: WhispersService,
     private readonly actions: ActionsService,
     private readonly overseer: OverseerService,
     private readonly settings: SettingsService,
@@ -641,6 +643,7 @@ export class ChatService {
         connected: s.body.connected,
         tier: s.body.spec.kind === 'environment' ? (s.body.spec.details['tier'] ?? null) : null,
       })),
+      overheard: this.whispers.overheard(),
       theatres: (await this.record.listActive('theatre')).map((t) => ({
         id: t.entityId,
         name: t.body.name,

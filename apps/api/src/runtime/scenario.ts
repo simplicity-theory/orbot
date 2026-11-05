@@ -34,6 +34,8 @@ export const ScenarioStep = z.discriminatedUnion('do', [
   }),
   z.object({ do: z.literal('diary'), category: DiaryCategory, text: Text }),
   z.object({ do: z.literal('sitrep'), text: Text, status: TaskStatus.optional() }),
+  /** Leave an unsigned note on the whispers board: no event, nothing recorded. */
+  z.object({ do: z.literal('whisper'), text: Text }),
   z.object({ do: z.literal('write-file'), path: z.string(), content: Text }),
   z.object({ do: z.literal('commit'), message: Text }),
   z.object({ do: z.literal('use-credential'), purpose: Text }),

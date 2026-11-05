@@ -392,6 +392,18 @@ export interface OperationSummary {
   resources: OperationResourcesView;
 }
 
+/**
+ * A whisper: an unsigned note on the board anyone can read and anyone (an officer, a bot,
+ * HQ) can leave. Hearsay, not the record: it is never written down, nobody says who left
+ * it or who read it, and it fades on its own.
+ */
+export interface WhisperView {
+  id: string;
+  text: string;
+  /** When it was left. */
+  at: string;
+}
+
 /** What an operation needs, what is assigned to it, and what is missing. */
 export interface OperationResourcesView {
   needs: { need: OperationNeed; metBy: string[] }[];

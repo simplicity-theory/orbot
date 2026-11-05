@@ -19,6 +19,11 @@ export const CreateTaskRequest = z.object({
 });
 export type CreateTaskRequest = z.input<typeof CreateTaskRequest>;
 
+/** Leave a whisper on the board. Short: a factoid, a hunch, a tip, not a report. */
+export const WHISPER_MAX = 280;
+export const WhisperRequest = z.object({ text: z.string().trim().min(1).max(WHISPER_MAX) });
+export type WhisperRequest = z.input<typeof WhisperRequest>;
+
 /** Connect a server bots log in to over SSH, as an environment. */
 export const ConnectServerRequest = z.object({
   name: z.string().trim().min(1).max(100),

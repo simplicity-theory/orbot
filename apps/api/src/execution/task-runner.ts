@@ -29,6 +29,7 @@ import { APP_CONFIG, type AppConfig } from '../config/config.js';
 import { ServersService } from '../servers/servers.service.js';
 import { SitesService } from '../servers/sites.service.js';
 import { BriefingService } from '../overseer/briefing.service.js';
+import { WhispersService } from '../whispers/whispers.service.js';
 import { PolicyService } from '../policy/policy.service.js';
 import { RecordService, type RecordWriter } from '../record/record.service.js';
 import { RedactionService } from '../redaction/redaction.service.js';
@@ -119,6 +120,7 @@ export class TaskRunner implements OnApplicationBootstrap {
     private readonly redaction: RedactionService,
     private readonly logger: RedactingLogger,
     private readonly briefing: BriefingService,
+    private readonly whispers: WhispersService,
     private readonly servers: ServersService,
     private readonly sites: SitesService,
   ) {}
@@ -522,6 +524,9 @@ export class TaskRunner implements OnApplicationBootstrap {
         withCredential: (name, purpose, fn) =>
           this.useCredential(name, purpose, fn, t, botPrincipal, refs),
         searchRecord: (q) => this.briefing.search(t.unitId, q),
+        whisper: async (text) => {
+          this.whispers.leave(text);
+        },
         orders: () => this.liveOrders(t.unitId),
         waitForFrago: (ms) => this.waitForFrago(run, ms),
         servers: () => this.servers.list(t.unitId),

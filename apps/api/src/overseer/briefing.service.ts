@@ -16,6 +16,7 @@ import { UnitDocsService } from '../documents/unit-docs.service.js';
 import { HoldPolicyService } from '../policy/hold-policy.service.js';
 import { RecordService } from '../record/record.service.js';
 import { words } from '../common/similarity.js';
+import { WhispersService } from '../whispers/whispers.service.js';
 
 /** All entries go in the brief up to this many; beyond it, only the most relevant. */
 const FULL_MANUAL_LIMIT = 12;
@@ -40,6 +41,7 @@ export class BriefingService {
     private readonly fieldManual: FieldManualService,
     private readonly docs: UnitDocsService,
     private readonly holds: HoldPolicyService,
+    private readonly whispers: WhispersService,
   ) {}
 
   async build(
@@ -92,6 +94,8 @@ export class BriefingService {
       ...k,
       rulings: await this.rulings(task.entityId),
       recon,
+      // Hearsay, not knowledge: overheard, never recorded (the event above names no whisper).
+      overheard: this.whispers.overheard(),
     };
   }
 

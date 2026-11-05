@@ -228,6 +228,9 @@ export class SimulatedRuntime implements BotRuntime {
           ...(step.status ? { status: step.status } : {}),
         };
         return false;
+      case 'whisper':
+        await ctx.whisper(text(step.text));
+        return false;
       case 'write-file':
         return yield* writeInWorkspace(brief, text(step.path), text(step.content));
       case 'commit':

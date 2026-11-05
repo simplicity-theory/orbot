@@ -67,6 +67,7 @@ import type {
   UnitView,
   VersionDiff,
   VersionWithStatus,
+  WhisperView,
 } from '@orbot/shared';
 
 export const API = '/api';
@@ -105,6 +106,7 @@ export const apiUrl = {
   standDown: () => `${API}/stand-down`,
   mainEffort: () => `${API}/main-effort`,
   dailyBrief: () => `${API}/daily-brief`,
+  whispers: () => `${API}/whispers`,
   officers: () => `${API}/officers`,
   connections: () => `${API}/connections`,
   issues: (connectionId: string) => `${API}/connections/${connectionId}/issues`,
@@ -155,6 +157,11 @@ export class Api {
         ...(login ? { login } : {}),
       }),
     );
+  }
+
+  /** Leave an unsigned note on the whispers board. Nothing records who did. */
+  whisper(text: string) {
+    return firstValueFrom(this.http.post<WhisperView>(apiUrl.whispers(), { text }));
   }
 
   logout() {

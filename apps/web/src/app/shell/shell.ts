@@ -42,6 +42,7 @@ const NAV: NavItem[] = [
   { label: 'Approvals', link: '/approvals', icon: 'stamp' },
   { label: 'Daily brief', link: '/brief', icon: 'sun' },
   { label: 'Sitreps', link: '/sitreps', icon: 'radio' },
+  { label: 'Whispers', link: '/whispers', icon: 'whisper' },
   { label: 'Chat', link: '/chat', icon: 'user' },
   { label: 'Orders log', link: '/orders', icon: 'book' },
   { label: 'Disputes', link: '/disputes', icon: 'users' },

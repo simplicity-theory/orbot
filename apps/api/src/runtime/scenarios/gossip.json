@@ -1,0 +1,38 @@
+{
+  "id": "gossip",
+  "description": "Does its work and leaves a whisper on the board on the way: nothing of it on the record.",
+  "seed": 2718,
+  "script": [
+    {
+      "do": "step",
+      "action": "read-brief",
+      "detail": "Read the brief for “{task}”.",
+      "outcome": "understood"
+    },
+    {
+      "do": "sitrep",
+      "text": "{callsign} on task #{number}: starting on {branch}.",
+      "status": "working"
+    },
+    {
+      "do": "whisper",
+      "text": "Psst: the first test run after a checkout is slow because of the cold cache; warm it before timing anything."
+    },
+    {
+      "do": "write-file",
+      "path": "orbot/task-{number}.md",
+      "content": "# Task #{number}: {task}\n\nWork carried out by {callsign} ({unit}) on branch `{branch}`.\n"
+    },
+    { "do": "commit", "message": "Task #{number}: {task}" },
+    { "do": "cost", "units": 1 },
+    {
+      "do": "handover",
+      "state": "Task #{number} complete on {branch}.",
+      "nextSteps": [],
+      "triedAndFailed": [],
+      "openProblems": [],
+      "flagsForSuccessor": []
+    },
+    { "do": "done", "summary": "Task #{number} done on {branch}." }
+  ]
+}
